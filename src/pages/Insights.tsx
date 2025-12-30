@@ -4,52 +4,11 @@ import { motion, useScroll, useTransform } from 'motion/react';
 import { ArrowRight, Clock, Tag, Send } from 'lucide-react';
 import GlassCard from '../components/GlassCard';
 import SEO from '../components/SEO';
+import { articles } from '../data/articles';
 
-const featuredArticle = {
-  title: 'The Future of Enterprise AI: Trends to Watch in 2025',
-  excerpt: 'Explore the emerging technologies and strategies that will shape business AI adoption over the next year.',
-  date: 'Dec 15, 2024',
-  readTime: '8 min read',
-  category: 'AI Trends',
-};
-
-const articles = [
-  {
-    title: 'Building Scalable ML Pipelines with Python',
-    excerpt: 'Best practices for designing production-ready machine learning infrastructure.',
-    date: 'Dec 10, 2024',
-    readTime: '6 min read',
-    category: 'Engineering',
-  },
-  {
-    title: 'ROI of AI: Measuring Business Impact',
-    excerpt: 'A framework for calculating and maximizing return on AI investments.',
-    date: 'Dec 5, 2024',
-    readTime: '5 min read',
-    category: 'Strategy',
-  },
-  {
-    title: 'NLP in Customer Service: A Case Study',
-    excerpt: 'How we helped a retail client reduce support costs by 60% with conversational AI.',
-    date: 'Nov 28, 2024',
-    readTime: '7 min read',
-    category: 'Case Study',
-  },
-  {
-    title: 'Data Privacy in the Age of AI',
-    excerpt: 'Navigating compliance and ethics in AI-powered systems.',
-    date: 'Nov 20, 2024',
-    readTime: '6 min read',
-    category: 'Compliance',
-  },
-  {
-    title: 'Edge AI: Processing at the Source',
-    excerpt: 'The rise of on-device machine learning and its enterprise applications.',
-    date: 'Nov 15, 2024',
-    readTime: '5 min read',
-    category: 'Technology',
-  },
-];
+// Featured article is the first one in the list for this example
+const featuredArticle = articles[0];
+const recentArticles = articles.slice(1);
 
 const pageVariants = {
   initial: { opacity: 0 },
@@ -143,72 +102,74 @@ export default function Insights() {
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
           >
-            <GlassCard className="p-0 overflow-hidden cursor-pointer group">
-              <div className="grid lg:grid-cols-2">
-                <motion.div 
-                  className="bg-gradient-to-br from-primary/20 to-secondary/20 min-h-[300px] flex items-center justify-center overflow-hidden"
-                  initial={{ clipPath: 'inset(100% 0% 0% 0%)' }}
-                  whileInView={{ clipPath: 'inset(0% 0% 0% 0%)' }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 1.2, ease: [0.25, 0.1, 0.25, 1] }}
-                >
+            <Link to={`/insights/${featuredArticle.slug}`}>
+              <GlassCard className="p-0 overflow-hidden cursor-pointer group">
+                <div className="grid lg:grid-cols-2">
                   <motion.div 
-                    className="text-8xl font-bold text-white/10"
-                    whileHover={{ scale: 1.1 }}
-                    transition={{ duration: 0.5 }}
+                    className="bg-gradient-to-br from-primary/20 to-secondary/20 min-h-[300px] flex items-center justify-center overflow-hidden"
+                    initial={{ clipPath: 'inset(100% 0% 0% 0%)' }}
+                    whileInView={{ clipPath: 'inset(0% 0% 0% 0%)' }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 1.2, ease: [0.25, 0.1, 0.25, 1] }}
                   >
-                    AI
+                    <motion.div 
+                      className="text-8xl font-bold text-white/10"
+                      whileHover={{ scale: 1.1 }}
+                      transition={{ duration: 0.5 }}
+                    >
+                      AI
+                    </motion.div>
                   </motion.div>
-                </motion.div>
-                <motion.div 
-                  className="p-12 lg:p-16 flex flex-col justify-center"
-                  initial="initial"
-                  whileInView="animate"
-                  viewport={{ once: true }}
-                >
                   <motion.div 
-                    className="flex items-center gap-4 mb-4"
-                    initial={{ opacity: 0, y: 30 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1 }}
+                    className="p-12 lg:p-16 flex flex-col justify-center"
+                    initial="initial"
+                    whileInView="animate"
+                    viewport={{ once: true }}
                   >
-                    <span className="px-3 py-1 bg-primary/10 text-primary text-sm rounded-full">
-                      {featuredArticle.category}
-                    </span>
-                    <span className="text-muted text-sm flex items-center gap-1">
-                      <Clock size={14} /> {featuredArticle.readTime}
-                    </span>
+                    <motion.div 
+                      className="flex items-center gap-4 mb-4"
+                      initial={{ opacity: 0, y: 30 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.1 }}
+                    >
+                      <span className="px-3 py-1 bg-primary/10 text-primary text-sm rounded-full">
+                        {featuredArticle.category}
+                      </span>
+                      <span className="text-muted text-sm flex items-center gap-1">
+                        <Clock size={14} /> {featuredArticle.readTime}
+                      </span>
+                    </motion.div>
+                    <motion.h2 
+                      className="text-2xl md:text-3xl font-bold mb-4 group-hover:text-primary transition-colors"
+                      initial={{ opacity: 0, y: 30 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2 }}
+                    >
+                      {featuredArticle.title}
+                    </motion.h2>
+                    <motion.p 
+                      className="text-muted mb-6"
+                      initial={{ opacity: 0, y: 30 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.3 }}
+                    >
+                      {featuredArticle.excerpt}
+                    </motion.p>
+                    <motion.div 
+                      className="flex items-center justify-between"
+                      initial={{ opacity: 0, y: 30 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.4 }}
+                    >
+                      <span className="text-sm text-muted">{featuredArticle.date}</span>
+                      <span className="text-primary flex items-center gap-1 group-hover:gap-2 transition-all">
+                        Read Article <ArrowRight size={16} />
+                      </span>
+                    </motion.div>
                   </motion.div>
-                  <motion.h2 
-                    className="text-2xl md:text-3xl font-bold mb-4 group-hover:text-primary transition-colors"
-                    initial={{ opacity: 0, y: 30 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.2 }}
-                  >
-                    {featuredArticle.title}
-                  </motion.h2>
-                  <motion.p 
-                    className="text-muted mb-6"
-                    initial={{ opacity: 0, y: 30 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 }}
-                  >
-                    {featuredArticle.excerpt}
-                  </motion.p>
-                  <motion.div 
-                    className="flex items-center justify-between"
-                    initial={{ opacity: 0, y: 30 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.4 }}
-                  >
-                    <span className="text-sm text-muted">{featuredArticle.date}</span>
-                    <span className="text-primary flex items-center gap-1 group-hover:gap-2 transition-all">
-                      Read Article <ArrowRight size={16} />
-                    </span>
-                  </motion.div>
-                </motion.div>
-              </div>
-            </GlassCard>
+                </div>
+              </GlassCard>
+            </Link>
           </motion.div>
         </div>
       </section>
@@ -232,24 +193,26 @@ export default function Insights() {
             whileInView="animate"
             viewport={{ once: true, margin: '-20%' }}
           >
-            {articles.map((article) => (
-              <motion.div key={article.title} variants={fadeInUp}>
-                <GlassCard className="h-full group cursor-pointer hover:border-primary/30 transition-all">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Tag size={14} className="text-primary" />
-                    <span className="text-xs text-primary">{article.category}</span>
-                  </div>
-                  <h3 className="text-lg font-semibold mb-3 group-hover:text-primary transition-colors">
-                    {article.title}
-                  </h3>
-                  <p className="text-muted text-sm mb-4">{article.excerpt}</p>
-                  <div className="flex items-center justify-between text-sm text-muted mt-auto pt-4 border-t border-white/5">
-                    <span>{article.date}</span>
-                    <span className="flex items-center gap-1">
-                      <Clock size={12} /> {article.readTime}
-                    </span>
-                  </div>
-                </GlassCard>
+            {recentArticles.map((article) => (
+              <motion.div key={article.slug} variants={fadeInUp}>
+                <Link to={`/insights/${article.slug}`}>
+                  <GlassCard className="h-full group cursor-pointer hover:border-primary/30 transition-all">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Tag size={14} className="text-primary" />
+                      <span className="text-xs text-primary">{article.category}</span>
+                    </div>
+                    <h3 className="text-lg font-semibold mb-3 group-hover:text-primary transition-colors">
+                      {article.title}
+                    </h3>
+                    <p className="text-muted text-sm mb-4">{article.excerpt}</p>
+                    <div className="flex items-center justify-between text-sm text-muted mt-auto pt-4 border-t border-white/5">
+                      <span>{article.date}</span>
+                      <span className="flex items-center gap-1">
+                        <Clock size={12} /> {article.readTime}
+                      </span>
+                    </div>
+                  </GlassCard>
+                </Link>
               </motion.div>
             ))}
           </motion.div>

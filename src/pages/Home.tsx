@@ -20,12 +20,6 @@ const stats = [
   { value: '24/7', label: 'Support', numValue: 24, suffix: '/7' },
 ];
 
-const testimonials = [
-  { quote: 'Uno Digit transformed our operations with AI solutions that exceeded expectations.', author: 'Sarah Chen', role: 'CTO, TechCorp' },
-  { quote: 'Their expertise in machine learning helped us achieve a 40% efficiency gain.', author: 'Michael Ross', role: 'CEO, DataFlow' },
-  { quote: 'The team delivered exceptional results on time and within budget.', author: 'Emma Williams', role: 'VP Engineering, NextGen' },
-];
-
 const pageVariants = {
   initial: { opacity: 0 },
   animate: { opacity: 1 },
@@ -299,41 +293,6 @@ export default function Home() {
               >
                 <AnimatedCounter value={stat.numValue} prefix={stat.prefix || ''} suffix={stat.suffix || ''} />
                 <div className="text-muted">{stat.label}</div>
-              </motion.div>
-            ))}
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Testimonials */}
-      <section className="py-24 bg-surface/50">
-        <div className="container mx-auto px-6">
-          <motion.h2 
-            className="text-3xl md:text-4xl font-bold text-center mb-16"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-          >
-            What Our Clients Say
-          </motion.h2>
-
-          <motion.div 
-            className="grid md:grid-cols-3 gap-8"
-            variants={staggerContainer}
-            initial="initial"
-            whileInView="animate"
-            viewport={{ once: true, margin: '-20%' }}
-          >
-            {testimonials.map((t) => (
-              <motion.div key={t.author} variants={fadeInUp}>
-                <GlassCard className="h-full">
-                  <Quote size={32} className="text-primary/30 mb-4" />
-                  <p className="text-lg mb-6">{t.quote}</p>
-                  <div>
-                    <div className="font-semibold">{t.author}</div>
-                    <div className="text-sm text-muted">{t.role}</div>
-                  </div>
-                </GlassCard>
               </motion.div>
             ))}
           </motion.div>

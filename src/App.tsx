@@ -7,6 +7,7 @@ import About from './pages/About';
 import Services from './pages/Services';
 import Work from './pages/Work';
 import Insights from './pages/Insights';
+import ArticleDetail from './pages/ArticleDetail';
 import Contact from './pages/Contact';
 
 function AnimatedRoutes() {
@@ -20,6 +21,7 @@ function AnimatedRoutes() {
         <Route path="/services" element={<Services />} />
         <Route path="/work" element={<Work />} />
         <Route path="/insights" element={<Insights />} />
+        <Route path="/insights/:slug" element={<ArticleDetail />} />
         <Route path="/contact" element={<Contact />} />
       </Routes>
     </AnimatePresence>
