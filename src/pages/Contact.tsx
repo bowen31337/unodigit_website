@@ -3,6 +3,7 @@ import { motion, useScroll, useTransform } from 'motion/react';
 import { Mail, Phone, MapPin, Send, CheckCircle } from 'lucide-react';
 import GlassCard from '../components/GlassCard';
 import MagneticButton from '../components/MagneticButton';
+import SEO from '../components/SEO';
 
 const pageVariants = {
   initial: { opacity: 0 },
@@ -62,6 +63,17 @@ export default function Contact() {
       exit="exit"
       transition={{ duration: 0.5 }}
     >
+      <SEO 
+        title="Contact Uno Digit | AI Consultancy Sydney"
+        description="Get in touch with Uno Digit. We are ready to help you transform your business with AI. Located in Sydney, Australia."
+        canonical="/contact"
+        schema={{
+          "@context": "https://schema.org",
+          "@type": "ContactPage",
+          "name": "Contact Uno Digit",
+          "description": "Contact information for Uno Digit."
+        }}
+      />
       {/* Hero */}
       <section ref={heroRef} className="py-24 relative overflow-hidden">
         <motion.div 
@@ -116,26 +128,8 @@ export default function Contact() {
                     </motion.div>
                     <div>
                       <h3 className="font-semibold mb-1">Email Us</h3>
-                      <a href="mailto:hello@unodigit.com" className="text-muted hover:text-primary transition-colors">
-                        hello@unodigit.com
-                      </a>
-                    </div>
-                  </GlassCard>
-                </motion.div>
-
-                <motion.div variants={fadeInUp}>
-                  <GlassCard className="flex items-start gap-4 group hover:border-primary/30 transition-all">
-                    <motion.div 
-                      className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0"
-                      whileHover={{ scale: 1.1 }}
-                      transition={{ type: 'spring', stiffness: 300 }}
-                    >
-                      <Phone className="text-primary" size={24} />
-                    </motion.div>
-                    <div>
-                      <h3 className="font-semibold mb-1">Call Us</h3>
-                      <a href="tel:+61280000000" className="text-muted hover:text-primary transition-colors">
-                        +61 2 8000 0000
+                      <a href="mailto:info@unodigit.com.au" className="text-muted hover:text-primary transition-colors">
+                        info@unodigit.com.au
                       </a>
                     </div>
                   </GlassCard>
@@ -153,8 +147,7 @@ export default function Contact() {
                     <div>
                       <h3 className="font-semibold mb-1">Visit Us</h3>
                       <p className="text-muted">
-                        100 Tech Avenue<br />
-                        Sydney NSW 2000<br />
+                        Sydney, NSW<br />
                         Australia
                       </p>
                     </div>

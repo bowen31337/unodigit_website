@@ -3,18 +3,12 @@ import { Link } from 'react-router-dom';
 import { motion, useScroll, useTransform, useSpring } from 'motion/react';
 import { Target, Lightbulb, Users, MapPin, ArrowRight } from 'lucide-react';
 import GlassCard from '../components/GlassCard';
+import SEO from '../components/SEO';
 
 const values = [
   { icon: Target, title: 'Transparency', description: 'Open communication and honest partnerships built on trust.' },
   { icon: Lightbulb, title: 'Innovation', description: 'Pushing boundaries with cutting-edge technology solutions.' },
   { icon: Users, title: 'Collaboration', description: 'Working together to achieve exceptional outcomes.' },
-];
-
-const team = [
-  { name: 'David Park', role: 'CEO & Founder', bio: '15+ years in AI and enterprise software' },
-  { name: 'Sarah Mitchell', role: 'CTO', bio: 'Former Google ML engineer' },
-  { name: 'James Wilson', role: 'Head of Strategy', bio: 'McKinsey veteran, digital transformation expert' },
-  { name: 'Emily Chen', role: 'Lead Developer', bio: 'Full-stack architect with 10+ years experience' },
 ];
 
 const pageVariants = {
@@ -69,6 +63,17 @@ export default function About() {
       exit="exit"
       transition={{ duration: 0.5 }}
     >
+      <SEO 
+        title="About Uno Digit | AI Consultancy Sydney"
+        description="Learn about Uno Digit, a Sydney-based AI consultancy. Meet our team of experts dedicated to democratizing AI technology for enterprises."
+        canonical="/about"
+        schema={{
+          "@context": "https://schema.org",
+          "@type": "AboutPage",
+          "name": "About Uno Digit",
+          "description": "Information about Uno Digit, an AI consultancy in Sydney."
+        }}
+      />
       {/* Hero with parallax elements */}
       <section ref={heroRef} className="py-24 relative overflow-hidden">
         <motion.div 
@@ -194,102 +199,6 @@ export default function About() {
               </motion.div>
             ))}
           </motion.div>
-        </div>
-      </section>
-
-      {/* Team */}
-      <section className="py-24 bg-surface/50">
-        <div className="container mx-auto px-6">
-          <motion.div 
-            className="text-center mb-16"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-          >
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Leadership Team</h2>
-            <p className="text-muted max-w-2xl mx-auto">
-              Meet the experts driving innovation at Uno Digit.
-            </p>
-          </motion.div>
-
-          <motion.div 
-            className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8"
-            variants={staggerContainer}
-            initial="initial"
-            whileInView="animate"
-            viewport={{ once: true, margin: '-20%' }}
-          >
-            {team.map((member) => (
-              <motion.div key={member.name} variants={fadeInUp}>
-                <GlassCard className="text-center h-full group">
-                  <motion.div 
-                    className="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-secondary mx-auto mb-4 flex items-center justify-center"
-                    whileHover={{ scale: 1.1 }}
-                    transition={{ type: 'spring', stiffness: 300 }}
-                  >
-                    <span className="text-2xl font-bold text-background">
-                      {member.name.split(' ').map(n => n[0]).join('')}
-                    </span>
-                  </motion.div>
-                  <h3 className="font-semibold text-lg">{member.name}</h3>
-                  <p className="text-primary text-sm mb-2">{member.role}</p>
-                  <p className="text-muted text-sm">{member.bio}</p>
-                </GlassCard>
-              </motion.div>
-            ))}
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Office */}
-      <section className="py-24">
-        <div className="container mx-auto px-6">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
-            <motion.div
-              initial={{ clipPath: 'inset(100% 0% 0% 0%)' }}
-              whileInView={{ clipPath: 'inset(0% 0% 0% 0%)' }}
-              viewport={{ once: true }}
-              transition={{ duration: 1.2, ease: [0.25, 0.1, 0.25, 1] }}
-            >
-              <GlassCard className="p-0 overflow-hidden">
-                <div className="h-80 bg-gradient-to-br from-surface to-background flex items-center justify-center relative overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-secondary/10" />
-                  <div className="text-center relative z-10">
-                    <MapPin size={48} className="text-primary mx-auto mb-4" />
-                    <p className="text-muted">Sydney Headquarters</p>
-                  </div>
-                </div>
-              </GlassCard>
-            </motion.div>
-            
-            <motion.div
-              initial={{ opacity: 0, x: 50 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6 }}
-            >
-              <h2 className="text-3xl md:text-4xl font-bold mb-6">Visit Our Office</h2>
-              <p className="text-lg text-muted mb-6">
-                Located in the heart of Sydney's tech hub, our modern workspace 
-                reflects our innovative approach to problem-solving.
-              </p>
-              <div className="space-y-4 mb-8">
-                <div className="flex items-start gap-4">
-                  <MapPin className="text-primary mt-1" size={20} />
-                  <div>
-                    <div className="font-medium">Address</div>
-                    <div className="text-muted">100 Tech Avenue, Sydney NSW 2000</div>
-                  </div>
-                </div>
-              </div>
-              <Link
-                to="/contact"
-                className="inline-flex items-center gap-2 text-primary hover:underline"
-              >
-                Get Directions <ArrowRight size={16} />
-              </Link>
-            </motion.div>
-          </div>
         </div>
       </section>
     </motion.main>

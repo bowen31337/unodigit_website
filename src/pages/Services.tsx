@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { motion, useScroll, useTransform, useSpring } from 'motion/react';
 import { Brain, Code, Database, LineChart, Cog, Cloud, ArrowRight, Check } from 'lucide-react';
 import GlassCard from '../components/GlassCard';
+import SEO from '../components/SEO';
 
 const services = [
   {
@@ -105,6 +106,21 @@ export default function Services() {
       exit="exit"
       transition={{ duration: 0.5 }}
     >
+      <SEO 
+        title="AI Services & Web Development | Uno Digit Sydney"
+        description="Comprehensive AI strategies, Machine Learning solutions, and Web Development services for Australian businesses. Transform your operations today."
+        canonical="/services"
+        schema={{
+          "@context": "https://schema.org",
+          "@type": "Service",
+          "serviceType": "AI Consulting",
+          "provider": {
+            "@type": "Organization",
+            "name": "Uno Digit"
+          },
+          "areaServed": "Australia"
+        }}
+      />
       {/* Hero */}
       <section ref={heroRef} className="py-24 relative overflow-hidden">
         <motion.div 

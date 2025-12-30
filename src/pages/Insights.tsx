@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { motion, useScroll, useTransform } from 'motion/react';
 import { ArrowRight, Clock, Tag, Send } from 'lucide-react';
 import GlassCard from '../components/GlassCard';
+import SEO from '../components/SEO';
 
 const featuredArticle = {
   title: 'The Future of Enterprise AI: Trends to Watch in 2025',
@@ -92,6 +93,17 @@ export default function Insights() {
       exit="exit"
       transition={{ duration: 0.5 }}
     >
+      <SEO 
+        title="AI Insights & Tech Blog | Uno Digit"
+        description="Stay updated with the latest trends in Artificial Intelligence, Machine Learning, and Enterprise Digital Transformation."
+        canonical="/insights"
+        schema={{
+          "@context": "https://schema.org",
+          "@type": "Blog",
+          "name": "Uno Digit Insights",
+          "description": "Thoughts on AI and Digital Transformation"
+        }}
+      />
       {/* Hero */}
       <section ref={heroRef} className="py-24 relative overflow-hidden">
         <motion.div 

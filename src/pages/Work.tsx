@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { motion, useScroll, useTransform, useSpring } from 'motion/react';
 import { ArrowRight, ExternalLink, TrendingUp } from 'lucide-react';
 import GlassCard from '../components/GlassCard';
+import SEO from '../components/SEO';
 
 const featuredCase = {
   title: 'AI-Powered Logistics Optimization',
@@ -114,6 +115,17 @@ export default function Work() {
       exit="exit"
       transition={{ duration: 0.5 }}
     >
+      <SEO 
+        title="Our Work & Case Studies | Uno Digit"
+        description="Explore our portfolio of successful AI implementation, data science projects, and digital transformation case studies across various industries."
+        canonical="/work"
+        schema={{
+          "@context": "https://schema.org",
+          "@type": "CollectionPage",
+          "name": "Uno Digit Case Studies",
+          "description": "A collection of AI and digital transformation case studies."
+        }}
+      />
       {/* Hero */}
       <section ref={heroRef} className="py-24 relative overflow-hidden">
         <motion.div 
@@ -271,7 +283,6 @@ export default function Work() {
                 <GlassCard className="h-full group cursor-pointer hover:border-primary/30 transition-all">
                   <span className="text-primary text-xs font-medium uppercase tracking-wider">{project.category}</span>
                   <h3 className="text-xl font-semibold mt-2 mb-2 group-hover:text-primary transition-colors">{project.title}</h3>
-                  <p className="text-sm text-muted mb-4">{project.client}</p>
                   <p className="text-muted text-sm mb-4">{project.description}</p>
                   <div className="flex items-center justify-between mt-auto pt-4 border-t border-white/5">
                     <span className="text-primary font-semibold">{project.result}</span>

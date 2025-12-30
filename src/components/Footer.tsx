@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
-import { Linkedin, Twitter, Github, Mail } from 'lucide-react';
+import { Linkedin, Github, Mail } from 'lucide-react';
+import Logo from './Logo';
 
 export default function Footer() {
   return (
@@ -7,27 +8,21 @@ export default function Footer() {
       <div className="container mx-auto px-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-12">
           <div className="col-span-1 md:col-span-2">
-            <Link to="/" className="flex items-center gap-2 mb-4">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-                <span className="text-background font-bold text-lg">U</span>
-              </div>
-              <span className="font-semibold text-lg">Uno Digit</span>
+            <Link to="/" className="inline-block mb-4">
+              <Logo />
             </Link>
             <p className="text-muted max-w-md mb-6">
               AI-Driven Digital Transformation for forward-thinking enterprises. 
               Based in Sydney, serving the world.
             </p>
             <div className="flex gap-4">
-              <a href="#" className="p-2 rounded-full glass hover:border-primary/30 transition-colors">
+              <a href="https://www.linkedin.com/company/101707731" target="_blank" rel="noopener noreferrer" className="p-2 rounded-full glass hover:border-primary/30 transition-colors">
                 <Linkedin size={20} />
               </a>
-              <a href="#" className="p-2 rounded-full glass hover:border-primary/30 transition-colors">
-                <Twitter size={20} />
-              </a>
-              <a href="#" className="p-2 rounded-full glass hover:border-primary/30 transition-colors">
+              <a href="https://github.com/organizations/unodigit/" target="_blank" rel="noopener noreferrer" className="p-2 rounded-full glass hover:border-primary/30 transition-colors">
                 <Github size={20} />
               </a>
-              <a href="#" className="p-2 rounded-full glass hover:border-primary/30 transition-colors">
+              <a href="mailto:info@unodigit.com.au" className="p-2 rounded-full glass hover:border-primary/30 transition-colors">
                 <Mail size={20} />
               </a>
             </div>
@@ -53,8 +48,7 @@ export default function Footer() {
             <h4 className="font-semibold mb-4">Contact</h4>
             <ul className="space-y-3 text-muted">
               <li>Sydney, Australia</li>
-              <li>hello@unodigit.com</li>
-              <li>+61 2 8000 0000</li>
+              <li>info@unodigit.com.au</li>
             </ul>
           </div>
         </div>

@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Menu, X } from 'lucide-react';
 import MagneticButton from './MagneticButton';
+import Logo from './Logo';
 
 const navLinks = [
   { path: '/', label: 'Home' },
@@ -42,11 +43,8 @@ export default function Navbar() {
               isScrolled ? 'glass' : ''
             }`}
           >
-            <Link to="/" className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-                <span className="text-background font-bold text-lg">U</span>
-              </div>
-              <span className="font-semibold text-lg">Uno Digit</span>
+            <Link to="/" className="block">
+              <Logo />
             </Link>
 
             <div className="hidden md:flex items-center gap-8">

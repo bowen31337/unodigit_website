@@ -5,6 +5,7 @@ import { ArrowRight, Zap, Shield, TrendingUp, Brain, Code, BarChart3, ChevronDow
 import ParticleBackground from '../components/ParticleBackground';
 import GlassCard from '../components/GlassCard';
 import MagneticButton from '../components/MagneticButton';
+import SEO from '../components/SEO';
 
 const services = [
   { icon: Brain, title: 'AI Strategy', description: 'Transform your business with intelligent automation and predictive analytics.' },
@@ -77,6 +78,23 @@ export default function Home() {
   const heroScale = useTransform(heroScrollProgress, [0, 0.5], [1, 0.95]);
   const bgScale = useTransform(heroScrollProgress, [0, 1], [1, 1.2]);
 
+  const schema = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "Uno Digit",
+    "url": "https://unodigit.com.au",
+    "logo": "https://unodigit.com.au/favicon.svg",
+    "description": "Sydney's Leading AI Consultancy helping enterprises harness the power of artificial intelligence.",
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": "100 Tech Avenue",
+      "addressLocality": "Sydney",
+      "addressRegion": "NSW",
+      "postalCode": "2000",
+      "addressCountry": "AU"
+    }
+  };
+
   return (
     <motion.main
       variants={pageVariants}
@@ -85,6 +103,11 @@ export default function Home() {
       exit="exit"
       transition={{ duration: 0.5 }}
     >
+      <SEO 
+        title="Uno Digit | AI & Digital Transformation Leader Sydney"
+        description="We partner with forward-thinking enterprises in Sydney and Australia to build intelligent systems, custom AI solutions, and digital ecosystems that drive growth."
+        schema={schema}
+      />
       {/* Hero Section */}
       <section ref={heroRef} className="relative min-h-screen flex items-center justify-center overflow-hidden">
         <motion.div style={{ scale: bgScale }} className="absolute inset-0">
@@ -168,27 +191,6 @@ export default function Home() {
             <ChevronDown size={32} className="animate-bounce text-muted" />
           </motion.div>
         </motion.div>
-      </section>
-
-      {/* Trust Bar */}
-      <section className="py-16 border-y border-white/5">
-        <div className="container mx-auto px-6">
-          <p className="text-center text-muted mb-8">Trusted by market leaders</p>
-          <div className="flex flex-wrap justify-center items-center gap-12 opacity-50">
-            {['TechCorp', 'DataFlow', 'NextGen', 'Innovate', 'FutureLabs'].map((name, i) => (
-              <motion.div 
-                key={name} 
-                className="text-xl font-semibold text-muted"
-                initial={{ opacity: 0, x: -20 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.1 }}
-                viewport={{ once: true }}
-              >
-                {name}
-              </motion.div>
-            ))}
-          </div>
-        </div>
       </section>
 
       {/* Value Props */}
