@@ -1,0 +1,98 @@
+import { describe, it, expect } from 'vitest'
+import { initialState, step, type ConversationState } from '../../src/graph/transitions'
+
+const at = (state: ConversationState['state'], over: Partial<ConversationState> = {}): ConversationState => ({
+  ...initialState(), state, ...over,
+})
+
+describe('step()', () => {
+  it('starts at GREETING with empty slots', () => {
+    const s = initialState()
+    expect(s.state).toBe('GREETING')
+    expect(s.turnsInState).toBe(0)
+    expect(s.totalTurns).toBe(0)
+    expect(s.forcedAdvances).toEqual([])
+  })
+
+  it('off-topic input consumes a total turn but not a state turn', () => {
+    const r = step(at('PROJECT_IDENTITY'), { slots: {}, readyToAdvance: false, offTopic: true })
+    expect(r.next.state).toBe('PROJECT_IDENTITY')
+    expect(r.next.turnsInState).toBe(0)
+    expect(r.next.totalTurns).toBe(1)
+    expect(r.advanced).toBe(false)
+  })
+
+  it('off-topic input does not merge slots', () => {
+    const r = step(at('PROJECT_IDENTITY'), {
+      slots: { project_name: 'injected' }, readyToAdvance: true, offTopic: true,
+    })
+    expect(r.next.slots).toEqual({})
+  })
+
+  it('merges slots and stays put when the gate is unmet', () => {
+    const r = step(at('PROJECT_IDENTITY'), {
+      slots: { project_name: 'Acme' }, readyToAdvance: true, offTopic: false,
+    })
+    expect(r.next.state).toBe('PROJECT_IDENTITY')
+    expect(r.next.slots).toEqual({ project_name: 'Acme' })
+    expect(r.next.turnsInState).toBe(1)
+    expect(r.advanced).toBe(false)
+  })
+
+  it('stays put when the gate is met but the model is not ready', () => {
+    const r = step(at('PROJECT_IDENTITY'), {
+      slots: { project_name: 'A', audience: 'B', problem: 'C' },
+      readyToAdvance: false, offTopic: false,
+    })
+    expect(r.next.state).toBe('PROJECT_IDENTITY')
+    expect(r.advanced).toBe(false)
+  })
+
+  it('advances when gate met and ready, resetting turnsInState', () => {
+    const r = step(at('PROJECT_IDENTITY', { turnsInState: 2 }), {
+      slots: { project_name: 'A', audience: 'B', problem: 'C' },
+      readyToAdvance: true, offTopic: false,
+    })
+    expect(r.next.state).toBe('SOLUTION_SHAPE')
+    expect(r.next.turnsInState).toBe(0)
+    expect(r.advanced).toBe(true)
+    expect(r.forced).toBe(false)
+  })
+
+  it('force-advances at maxTurns even with an unmet gate', () => {
+    // PROJECT_IDENTITY.maxTurns is 6
+    const r = step(at('PROJECT_IDENTITY', { turnsInState: 5 }), {
+      slots: {}, readyToAdvance: false, offTopic: false,
+    })
+    expect(r.next.state).toBe('SOLUTION_SHAPE')
+    expect(r.forced).toBe(true)
+    expect(r.advanced).toBe(true)
+    expect(r.next.forcedAdvances).toEqual(['PROJECT_IDENTITY'])
+  })
+
+  it('preserves slots collected before a forced advance', () => {
+    const r = step(at('PROJECT_IDENTITY', { turnsInState: 5, slots: { project_name: 'A' } }), {
+      slots: { audience: 'B' }, readyToAdvance: false, offTopic: false,
+    })
+    expect(r.next.slots).toEqual({ project_name: 'A', audience: 'B' })
+  })
+
+  it('marks finished when advancing into DONE', () => {
+    const r = step(at('GENERATE'), { slots: {}, readyToAdvance: true, offTopic: false })
+    expect(r.next.state).toBe('DONE')
+    expect(r.finished).toBe(true)
+  })
+
+  it('is terminal at DONE', () => {
+    const r = step(at('DONE'), { slots: {}, readyToAdvance: true, offTopic: false })
+    expect(r.next.state).toBe('DONE')
+    expect(r.finished).toBe(true)
+  })
+
+  it('does not mutate the input state', () => {
+    const before = at('PROJECT_IDENTITY')
+    const snapshot = JSON.stringify(before)
+    step(before, { slots: { project_name: 'A' }, readyToAdvance: true, offTopic: false })
+    expect(JSON.stringify(before)).toBe(snapshot)
+  })
+})
