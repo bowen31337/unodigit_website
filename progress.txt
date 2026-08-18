@@ -144,3 +144,68 @@ Next implementer (Task 4, program mode) extends runEstimate in-place: when a
 single-mode result's total_tasks exceeds programThreshold, re-ask using
 PROGRAM_MODE_ADDENDUM (already written, unused until Task 4) and return the
 program-mode shape instead.
+
+### 2026-08-18 — US-004: Estimator program mode
+
+Refactored the Task 3 body of runEstimate into a private askOnce(client, model,
+initialMessages) (identical retry-once-on-malformed-JSON logic, just parameterized
+on the message list instead of hardcoding it), then rewrote runEstimate to call
+askOnce for a first pass; if ok and total_tasks <= programThreshold, returns it
+unchanged (exactly one LLM call). If over threshold, calls askOnce again with
+[ESTIMATOR_SYSTEM_PROMPT, PROGRAM_MODE_ADDENDUM, user] — the frozen prompt stays
+first in both passes so the cached prefix is shared, and nothing per-request is
+interpolated into either. A failed second pass returns `first` (the already-
+validated single result) rather than erroring. Token usage on the two-pass path
+sums first+second promptTokens/completionTokens. Transcribed verbatim from the
+plan's Task 4 Step 3.
+
+Verification: suite now 92 tests / 11 files / zero warnings (was 88/10);
+apps/ba-bot-api typecheck clean (tsc --noEmit, exit 0, no output).
+
+TDD: wrote test/estimator/program.test.ts first (RED), ran it against the
+unmodified Task-3 estimate.ts — 2 of 4 failed as expected ("re-asks in program
+mode": expected 'program', got 'single'; "sums token usage": expected 1000, got
+500). Implemented Task 4's code, reran — GREEN, all 4 pass, full suite 92/11.
+
+Deviation from the plan (reported, not silently applied): the plan's literal
+`bigSingle` fixture (`bullets: 540`, `total_tasks: 540`) is schema-invalid —
+`EstimateCategorySchema.bullets` and single-mode `total_tasks` are both capped at
+max(400) in packages/ba-bot-contract/src/index.ts (lines 167, 191), landed in
+Task 1. Verified empirically (not just by inspection): even after implementing
+Task 4's code exactly as specified, tests 3 ("keeps the oversized single result
+if the program pass fails") and 4 ("sums token usage") still failed, because
+askOnce can never return ok:true with shape.mode:'single' for content that
+violates those maxes — no implementation of runEstimate can satisfy them as
+literally written. Root-caused by temporarily reverting estimate.ts (git stash)
+and confirming test 1 also passed at baseline for the wrong reason (the existing
+repair-retry mechanism, not the new addendum-based second pass, was consuming
+the stub's second response). Fixed by changing bigSingle to
+bullets/total_tasks: 350 — still > programThreshold (300), still schema-valid —
+and updating test 3's one dependent assertion (540 -> 350). Re-verified RED
+(reverted estimate.ts again): tests 1 and 4 now fail for the correct reason
+(missing second-pass logic), tests 2 and 3 pass at baseline as expected (test 2
+needs no new behavior; test 3 passes vacuously since baseline never attempts a
+second pass) — then re-verified GREEN and traced test 3's call sequence by hand
+to confirm the fallback path is genuinely exercised (1 successful first-pass
+call + 2 failed second-pass attempts = 3 calls, not vacuous).
+
+Worst-case total LLM calls across both passes: 4 (2 attempts in the first
+askOnce, at most 2 more in the second). The under-threshold path is exactly 1
+call, asserted by client.calls === 1 in program.test.ts and estimate.test.ts;
+traced to confirm it cannot pass for the wrong reason (no retry needed, no
+second pass invoked).
+
+PII grep `grep -rnE "\b(name|email)\b" src/llm/ src/graph/prompts.ts
+src/estimator/` still returns exactly the same four known-adjudicated lines as
+US-003 (prompts.ts do-not-ask line; calibration.ts's "email + SMS reminders"
+prose; two prompt.ts JSON-schema "name": string fields). Nothing in this story's
+diff touches prompt.ts or calibration.ts content, so no new PII surface.
+
+Next implementer (Task 5, brief and quote renderers) is unaffected by the
+bigSingle fixture correction — it works from a self-contained EstimateShape
+fixture in test/render/render.test.ts, not from estimate.ts's test fixtures.
+Worth knowing: the single-mode total_tasks/bullets max(400) ceiling from Task 1
+is tighter than the "100-300 typical" language in the estimator prompt, which is
+intentional headroom for the over-threshold-but-still-single-mode window
+(program threshold 300 < schema max 400), not a bug — only the plan's own 540
+literal was out of range.

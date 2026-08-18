@@ -82,8 +82,8 @@
       ],
       "expectedTests": 92,
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "92/11 zero warnings, typecheck clean. Fixed plan's bigSingle fixture (540) to 350: it violated the Task-1 schema's own max(400) on bullets/total_tasks, making tests 3-4 structurally unsatisfiable regardless of implementation; corrected to stay schema-valid and still over programThreshold."
     },
     {
       "id": "US-005",

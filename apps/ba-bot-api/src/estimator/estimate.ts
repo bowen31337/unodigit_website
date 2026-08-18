@@ -1,6 +1,6 @@
 import { EstimateShapeSchema, type EstimateShape } from '@unodigit/ba-bot-contract'
 import type { ChatMessage, LlmClient } from '../llm/types'
-import { ESTIMATOR_SYSTEM_PROMPT } from './prompt'
+import { ESTIMATOR_SYSTEM_PROMPT, PROGRAM_MODE_ADDENDUM } from './prompt'
 
 export type EstimateResult =
   | { ok: true; shape: EstimateShape; promptTokens: number; completionTokens: number }
@@ -32,19 +32,17 @@ function parse(content: string): EstimateShape | null {
   }
 }
 
-export async function runEstimate(
+async function askOnce(
   client: LlmClient,
-  args: { model: string; briefText: string; programThreshold: number },
+  model: string,
+  initialMessages: ChatMessage[],
 ): Promise<EstimateResult> {
-  const messages: ChatMessage[] = [
-    { role: 'system', content: ESTIMATOR_SYSTEM_PROMPT },
-    { role: 'user', content: args.briefText },
-  ]
+  const messages: ChatMessage[] = [...initialMessages]
 
   for (let attempt = 0; attempt < 2; attempt++) {
     let res
     try {
-      res = await client.chat({ model: args.model, messages, jsonMode: true, maxTokens: 1600 })
+      res = await client.chat({ model, messages, jsonMode: true, maxTokens: 1600 })
     } catch {
       return { ok: false, reason: 'provider' }
     }
@@ -72,4 +70,36 @@ export async function runEstimate(
   }
 
   return { ok: false, reason: 'parse' }
+}
+
+export async function runEstimate(
+  client: LlmClient,
+  args: { model: string; briefText: string; programThreshold: number },
+): Promise<EstimateResult> {
+  const first = await askOnce(client, args.model, [
+    { role: 'system', content: ESTIMATOR_SYSTEM_PROMPT },
+    { role: 'user', content: args.briefText },
+  ])
+
+  if (!first.ok) return first
+  if (first.shape.total_tasks <= args.programThreshold) return first
+
+  // Over the threshold: one claw-forge spec targets 100-300 bullets, so ask for
+  // a subsystem split. This is also the better commercial artifact — a phased
+  // first-subsystem price converts where one large total does not.
+  const second = await askOnce(client, args.model, [
+    { role: 'system', content: ESTIMATOR_SYSTEM_PROMPT },
+    { role: 'system', content: PROGRAM_MODE_ADDENDUM },
+    { role: 'user', content: args.briefText },
+  ])
+
+  // A valid oversized estimate beats no estimate. Fall back rather than fail.
+  if (!second.ok) return first
+
+  return {
+    ok: true,
+    shape: second.shape,
+    promptTokens: first.promptTokens + second.promptTokens,
+    completionTokens: first.completionTokens + second.completionTokens,
+  }
 }
