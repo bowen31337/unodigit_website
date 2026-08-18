@@ -337,3 +337,36 @@ neither directory. A second grep scoped to the new src/render/ files matches
 only `s.name`/`c.name`/`byName` (subsystem and category labels) and a local
 `name` variable in brief.ts bound to the `project_name` slot — none read a
 lead's actual name or email.
+
+### 2026-08-19 — US-005 controller hardening (not a plan task)
+
+The renderers themselves were correct as delivered (2a7f5b8); three of their
+acceptance criteria were not actually pinned by the committed suite.
+
+1. belowFloor asserted only that a starter-engagement message APPEARS. The
+   criterion is that it REPLACES the band. That test passes on a renderer
+   printing both the message and "$601-$1,247" — precisely the commercially
+   harmful case the branch exists to prevent. The implementer verified real
+   behaviour with a scratch test and deleted it before committing, so the
+   behaviour was right but unpinned. Added not.toContain for the band numbers
+   and the per-task rate.
+2. Phase order was unasserted. The existing test declared subsystems already in
+   dependency order and checked only that both names appear and "Phase 1"
+   exists, so it would pass on a renderer that ignored depends_on entirely.
+   Added a test declaring Scheduling BEFORE Identity and asserting Identity is
+   Phase 1.
+3. No dependency-cycle test existed at all, despite being an explicit
+   criterion. The implementer hand-traced the cycle in its report but never
+   wrote it. Added one asserting no throw AND that both subsystems survive —
+   a dropped subsystem would understate a quote a client is reading.
+
+Suite 106 -> 108 tests / 12 files, zero warnings. Both packages typecheck.
+No source change: all three passed on first run against the delivered
+renderers, which is the point — they pin behaviour that was previously free to
+regress silently.
+
+Pattern worth carrying: this plan's fixtures have now been wrong three times
+(US-004 total_tasks 540 vs the contract's max(400); US-005 belowFloor:true set
+unconditionally on a shared fixture used by band-showing tests). Treat plan
+fixtures as unverified. Prefer asserting absence over presence wherever a
+requirement is phrased as "replaces", "omits", or "instead of".

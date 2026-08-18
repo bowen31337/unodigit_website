@@ -105,6 +105,56 @@ describe('renderQuote', () => {
   it('flags a project below the engagement floor rather than quoting it', () => {
     const md = renderQuote({ ...base, quote: { ...quote, belowFloor: true }, rateShown: true })
     expect(md.toLowerCase()).toMatch(/smaller than|minimum|starter/)
+
+    // The criterion is that belowFloor REPLACES the band, not that it adds a
+    // message beside it. Asserting only the message's presence would pass on a
+    // renderer that printed both — which is the commercially harmful case this
+    // whole branch exists to prevent. Assert the numbers are absent.
+    expect(md).not.toContain('601')
+    expect(md).not.toContain('1,247')
+    expect(md).not.toContain('per task')
+  })
+
+  it('orders phases by dependency, not declaration order', () => {
+    // Scheduling is declared FIRST but depends on Identity, so a renderer that
+    // ignored depends_on and emitted declaration order would still satisfy a
+    // test that only checked "Phase 1 exists" and "both names appear".
+    const prog: EstimateShape = {
+      mode: 'program', umbrella: 'Platform',
+      subsystems: [
+        { name: 'Scheduling', categories: [{ name: 'Core functionality', bullets: 184, sample: 'y' }], total_tasks: 184, depends_on: ['Identity'] },
+        { name: 'Identity', categories: [{ name: 'Authentication & User Management', bullets: 96, sample: 'x' }], total_tasks: 96, depends_on: [] },
+      ],
+      total_tasks: 280, confidence: 'low', drivers: [],
+    }
+    const md = renderQuote({ ...base, shape: prog, quote: { ...quote, mode: 'program' }, rateShown: true })
+
+    expect(md).toMatch(/### Phase 1 — Identity/)
+    expect(md).toMatch(/### Phase 2 — Scheduling/)
+  })
+
+  it('falls back to declaration order on a dependency cycle without throwing', () => {
+    // A malformed depends_on from the model must still yield a complete
+    // artifact. Mis-ordered phases are acceptable; a 500, or a subsystem
+    // silently dropped from the quote, is not.
+    const cyclic: EstimateShape = {
+      mode: 'program', umbrella: 'Platform',
+      subsystems: [
+        { name: 'Alpha', categories: [{ name: 'Core functionality', bullets: 96, sample: 'x' }], total_tasks: 96, depends_on: ['Beta'] },
+        { name: 'Beta', categories: [{ name: 'Core functionality', bullets: 184, sample: 'y' }], total_tasks: 184, depends_on: ['Alpha'] },
+      ],
+      total_tasks: 280, confidence: 'low', drivers: [],
+    }
+
+    let md = ''
+    expect(() => {
+      md = renderQuote({ ...base, shape: cyclic, quote: { ...quote, mode: 'program' }, rateShown: true })
+    }).not.toThrow()
+
+    // Both subsystems must survive the cycle — losing one would understate the
+    // quote a client is reading.
+    expect(md).toMatch(/### Phase 1 — Alpha/)
+    expect(md).toMatch(/### Phase 2 — Beta/)
   })
 
   it('lists subsystems and phase order in program mode', () => {

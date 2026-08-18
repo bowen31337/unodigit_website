@@ -115,10 +115,10 @@
         "Program mode lists subsystems in dependency order labelled Phase 1..N; a cycle falls back to declaration order without throwing",
         "Both renderers are pure"
       ],
-      "expectedTests": 104,
+      "expectedTests": 108,
       "priority": 5,
       "passes": true,
-      "notes": "Actual suite is 106/12 (baseline 96/11 per US-004a, +10 tests/1 file), not the plan's 104/12 (which assumed the pre-US-004a 92/11 baseline). Fixed a self-contradictory plan test fixture: the shared belowFloor:true Quote fixture broke 2 sibling tests expecting the band/per-task-rate path; flipped the default to false and overrode true only in the floor-specific test."
+      "notes": "Actual suite is 106/12 (baseline 96/11 per US-004a, +10 tests/1 file), not the plan's 104/12 (which assumed the pre-US-004a 92/11 baseline). Fixed a self-contradictory plan test fixture: the shared belowFloor:true Quote fixture broke 2 sibling tests expecting the band/per-task-rate path; flipped the default to false and overrode true only in the floor-specific test. Controller hardening: added negative assertions that belowFloor omits the band numbers and rate (was asserting only the message's presence), a phase-order test with subsystems declared out of dependency order, and the missing dependency-cycle test the criteria required. 106 -> 108."
     },
     {
       "id": "US-006",
