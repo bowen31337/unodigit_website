@@ -1,9 +1,9 @@
-# The Next.js marketing site deliberately stays at the repository root rather
-# than moving to apps/web. That keeps CI untouched — `pnpm build` still runs
-# `next build` here and still emits ./out, which the Pages deploy expects.
-# Moving it is a separate, riskier change that needs a preview deploy to verify.
+# Every deployable and shared library lives under apps/* or packages/*; the
+# repository root is workspace metadata only (no sources, no app manifest).
 #
-# Only these subtrees are workspace members.
+# The Next.js marketing site is `apps/web` (@unodigit/web). CI still runs
+# `pnpm build` at the root — that now delegates via `turbo build --filter=@unodigit/web`
+# and the static export lands in apps/web/out, which the Pages deploy expects.
 packages:
   - "apps/*"
   - "packages/*"

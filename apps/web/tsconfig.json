@@ -28,20 +28,12 @@
     },
     "target": "ES2017"
   },
-  // This is deliberately an allowlist, not a denylist: it is the only thing stopping
-  // `next build` from typechecking Worker sources (D1Database, cloudflare:test) under
-  // apps/** and packages/**, which would fail the static export build. A denylist of
-  // workspace dirs would silently reopen this hole the next time a top-level workspace
-  // member is added. Keep this in sync with the Next app's actual source directories.
   "include": [
     "next-env.d.ts",
-    "app/**/*",
-    "components/**/*",
-    "lib/**/*",
-    "data/**/*",
-    "tailwind.config.ts",
+    "**/*.ts",
+    "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "out", ".next"]
 }
