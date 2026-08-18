@@ -36,6 +36,12 @@ if [[ "${1:-}" == "--check" ]]; then
   exit $?
 fi
 
+if [[ "${1:-}" == "--list" ]]; then
+  # Names only — Cloudflare never returns secret values, by design.
+  pnpm wrangler secret list
+  exit $?
+fi
+
 for entry in "${SECRETS[@]}"; do
   name="${entry%%:*}"
   ref="${entry#*:}"
