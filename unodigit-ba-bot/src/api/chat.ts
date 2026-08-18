@@ -92,7 +92,13 @@ export function registerChatRoutes(
         id: newId('msg'), conversationId: convId, seq: seq + 1, role: 'assistant',
         content: FALLBACK_REPLY, slotsJson: null, offTopic: false, createdAt: now,
       })
-      await saveSession(c.env, convId, { ...session, totalTurns: session.totalTurns + 1 })
+
+      // A failed turn still consumes a global turn — keep KV and D1 in
+      // lockstep the same way the success path below does, so turn_count
+      // never under-reports relative to the KV session.
+      const failedTotalTurns = session.totalTurns + 1
+      await saveSession(c.env, convId, { ...session, totalTurns: failedTotalTurns })
+      await updateConversationState(c.env.DB, convId, session.state, failedTotalTurns)
 
       return c.json({
         conversationId: convId, reply: FALLBACK_REPLY, state: session.state, finished: false,
