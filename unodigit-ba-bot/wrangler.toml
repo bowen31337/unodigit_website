@@ -1,0 +1,25 @@
+name = "unodigit-ba-bot"
+main = "src/index.ts"
+compatibility_date = "2026-08-18"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ba_bot"
+# placeholder — replace with the id printed by `wrangler d1 create ba_bot` (see SETUP.md)
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[[kv_namespaces]]
+binding = "SESSIONS"
+# placeholder — replace with the id printed by `wrangler kv namespace create SESSIONS` (see SETUP.md)
+id = "00000000-0000-0000-0000-000000000000"
+
+[vars]
+RATE_PER_TASK_AUD = "10"
+MINIMUM_ENGAGEMENT_AUD = "6000"
+TASKS_PER_WEEK = "25"
+PROGRAM_MODE_THRESHOLD = "300"
+QUOTE_VALID_DAYS = "30"
+MAX_TOTAL_TURNS = "40"
+ALLOWED_ORIGIN = "https://unodigit.com"
