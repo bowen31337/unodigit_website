@@ -1,5 +1,5 @@
 import type { Hono } from 'hono'
-import { z } from 'zod'
+import { ChatRequestSchema } from '@unodigit/ba-bot-contract'
 import type { Env } from '../env'
 import { createOpenAiCompatClient } from '../llm/openai-compat'
 import type { ChatMessage, LlmClient } from '../llm/types'
@@ -13,10 +13,7 @@ import {
 import { newId } from '../util/ids'
 import { loadSession, persistSession } from '../session'
 
-const Body = z.object({
-  conversationId: z.string().optional(),
-  message: z.string().min(1).max(4000),
-})
+const Body = ChatRequestSchema
 
 const FALLBACK_REPLY =
   'Sorry — something went wrong on my end. Could you say that once more?'

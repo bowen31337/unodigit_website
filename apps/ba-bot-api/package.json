@@ -12,6 +12,7 @@
     "db:migrate:remote": "wrangler d1 migrations apply ba_bot --remote"
   },
   "dependencies": {
+    "@unodigit/ba-bot-contract": "workspace:*",
     "hono": "^4.6.0",
     "zod": "^3.24.1"
   },

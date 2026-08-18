@@ -1,5 +1,5 @@
 import type { Hono } from 'hono'
-import { z } from 'zod'
+import { ContactRequestSchema } from '@unodigit/ba-bot-contract'
 import type { Env } from '../env'
 import { getConversation, insertLead, recordEvent } from '../db/queries'
 import { verifyTurnstile } from '../guards/turnstile'
@@ -8,22 +8,7 @@ import { newId } from '../util/ids'
 import { step } from '../graph/transitions'
 import { loadSession, persistSession } from '../session'
 
-const Body = z.object({
-  conversationId: z.string(),
-  name: z.string().min(1).max(120).optional(),
-  email: z.string().email().max(200),
-  company: z.string().max(160).optional(),
-  role: z.string().max(120).optional(),
-  consent: z.literal(true),
-  turnstileToken: z.string().min(1),
-  utm: z.object({
-    source: z.string().optional(),
-    medium: z.string().optional(),
-    campaign: z.string().optional(),
-  }).optional(),
-  referrer: z.string().max(500).optional(),
-  landingPage: z.string().max(500).optional(),
-})
+const Body = ContactRequestSchema
 
 export function registerContactRoutes(app: Hono<{ Bindings: Env }>): void {
   app.post('/api/contact', async (c) => {

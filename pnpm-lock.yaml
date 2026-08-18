@@ -189,6 +189,9 @@ importers:
 
   apps/ba-bot-api:
     dependencies:
+      '@unodigit/ba-bot-contract':
+        specifier: workspace:*
+        version: link:../../packages/ba-bot-contract
       hono:
         specifier: ^4.6.0
         version: 4.13.3
@@ -211,6 +214,16 @@ importers:
       wrangler:
         specifier: ^4.123.0
         version: 4.123.0(@cloudflare/workers-types@5.20260818.1)
+
+  packages/ba-bot-contract:
+    dependencies:
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: ~5.6.2
+        version: 5.6.3
 
 packages:
 

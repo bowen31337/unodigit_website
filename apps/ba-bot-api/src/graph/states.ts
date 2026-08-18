@@ -1,15 +1,9 @@
 import { z } from 'zod'
+import type { StateId } from '@unodigit/ba-bot-contract'
 
-export type StateId =
-  | 'GREETING'
-  | 'PROJECT_IDENTITY'
-  | 'SOLUTION_SHAPE'
-  | 'USERS_AND_SCOPE'
-  | 'FEATURE_MAP'
-  | 'CONSTRAINTS'
-  | 'CONTACT'
-  | 'GENERATE'
-  | 'DONE'
+// Re-exported so existing importers of `StateId` from this module keep
+// working; the union itself is now the wire contract's source of truth.
+export type { StateId }
 
 export type Slots = Record<string, unknown>
 
