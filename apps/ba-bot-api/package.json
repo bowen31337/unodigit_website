@@ -1,5 +1,5 @@
 {
-  "name": "unodigit-ba-bot",
+  "name": "@unodigit/ba-bot-api",
   "private": true,
   "type": "module",
   "scripts": {

@@ -6,7 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "ws:test": "turbo test",
+    "ws:typecheck": "turbo typecheck",
+    "bot:dev": "turbo dev --filter=@unodigit/ba-bot-api",
+    "bot:test": "turbo test --filter=@unodigit/ba-bot-api",
+    "bot:deploy": "turbo deploy --filter=@unodigit/ba-bot-api"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -68,6 +73,14 @@
     "eslint-config-next": "14.2.18",
     "postcss": "8.4.49",
     "tailwindcss": "^3.4.16",
+    "turbo": "^2.10.10",
     "typescript": "~5.6.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "unrs-resolver",
+      "workerd"
+    ]
   }
 }

@@ -1,0 +1,9 @@
+# The Next.js marketing site deliberately stays at the repository root rather
+# than moving to apps/web. That keeps CI untouched — `pnpm build` still runs
+# `next build` here and still emits ./out, which the Pages deploy expects.
+# Moving it is a separate, riskier change that needs a preview deploy to verify.
+#
+# Only these subtrees are workspace members.
+packages:
+  - "apps/*"
+  - "packages/*"
