@@ -350,9 +350,17 @@ read as a fixed-price offer.
 
 ## 7. Contact capture
 
-**Name, email, and mobile are collected by a React form component, not through
-the conversation.** The `CONTACT` state renders the form; it POSTs directly to
-the Worker and into D1. These fields never enter the LLM message array.
+**Contact details are collected by a React form component, not through the
+conversation.** The `CONTACT` state renders the form; it POSTs directly to the
+Worker and into D1. These fields never enter the LLM message array.
+
+**Email is the only required field.** `name`, `company`, and `role` are
+optional, and a phone number is not collected at all. This is a deliberate
+data-minimisation decision: the deliverable is a brief and quote sent by email,
+so an email address is the one field with a purpose. A mobile number would be
+PII held on the off-chance someone wants to call — extra breach surface, an
+extra APP 11 obligation, and a form field that costs conversions. Collect only
+what is needed.
 
 Better on four axes at once:
 
@@ -360,9 +368,8 @@ Better on four axes at once:
   **APP 8**, cross-border disclosure of personal information leaves Uno Digit
   accountable for the overseas recipient's handling of it. Keeping PII out of
   the transcript removes the exposure rather than managing it.
-- **Reliability** — `type="email"` / `type="tel"` with real validation beat an
-  LLM parsing a phone number from free text. A quote cannot be emailed to a
-  hallucinated address.
+- **Reliability** — `type="email"` with real validation beats an LLM parsing an
+  address from free text. A quote cannot be emailed to a hallucinated address.
 - **Cost** — zero tokens.
 - **UX** — mobile keyboards and autofill.
 
@@ -392,9 +399,10 @@ sensitive product concepts. Required before launch:
 CREATE TABLE leads (
   id                TEXT PRIMARY KEY,
   created_at        INTEGER NOT NULL,
-  name              TEXT NOT NULL,
+  -- name is nullable and there is no mobile column: see §7, email is the only
+  -- required contact field.
+  name              TEXT,
   email             TEXT NOT NULL,
-  mobile            TEXT NOT NULL,
   company           TEXT,
   role              TEXT,
   ip_hash           TEXT NOT NULL,
@@ -565,7 +573,7 @@ endpoints stay unauthenticated.
 
 | View | Shows |
 |---|---|
-| Leads | name, email, mobile, company, source, date, quote total |
+| Leads | name (optional), email, company, source, date, quote total |
 | Conversation | full transcript, slots per turn, off-topic flags |
 | Brief | rendered markdown from `briefs.markdown` |
 | Quote | rendered markdown from `quotes.markdown` |

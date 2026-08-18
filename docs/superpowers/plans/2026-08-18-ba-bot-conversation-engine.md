@@ -19,7 +19,8 @@ These apply to every task. Violating any of them is a review rejection.
 - **All Zod object schemas use `.strict()`.** DeepSeek guarantees valid JSON syntax only, never schema conformance. Unknown keys are a validation failure, not something to ignore.
 - **Exactly one repair retry per turn.** Never two. Cost and latency both compound.
 - **Every state must declare `maxTurns`.** No exceptions, no defaults.
-- **Name, email, and mobile must never enter the LLM message array.** They are captured by `POST /api/contact` and written straight to D1.
+- **No lead field may ever enter the LLM message array.** Contact details are captured by `POST /api/contact` and written straight to D1.
+- **Collect only what is needed.** Data minimisation: `email` is the only required contact field. `name` is optional and `mobile` is not collected at all — a quote is delivered by email, so a phone number is PII held without a purpose.
 - **Admin routes live under `/admin/*`.** Public chat endpoints stay unauthenticated; nothing else may share that prefix.
 - Node version: 20+. Package manager: **pnpm** (matches `uno-digit`).
 - `zod` is pinned to `^3.24.1` to match `uno-digit`'s existing dependency.
@@ -427,9 +428,8 @@ rm migrations/0000_placeholder.sql
 CREATE TABLE leads (
   id                TEXT PRIMARY KEY,
   created_at        INTEGER NOT NULL,
-  name              TEXT NOT NULL,
+  name              TEXT,
   email             TEXT NOT NULL,
-  mobile            TEXT NOT NULL,
   company           TEXT,
   role              TEXT,
   ip_hash           TEXT NOT NULL,
@@ -567,9 +567,8 @@ export interface MessageInsert {
 export interface LeadInsert {
   id: string
   createdAt: number
-  name: string
+  name: string | null
   email: string
-  mobile: string
   company: string | null
   role: string | null
   ipHash: string
@@ -645,12 +644,12 @@ export async function insertLead(db: D1Database, row: LeadInsert): Promise<strin
   await db
     .prepare(
       `INSERT INTO leads (
-         id, created_at, name, email, mobile, company, role, ip_hash, country, asn, user_agent,
+         id, created_at, name, email, company, role, ip_hash, country, asn, user_agent,
          utm_source, utm_medium, utm_campaign, referrer, landing_page, consent_marketing, consent_ts
-       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     )
     .bind(
-      row.id, row.createdAt, row.name, row.email, row.mobile, row.company, row.role,
+      row.id, row.createdAt, row.name, row.email, row.company, row.role,
       row.ipHash, row.country, row.asn, row.userAgent, row.utmSource, row.utmMedium,
       row.utmCampaign, row.referrer, row.landingPage, row.consentMarketing ? 1 : 0, row.consentTs,
     )
@@ -2075,7 +2074,7 @@ async function seedConversation(): Promise<string> {
 }
 
 const valid = {
-  name: 'Jane Doe', email: 'jane@acme.com', mobile: '+61411222333',
+  name: 'Jane Doe', email: 'jane@acme.com',
   company: 'Acme', consent: true, turnstileToken: 'tok',
 }
 
@@ -2091,10 +2090,9 @@ describe('POST /api/contact', () => {
 
     const { leadId } = await res.json<{ leadId: string }>()
     const lead = await env.DB.prepare('SELECT * FROM leads WHERE id = ?').bind(leadId)
-      .first<{ name: string; email: string; mobile: string; ip_hash: string; consent_marketing: number }>()
+      .first<{ name: string; email: string; ip_hash: string; consent_marketing: number }>()
 
     expect(lead!.name).toBe('Jane Doe')
-    expect(lead!.mobile).toBe('+61411222333')
     expect(lead!.consent_marketing).toBe(1)
 
     const conv = await env.DB.prepare('SELECT lead_id FROM conversations WHERE id = ?')
@@ -2128,11 +2126,12 @@ describe('POST /api/contact', () => {
     expect(res.status).toBe(400)
   })
 
-  it('rejects a missing mobile number', async () => {
+  it('accepts a lead with no name', async () => {
     mockTurnstile(true)
     const conversationId = await seedConversation()
-    const res = await postContact({ ...valid, mobile: '', conversationId })
-    expect(res.status).toBe(400)
+    const { name: _name, ...withoutName } = valid
+    const res = await postContact({ ...withoutName, conversationId })
+    expect(res.status).toBe(200)
   })
 
   it('rejects withheld consent', async () => {
@@ -2179,14 +2178,13 @@ import { hashIp } from '../util/hash'
 import { newId } from '../util/ids'
 import { step, initialState, type ConversationState } from '../graph/transitions'
 
-// Deliberately permissive on format, strict on presence: international mobile
-// numbers vary too much to regex safely, and rejecting a real lead is worse
-// than storing one we have to normalise later.
+// Data minimisation: email is the only required contact field, because it is
+// the only one the quote delivery actually needs. A name is nice to have, and
+// a phone number is PII with no purpose here — so it is not collected.
 const Body = z.object({
   conversationId: z.string(),
-  name: z.string().min(1).max(120),
+  name: z.string().min(1).max(120).optional(),
   email: z.string().email().max(200),
-  mobile: z.string().min(6).max(30),
   company: z.string().max(160).optional(),
   role: z.string().max(120).optional(),
   consent: z.literal(true),
@@ -2224,9 +2222,8 @@ export function registerContactRoutes(app: Hono<{ Bindings: Env }>): void {
     await insertLead(c.env.DB, {
       id: leadId,
       createdAt: now,
-      name: b.name,
+      name: b.name ?? null,
       email: b.email,
-      mobile: b.mobile,
       company: b.company ?? null,
       role: b.role ?? null,
       ipHash: await hashIp(ip ?? 'unknown', c.env.IP_HASH_SALT),
@@ -2286,7 +2283,7 @@ Expected: PASS, 8 tests.
 
 - [ ] **Step 6: Verify no PII path reaches the LLM**
 
-Run: `grep -rn "name\|email\|mobile" unodigit-ba-bot/src/llm unodigit-ba-bot/src/graph/prompts.ts`
+Run: `grep -rn "name\|email" unodigit-ba-bot/src/llm unodigit-ba-bot/src/graph/prompts.ts`
 Expected: the only matches are the prompt's instruction *not* to ask for them. If any code path in `src/llm/` or the prompts reads a lead field, that is a spec violation and must be removed.
 
 - [ ] **Step 7: Run the full suite and deploy**

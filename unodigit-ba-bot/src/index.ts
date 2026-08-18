@@ -6,9 +6,30 @@ import { registerContactRoutes } from './api/contact'
 
 const app = new Hono<{ Bindings: Env }>()
 
+/** Secrets whose absence silently degrades a control rather than failing:
+ * an unset IP_HASH_SALT hashes every IP under a constant, publicly-known
+ * prefix (a rainbow-table lookup away from the raw address), and an unset
+ * TURNSTILE_SECRET or LLM_API_KEY turns a guard into a no-op. A misconfigured
+ * deploy must refuse traffic, not serve it with the guardrails off. */
+const REQUIRED_SECRETS = ['LLM_API_KEY', 'IP_HASH_SALT', 'TURNSTILE_SECRET'] as const
+
 app.use('/api/*', (c, next) =>
   cors({ origin: c.env.ALLOWED_ORIGIN, allowMethods: ['GET', 'POST', 'OPTIONS'] })(c, next),
 )
+
+app.use('/api/*', async (c, next) => {
+  if (REQUIRED_SECRETS.some((k) => !c.env[k])) {
+    return c.json({ error: 'not_configured' }, 503)
+  }
+  await next()
+})
+
+// Unexpected throws (a D1 constraint, a binding outage) would otherwise
+// surface as a bare 500 with an HTML-ish body the widget cannot parse.
+app.onError((err, c) => {
+  console.error('unhandled', err)
+  return c.json({ error: 'internal_error' }, 500)
+})
 
 app.get('/health', (c) => c.json({ status: 'ok' }))
 

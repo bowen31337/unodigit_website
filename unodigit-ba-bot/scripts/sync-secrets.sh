@@ -21,11 +21,18 @@ CF_TOKEN_REF="op://application/cloudflare_api/api_token"
 SECRETS=(
   "LLM_API_KEY:op://application/deepseek/api_key"
   "RESEND_API_KEY:op://application/resend/api_key"
+  "TURNSTILE_SECRET:op://application/turnstile/secret_key"
+  "IP_HASH_SALT:op://application/ba_bot/ip_hash_salt"
 )
 
-# Secrets not yet in 1Password. Create them, then add lines above.
-#   TURNSTILE_SECRET  — Cloudflare dashboard → Turnstile → your site → secret key
-#   IP_HASH_SALT      — generate once: openssl rand -hex 32
+# The last two 1Password entries must be created before this script will
+# succeed — `op read` exits non-zero on a missing item and `set -e` stops here.
+#   op://application/turnstile/secret_key — Cloudflare dashboard → Turnstile → your site → secret key
+#   op://application/ba_bot/ip_hash_salt  — generate once: openssl rand -hex 32
+#
+# The Worker refuses traffic with 503 while TURNSTILE_SECRET or IP_HASH_SALT is
+# unset (see src/index.ts) — an unsalted ip_hash is a reversible IP, so a
+# missing salt must fail closed rather than degrade quietly.
 
 CLOUDFLARE_API_TOKEN="$(op read "$CF_TOKEN_REF")"
 export CLOUDFLARE_API_TOKEN

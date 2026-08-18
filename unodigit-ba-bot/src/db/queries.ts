@@ -89,6 +89,31 @@ export async function appendMessage(db: D1Database, row: MessageInsert): Promise
     .run()
 }
 
+/** Append a message, choosing `seq` inside the INSERT itself.
+ *
+ * Computing `seq` in the Worker (read length, await the LLM, then insert) lets
+ * two concurrent turns on one conversation pick the same number and collide on
+ * `idx_messages_conv_seq`. SQLite evaluates the sub-select and the insert as a
+ * single serialised statement, so concurrent callers get distinct numbers.
+ * Returns the seq that was actually written. */
+export async function appendMessageAtNextSeq(
+  db: D1Database, row: Omit<MessageInsert, 'seq'>,
+): Promise<number> {
+  const inserted = await db
+    .prepare(
+      `INSERT INTO messages (id, conversation_id, seq, role, content, slots_json, off_topic, created_at)
+       SELECT ?, ?, COALESCE(MAX(seq), 0) + 1, ?, ?, ?, ?, ?
+       FROM messages WHERE conversation_id = ?
+       RETURNING seq`,
+    )
+    .bind(
+      row.id, row.conversationId, row.role, row.content,
+      row.slotsJson, row.offTopic ? 1 : 0, row.createdAt, row.conversationId,
+    )
+    .first<{ seq: number }>()
+  return inserted!.seq
+}
+
 export async function listMessages(db: D1Database, conversationId: string): Promise<MessageRow[]> {
   const { results } = await db
     .prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY seq ASC')

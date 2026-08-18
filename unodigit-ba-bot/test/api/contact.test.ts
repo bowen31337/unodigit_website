@@ -26,9 +26,15 @@ async function postContact(body: unknown) {
   })
 }
 
-async function seedConversation(): Promise<string> {
+// The form only renders once the graph reaches CONTACT, so every happy-path
+// case seeds a session that is actually sitting there. `wrongState` seeds the
+// same conversation mid-interview instead.
+async function seedConversation(state = 'CONTACT'): Promise<string> {
   const id = newId('conv')
   await createConversation(env.DB, id, Date.now())
+  await env.SESSIONS.put(sessionKey(id), JSON.stringify({
+    state, slots: {}, turnsInState: 0, totalTurns: 10, forcedAdvances: [],
+  }))
   return id
 }
 
@@ -114,12 +120,43 @@ describe('POST /api/contact', () => {
   it('advances the session past CONTACT', async () => {
     mockTurnstile(true)
     const conversationId = await seedConversation()
-    await env.SESSIONS.put(sessionKey(conversationId), JSON.stringify({
-      state: 'CONTACT', slots: {}, turnsInState: 0, totalTurns: 10, forcedAdvances: [],
-    }))
 
     const res = await postContact({ ...valid, conversationId })
     const json = await res.json<{ state: string }>()
     expect(json.state).toBe('GENERATE')
+  })
+
+  it('rejects a post from a state other than CONTACT', async () => {
+    mockTurnstile(true)
+    const conversationId = await seedConversation('GREETING')
+
+    const res = await postContact({ ...valid, conversationId })
+    expect(res.status).toBe(409)
+
+    const row = await env.DB.prepare('SELECT state, lead_id FROM conversations WHERE id = ?')
+      .bind(conversationId).first<{ state: string; lead_id: string | null }>()
+    expect(row!.state).toBe('GREETING')
+    expect(row!.lead_id).toBeNull()
+  })
+
+  it('returns 404, not 500, for a failed challenge on an unknown conversation', async () => {
+    mockTurnstile(false)
+    const res = await postContact({ ...valid, conversationId: 'conv_nope' })
+    expect(res.status).toBe(404)
+  })
+
+  it('keeps D1 state and turn_count in lockstep with KV', async () => {
+    mockTurnstile(true)
+    const conversationId = await seedConversation()
+    await postContact({ ...valid, conversationId })
+
+    const row = await env.DB.prepare('SELECT state, turn_count FROM conversations WHERE id = ?')
+      .bind(conversationId).first<{ state: string; turn_count: number }>()
+    const session = JSON.parse((await env.SESSIONS.get(sessionKey(conversationId)))!) as
+      { state: string; totalTurns: number }
+
+    expect(row!.state).toBe(session.state)
+    expect(row!.turn_count).toBe(session.totalTurns)
+    expect(row!.turn_count).toBe(11)
   })
 })
