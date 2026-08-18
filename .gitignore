@@ -52,3 +52,9 @@ next-env.d.ts
 
 # Turborepo local task cache (root and per-package)
 .turbo/
+
+# Wrangler local state / secrets (belt and braces with apps/ba-bot-api/.gitignore —
+# `pnpm wrangler ...` run one directory too high creates these at the repo root)
+.wrangler/
+.dev.vars
+.dev.vars.*

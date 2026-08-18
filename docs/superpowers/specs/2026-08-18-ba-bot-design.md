@@ -53,7 +53,7 @@ benefit, so the bot backend is a **separate Worker**.
 └──────────────┬──────────────┘
                │ fetch / SSE  →  api.unodigit.com
 ┌──────────────▼──────────────┐
-│ unodigit-ba-bot (Worker)    │  Hono
+│ apps/ba-bot-api (Worker)    │  Hono
 │  graph/     elicitation FSM │
 │  llm/       provider adapter│──→ DeepSeek (OpenAI-compatible)
 │  estimator/ task decomposer │
