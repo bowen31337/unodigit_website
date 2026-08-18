@@ -1,296 +1,259 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { motion, useScroll, useTransform } from 'motion/react';
-import { Mail, MapPin, Send, CheckCircle } from 'lucide-react';
+import { useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { Mail, MapPin, Send, Check } from 'lucide-react';
+import PageHero from '@/components/PageHero';
 import GlassCard from '@/components/GlassCard';
-import MagneticButton from '@/components/MagneticButton';
+import Button from '@/components/Button';
 
-const pageVariants = {
-  initial: { opacity: 0 },
-  animate: { opacity: 1 },
-  exit: { opacity: 0 },
-};
+const needs = [
+  { value: 'ai-strategy', label: 'AI Strategy' },
+  { value: 'ml-development', label: 'ML Development' },
+  { value: 'web-app', label: 'Web / App Development' },
+  { value: 'data-engineering', label: 'Data Engineering' },
+  { value: 'other', label: 'Other' },
+];
 
-const staggerContainer = {
-  animate: { transition: { staggerChildren: 0.15 } },
-};
+const budgets = [
+  { value: '10-50k', label: '$10,000 – $50,000' },
+  { value: '50-100k', label: '$50,000 – $100,000' },
+  { value: '100-500k', label: '$100,000 – $500,000' },
+  { value: '500k+', label: '$500,000+' },
+];
 
-const fadeInUp = {
-  initial: { opacity: 0, y: 60, scale: 0.95 },
-  animate: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.8, ease: [0.25, 0.1, 0.25, 1] as const } },
-};
-
-const formFieldVariants = {
-  initial: { opacity: 0, y: 20 },
-  animate: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.25, 0.1, 0.25, 1] as const } },
-};
+const EMPTY = { name: '', company: '', email: '', need: '', budget: '', message: '' };
 
 export default function ContactClient() {
   const [submitted, setSubmitted] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    company: '',
-    email: '',
-    need: '',
-    budget: '',
-    message: '',
-  });
-  
-  const heroRef = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({
-    target: heroRef,
-    offset: ['start start', 'end start'],
-  });
-  
-  const bgY1 = useTransform(scrollYProgress, [0, 1], [0, 100]);
-  const bgY2 = useTransform(scrollYProgress, [0, 1], [0, 150]);
+  const [form, setForm] = useState(EMPTY);
+  const reduced = useReducedMotion();
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitted(true);
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
+  const update = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => setForm({ ...form, [e.target.name]: e.target.value });
 
   return (
-    <motion.main
-      className="pt-24"
-      variants={pageVariants}
-      initial="initial"
-      animate="animate"
-      exit="exit"
-      transition={{ duration: 0.5 }}
-    >
-      {/* Hero */}
-      <section ref={heroRef} className="py-24 relative overflow-hidden">
-        <motion.div 
-          style={{ y: bgY1 }} 
-          className="absolute -top-20 -left-20 w-96 h-96 bg-primary/5 rounded-full blur-3xl" 
-        />
-        <motion.div 
-          style={{ y: bgY2 }} 
-          className="absolute bottom-0 right-20 w-[500px] h-[500px] bg-secondary/5 rounded-full blur-3xl" 
-        />
-        
-        <div className="container mx-auto px-6 relative z-10">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="max-w-4xl"
-          >
-            <span className="text-primary font-medium mb-4 block">Contact Us</span>
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6">
-              Let&apos;s Build Something <span className="text-gradient">Amazing Together</span>
-            </h1>
-            <p className="text-xl text-muted max-w-2xl">
-              Ready to transform your business with AI? Get in touch and let&apos;s discuss 
-              how we can help you achieve your goals.
-            </p>
-          </motion.div>
-        </div>
-      </section>
+    <>
+      <PageHero
+        eyebrow="Contact"
+        title={
+          <>
+            Let&rsquo;s build something{' '}
+            <span style={{ color: 'var(--accent-display)' }}>together</span>
+          </>
+        }
+        lede="Tell us what you're working on. We'll come back within one business day with a considered response, not a sales sequence."
+      />
 
-      {/* Contact Content */}
-      <section className="py-12 pb-24">
-        <div className="container mx-auto px-6">
-          <div className="grid lg:grid-cols-3 gap-12">
-            {/* Contact Info */}
-            <div className="lg:col-span-1">
-              <motion.div 
-                className="space-y-6"
-                variants={staggerContainer}
-                initial="initial"
-                whileInView="animate"
-                viewport={{ once: true }}
-              >
-                <motion.div variants={fadeInUp}>
-                  <GlassCard className="flex items-start gap-4 group hover:border-primary/30 transition-all">
-                    <motion.div 
-                      className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0"
-                      whileHover={{ scale: 1.1 }}
-                      transition={{ type: 'spring', stiffness: 300 }}
-                    >
-                      <Mail className="text-primary" size={24} />
-                    </motion.div>
-                    <div>
-                      <h3 className="font-semibold mb-1">Email Us</h3>
-                      <a href="mailto:info@unodigit.com.au" className="text-muted hover:text-primary transition-colors">
-                        info@unodigit.com.au
-                      </a>
-                    </div>
-                  </GlassCard>
-                </motion.div>
+      <section className="pb-s12">
+        <div className="container">
+          <div className="grid gap-s9 lg:grid-cols-3">
+            {/* ── Contact details ─────────────────────────────────────── */}
+            <div className="space-y-s5 lg:col-span-1">
+              <GlassCard className="flex items-start gap-s5" material="thin">
+                <span
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md"
+                  style={{ background: 'rgb(var(--c-accent) / 0.14)', color: 'var(--accent-ink)' }}
+                >
+                  <Mail size={20} strokeWidth={2} />
+                </span>
+                <span className="block">
+                  <span className="type-headline mb-s2 block">Email us</span>
+                  <a
+                    href="mailto:info@unodigit.com.au"
+                    className="type-callout transition-colors duration-fast hover:text-accent-ink"
+                    style={{ color: 'var(--label-secondary)' }}
+                  >
+                    info@unodigit.com.au
+                  </a>
+                </span>
+              </GlassCard>
 
-                <motion.div variants={fadeInUp}>
-                  <GlassCard className="flex items-start gap-4 group hover:border-primary/30 transition-all">
-                    <motion.div 
-                      className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0"
-                      whileHover={{ scale: 1.1 }}
-                      transition={{ type: 'spring', stiffness: 300 }}
-                    >
-                      <MapPin className="text-primary" size={24} />
-                    </motion.div>
-                    <div>
-                      <h3 className="font-semibold mb-1">Visit Us</h3>
-                      <p className="text-muted">
-                        Sydney, NSW<br />
-                        Australia
-                      </p>
-                    </div>
-                  </GlassCard>
-                </motion.div>
-              </motion.div>
+              <GlassCard className="flex items-start gap-s5" material="thin">
+                <span
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md"
+                  style={{ background: 'rgb(var(--c-accent-2) / 0.14)', color: 'var(--accent-2-ink)' }}
+                >
+                  <MapPin size={20} strokeWidth={2} />
+                </span>
+                <span className="block">
+                  <span className="type-headline mb-s2 block">Visit us</span>
+                  <span className="type-callout" style={{ color: 'var(--label-secondary)' }}>
+                    Sydney, NSW
+                    <br />
+                    Australia
+                  </span>
+                </span>
+              </GlassCard>
             </div>
 
-            {/* Contact Form */}
+            {/* ── Form ────────────────────────────────────────────────── */}
             <div className="lg:col-span-2">
-              <motion.div
-                initial={{ opacity: 0, x: 50, rotateY: -10 }}
-                whileInView={{ opacity: 1, x: 0, rotateY: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.8 }}
-                style={{ perspective: 1000 }}
-              >
-                <GlassCard>
+              <div className="card p-s8 sm:p-s10">
+                <AnimatePresence mode="wait" initial={false}>
                   {submitted ? (
-                    <motion.div 
-                      className="text-center py-12"
-                      initial={{ opacity: 0, scale: 0.8 }}
+                    <motion.div
+                      key="thanks"
+                      initial={{ opacity: 0, scale: reduced ? 1 : 0.96 }}
                       animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.5, type: 'spring', bounce: 0.4 }}
+                      exit={{ opacity: 0 }}
+                      transition={
+                        reduced
+                          ? { duration: 0.25 }
+                          : { type: 'spring', bounce: 0.15, visualDuration: 0.35 }
+                      }
+                      className="py-s10 text-center"
+                      role="status"
                     >
-                      <motion.div 
-                        className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6"
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        transition={{ delay: 0.2, type: 'spring', bounce: 0.5 }}
+                      <span
+                        className="mx-auto mb-s7 flex h-16 w-16 items-center justify-center rounded-full"
+                        style={{ background: 'var(--accent-solid)', color: 'var(--on-accent)' }}
                       >
-                        <CheckCircle size={40} className="text-primary" />
-                      </motion.div>
-                      <h3 className="text-2xl font-bold mb-4">Thank You!</h3>
-                      <p className="text-muted">
-                        We&apos;ve received your message and will get back to you within 24 hours.
+                        <Check size={30} strokeWidth={3} />
+                      </span>
+                      <h2 className="type-title-2 mb-s4">Thank you</h2>
+                      <p
+                        className="type-body mx-auto max-w-sm"
+                        style={{ color: 'var(--label-secondary)' }}
+                      >
+                        We&rsquo;ve received your message and will get back to you within one
+                        business day.
                       </p>
                     </motion.div>
                   ) : (
-                    <motion.form 
-                      onSubmit={handleSubmit} 
-                      className="space-y-6"
-                      initial="initial"
-                      whileInView="animate"
-                      viewport={{ once: true }}
+                    <motion.form
+                      key="form"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        setSubmitted(true);
+                      }}
+                      className="space-y-s6"
+                      noValidate={false}
                     >
-                      <div className="grid md:grid-cols-2 gap-6">
-                        <motion.div variants={formFieldVariants} transition={{ delay: 0 }}>
-                          <label className="block text-sm font-medium mb-2">Name *</label>
+                      <div className="grid gap-s6 sm:grid-cols-2">
+                        <div>
+                          <label htmlFor="name" className="field-label">
+                            Name <span aria-hidden="true">*</span>
+                          </label>
                           <input
-                            type="text"
+                            id="name"
                             name="name"
-                            value={formData.name}
-                            onChange={handleChange}
-                            required
-                            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-primary transition-colors"
-                            placeholder="Your name"
-                          />
-                        </motion.div>
-                        <motion.div variants={formFieldVariants} transition={{ delay: 0.08 }}>
-                          <label className="block text-sm font-medium mb-2">Company</label>
-                          <input
                             type="text"
-                            name="company"
-                            value={formData.company}
-                            onChange={handleChange}
-                            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-primary transition-colors"
-                            placeholder="Your company"
+                            required
+                            autoComplete="name"
+                            value={form.name}
+                            onChange={update}
+                            placeholder="Your name"
+                            className="field"
                           />
-                        </motion.div>
+                        </div>
+                        <div>
+                          <label htmlFor="company" className="field-label">
+                            Company
+                          </label>
+                          <input
+                            id="company"
+                            name="company"
+                            type="text"
+                            autoComplete="organization"
+                            value={form.company}
+                            onChange={update}
+                            placeholder="Your company"
+                            className="field"
+                          />
+                        </div>
                       </div>
 
-                      <motion.div variants={formFieldVariants} transition={{ delay: 0.16 }}>
-                        <label className="block text-sm font-medium mb-2">Email *</label>
+                      <div>
+                        <label htmlFor="email" className="field-label">
+                          Email <span aria-hidden="true">*</span>
+                        </label>
                         <input
-                          type="email"
+                          id="email"
                           name="email"
-                          value={formData.email}
-                          onChange={handleChange}
+                          type="email"
                           required
-                          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-primary transition-colors"
-                          placeholder="your@email.com"
+                          autoComplete="email"
+                          value={form.email}
+                          onChange={update}
+                          placeholder="you@company.com"
+                          className="field"
                         />
-                      </motion.div>
+                      </div>
 
-                      <div className="grid md:grid-cols-2 gap-6">
-                        <motion.div variants={formFieldVariants} transition={{ delay: 0.24 }}>
-                          <label className="block text-sm font-medium mb-2">What do you need?</label>
+                      <div className="grid gap-s6 sm:grid-cols-2">
+                        <div>
+                          <label htmlFor="need" className="field-label">
+                            What do you need?
+                          </label>
                           <select
+                            id="need"
                             name="need"
-                            value={formData.need}
-                            onChange={handleChange}
-                            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-primary transition-colors"
+                            value={form.need}
+                            onChange={update}
+                            className="field"
                           >
                             <option value="">Select a service</option>
-                            <option value="ai-strategy">AI Strategy</option>
-                            <option value="ml-development">ML Development</option>
-                            <option value="web-app">Web/App Development</option>
-                            <option value="data-engineering">Data Engineering</option>
-                            <option value="other">Other</option>
+                            {needs.map((n) => (
+                              <option key={n.value} value={n.value}>
+                                {n.label}
+                              </option>
+                            ))}
                           </select>
-                        </motion.div>
-                        <motion.div variants={formFieldVariants} transition={{ delay: 0.32 }}>
-                          <label className="block text-sm font-medium mb-2">Budget Range</label>
+                        </div>
+                        <div>
+                          <label htmlFor="budget" className="field-label">
+                            Budget range
+                          </label>
                           <select
+                            id="budget"
                             name="budget"
-                            value={formData.budget}
-                            onChange={handleChange}
-                            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-primary transition-colors"
+                            value={form.budget}
+                            onChange={update}
+                            className="field"
                           >
-                            <option value="">Select budget</option>
-                            <option value="10-50k">$10,000 - $50,000</option>
-                            <option value="50-100k">$50,000 - $100,000</option>
-                            <option value="100-500k">$100,000 - $500,000</option>
-                            <option value="500k+">$500,000+</option>
+                            <option value="">Select a range</option>
+                            {budgets.map((b) => (
+                              <option key={b.value} value={b.value}>
+                                {b.label}
+                              </option>
+                            ))}
                           </select>
-                        </motion.div>
+                        </div>
                       </div>
 
-                      <motion.div variants={formFieldVariants} transition={{ delay: 0.4 }}>
-                        <label className="block text-sm font-medium mb-2">Message *</label>
+                      <div>
+                        <label htmlFor="message" className="field-label">
+                          Message <span aria-hidden="true">*</span>
+                        </label>
                         <textarea
+                          id="message"
                           name="message"
-                          value={formData.message}
-                          onChange={handleChange}
                           required
                           rows={5}
-                          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-primary transition-colors resize-none"
-                          placeholder="Tell us about your project..."
+                          value={form.message}
+                          onChange={update}
+                          placeholder="Tell us about your project…"
+                          className="field"
                         />
-                      </motion.div>
+                      </div>
 
-                      <motion.div variants={formFieldVariants} transition={{ delay: 0.48 }}>
-                        <MagneticButton>
-                          <motion.button
-                            type="submit"
-                            className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-primary to-secondary text-background font-semibold rounded-full hover:shadow-lg hover:shadow-primary/25 transition-all"
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                          >
-                            Send Message <Send size={20} />
-                          </motion.button>
-                        </MagneticButton>
-                      </motion.div>
+                      <Button type="submit" size="lg">
+                        Send message <Send size={17} />
+                      </Button>
                     </motion.form>
                   )}
-                </GlassCard>
-              </motion.div>
+                </AnimatePresence>
+              </div>
             </div>
           </div>
         </div>
       </section>
-    </motion.main>
+    </>
   );
 }
-

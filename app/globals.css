@@ -1,3 +1,20 @@
+/* ============================================================================
+   Uno Digit — Apple design token layer
+   ----------------------------------------------------------------------------
+   Structure:
+     1. Brand ramps      — derived from public/logo.png (the only source of truth
+                           for brand hue: cyan #06b6d4, violet #8b5cf6)
+     2. Apple primitives — type scale, spacing, radii, elevation, motion
+     3. Semantic tokens  — light defaults, remapped for dark
+     4. Materials        — Liquid Glass recipes
+     5. Base + a11y      — reduced motion / transparency / contrast fallbacks
+
+   Never hardcode a hex in a component. Reference the semantic tokens so both
+   themes and the prefers-* fallbacks keep working.
+   ============================================================================ */
+
+/* -apple-system leads so Apple devices render real SF Pro; Inter is the
+   cross-platform stand-in with the closest metrics. */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 @tailwind base;
@@ -5,209 +22,775 @@
 @tailwind utilities;
 
 :root {
-  --bg-deep: #020617;
-  --bg-glass: rgba(15, 23, 42, 0.6);
-  --primary: #06b6d4;
-  --secondary: #8b5cf6;
-  --text-primary: #f8fafc;
-  --text-muted: #94a3b8;
+  /* ==========================================================================
+     1. BRAND RAMPS — generated from the logo, hue locked
+     --------------------------------------------------------------------------
+     Cyan  hue 188.7°, 500 = #06b6d4 (the U stroke — 42,087px of the logo)
+     Violet hue 258.3°, 400 = #8b5cf6 (the two nodes  — 8,980px of the logo)
+     Contrast ratios noted are against white / black respectively.
+     ========================================================================== */
+  --cyan-50:  #f1fcfd;
+  --cyan-100: #daf6fb;
+  --cyan-200: #b4eef8;
+  --cyan-300: #6fe2f6;
+  --cyan-400: #1ed6f6;  /* dark-mode ink track  — 12.00:1 on #000 */
+  --cyan-500: #06b6d4;  /* THE LOGO COLOR       — graphics only, 2.43:1 on #fff */
+  --cyan-600: #04849a;  /* light LARGE-text track — 3.83:1 over the mesh core */
+  --cyan-700: #04778b;  /* light body-text track   — 5.23:1 #fff / 4.69:1 #f2f2f7 */
+  --cyan-800: #056576;
+  --cyan-900: #054651;
+
+  --violet-50:  #f5f1fe;
+  --violet-100: #eae2fd;
+  --violet-200: #d5c4fd;
+  --violet-300: #b393fb;  /* dark-mode ink track — 8.48:1 on #000 */
+  --violet-400: #8b5cf6;  /* THE LOGO COLOR      — graphics / accent punctuation */
+  --violet-500: #7038f0;
+  --violet-600: #7845ed;  /* light body-text track — 5.42:1 #fff / 4.86:1 #f2f2f7 */
+  --violet-700: #4b18bf;
+  --violet-800: #3e1797;
+  --violet-900: #31156f;
+
+  /* ==========================================================================
+     2. APPLE PRIMITIVES
+     ========================================================================== */
+
+  /* ---- Type: SF via system fonts, Inter as the cross-platform fallback ---- */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
+    'Inter', 'Helvetica Neue', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace;
+
+  /* Apple text styles, pt -> rem at a 16px root */
+  --text-large-title: 2.125rem;  /* 34pt */
+  --text-title-1:     1.75rem;   /* 28pt */
+  --text-title-2:     1.375rem;  /* 22pt */
+  --text-title-3:     1.25rem;   /* 20pt */
+  --text-headline:    1.0625rem; /* 17pt semibold */
+  --text-body:        1.0625rem; /* 17pt */
+  --text-callout:     1rem;      /* 16pt */
+  --text-subhead:     0.9375rem; /* 15pt */
+  --text-footnote:    0.8125rem; /* 13pt */
+  --text-caption-1:   0.75rem;   /* 12pt */
+  --text-caption-2:   0.6875rem; /* 11pt */
+
+  /* Tracking TIGHTENS as size grows — the single biggest Apple type tell */
+  --tracking-tight:  -0.022em;
+  --tracking-snug:   -0.014em;
+  --tracking-normal:  0em;
+  --tracking-wide:    0.01em;
+
+  /* Leading moves INVERSELY to size */
+  --leading-tight:   1.05;
+  --leading-snug:    1.2;
+  --leading-normal:  1.35;
+  --leading-relaxed: 1.5;
+
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+
+  /* ---- Spacing: 4/8pt grid ---- */
+  --space-1:  0.125rem;
+  --space-2:  0.25rem;
+  --space-3:  0.5rem;
+  --space-4:  0.75rem;
+  --space-5:  1rem;
+  --space-6:  1.25rem;
+  --space-7:  1.5rem;
+  --space-8:  2rem;
+  --space-9:  2.5rem;
+  --space-10: 3rem;
+  --space-12: 4rem;
+
+  /* ---- Radii: iOS continuous-corner scale ---- */
+  --radius-xs:  6px;
+  --radius-sm:  8px;
+  --radius-md:  12px;
+  --radius-lg:  16px;
+  --radius-xl:  22px;
+  --radius-2xl: 28px;
+  --radius-capsule: 999px;
+
+  /* ---- Elevation: two-layer (tight contact + soft ambient), never harsh ---- */
+  --shadow-1: 0 1px 2px rgba(0,0,0,0.04), 0 1px 1px rgba(0,0,0,0.06);
+  --shadow-2: 0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.08);
+  --shadow-3: 0 8px 24px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.08);
+  --shadow-4: 0 16px 48px rgba(0,0,0,0.14), 0 4px 12px rgba(0,0,0,0.10);
+  --shadow-glass: 0 8px 32px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.05);
+
+  /* ---- Motion: never the weak built-in ease-*; never ease-in on UI ---- */
+  --ease-out:    cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-ios:    cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-snappy: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --duration-instant: 100ms;
+  --duration-fast:    200ms;
+  --duration-base:    300ms;
+  --duration-slow:    450ms;
+
+  /* ==========================================================================
+     3. SEMANTIC TOKENS — LIGHT (default)
+     --------------------------------------------------------------------------
+     Channel triplets (--c-*) exist so Tailwind's `/opacity` modifier works;
+     the rgba() forms are for direct CSS use.
+     ========================================================================== */
+
+  /* Accent: TWO TRACKS. `accent` is the graphic color (the literal logo cyan);
+     `accent-ink` is the contrast-safe text/link color at the same hue. */
+  --accent:        var(--cyan-500);
+  --accent-ink:    var(--cyan-700);
+  --accent-solid:  var(--cyan-700);   /* filled control bg */
+  --on-accent:     #ffffff;           /* ink ON that fill — 5.23:1 */
+  --accent-2:      var(--violet-400);
+  --accent-2-ink:  var(--violet-600);
+
+  /* LARGE TEXT ONLY (>=24px bold / >=18.66px), where WCAG drops the bar to 3:1
+     and a lighter, more vivid stop becomes usable. The value was picked by
+     sampling the actual rendered hero pixels, not by assuming a white page:
+     over the mesh pool's core (#daf4f9) it measures 3.83:1, where the more
+     obvious cyan-600 candidate #0699b2 fell to 2.95:1 and failed.
+     Never use this below title size. */
+  --accent-display: var(--cyan-600);
+
+  --c-accent:      6 182 212;
+  --c-accent-ink:  4 119 139;
+  --c-accent-2:    139 92 246;
+
+  /* Backgrounds: base -> elevated */
+  --bg:           #ffffff;
+  --bg-secondary: #f2f2f7;
+  --bg-tertiary:  #ffffff;
+  --bg-grouped:   #f2f2f7;
+  --c-bg:         255 255 255;
+
+  /* Labels: Apple encodes hierarchy as opacity over a base ink, so text
+     hierarchy survives over glass and over any background. */
+  --label:            rgba(0, 0, 0, 1);
+  /* Apple ships secondary at 0.60 alpha, which measures 3.44:1 on #fff and
+     3.30:1 on #f2f2f7 — below the 4.5:1 body-text bar. Apple follows its own
+     internal guidance here; we take the accessibility floor instead and raise
+     the alpha to 0.73 (4.88:1 / 4.59:1). The opacity-encoded model is kept, so
+     hierarchy still holds over glass and over any background.
+     --label-tertiary stays at Apple's value and is reserved for DECORATIVE
+     marks only (list markers, scrollbar). Never put readable copy on it. */
+  --label-secondary:  rgba(60, 60, 67, 0.73);
+  --label-tertiary:   rgba(60, 60, 67, 0.55);
+  --label-quaternary: rgba(60, 60, 67, 0.18);
+  --c-label:          0 0 0;
+
+  --separator:        rgba(60, 60, 67, 0.20);
+  --separator-opaque: #c6c6c8;
+  --fill-1: rgba(120, 120, 128, 0.20);
+  --fill-2: rgba(120, 120, 128, 0.16);
+  --fill-3: rgba(120, 120, 128, 0.12);
+  --fill-4: rgba(120, 120, 128, 0.08);
+
+  /* ---- 4. MATERIALS: tint + blur pair per thickness ---- */
+  --material-ultrathin-tint: rgba(255, 255, 255, 0.44);
+  --material-thin-tint:      rgba(255, 255, 255, 0.60);
+  --material-regular-tint:   rgba(255, 255, 255, 0.72);
+  --material-thick-tint:     rgba(255, 255, 255, 0.86);
+  --material-blur:      20px;
+  --material-blur-thin: 12px;
+  --material-saturate:  180%;
+
+  /* Specular highlight + rim, per theme. The inset top-edge highlight is the
+     highest-leverage detail separating Apple materials from 2020 glassmorphism. */
+  --glass-specular: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  --glass-inner:    inset 0 0 0 0.5px rgba(255, 255, 255, 0.30);
+  /* Light mode gives glass almost no contrast against a white page, so the
+     hairline rim carries most of the edge definition — it has to be stronger
+     here than the 0.06 that reads correctly over imagery. */
+  --glass-rim:      0 0 0 0.5px rgba(0, 0, 0, 0.10);
+
+  /* Ambient brand wash used behind hero sections.
+     Each pool carries an explicit zero-alpha twin of the SAME hue. Fading to
+     the `transparent` keyword instead would interpolate toward rgba(0,0,0,0)
+     and drag grey through the midpoint — which on a white page reads as a
+     dirty smudge rather than coloured light. */
+  --mesh-1: rgba(6, 182, 212, 0.22);
+  --mesh-1-fade: rgba(6, 182, 212, 0);
+  --mesh-2: rgba(139, 92, 246, 0.18);
+  --mesh-2-fade: rgba(139, 92, 246, 0);
+
+  /* Stained-glass tint: on a light page the wash has to MULTIPLY to be seen
+     at all — plus-lighter over white just returns white. */
+  --glass-tint-blend: multiply;
+  --glass-tint-opacity: 0.10;
+
+  color-scheme: light dark;
 }
 
-* {
-  box-sizing: border-box;
+/* ============================================================================
+   DARK — auto via prefers-color-scheme, plus an explicit override so the
+   theme toggle can force either mode regardless of the OS setting.
+   ============================================================================ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --accent:       var(--cyan-500);
+    --accent-ink:   var(--cyan-400);
+    --accent-solid: var(--cyan-400);
+    --on-accent:    #001519;            /* dark ink on a bright fill — 12.00:1 */
+    --accent-2:     var(--violet-400);
+    --accent-2-ink: var(--violet-300);
+    /* On black the ink track already clears 12:1, so display type needs no
+       separate, more-vivid stop — it collapses back onto accent-ink. */
+    --accent-display: var(--cyan-400);
+
+    --c-accent-ink: 30 214 246;
+
+    --bg:           #000000;
+    --bg-secondary: #1c1c1e;
+    --bg-tertiary:  #2c2c2e;
+    --bg-grouped:   #000000;
+    --c-bg:         0 0 0;
+
+    --label:            rgba(255, 255, 255, 1);
+    --label-secondary:  rgba(235, 235, 245, 0.60);
+    --label-tertiary:   rgba(235, 235, 245, 0.30);
+    --label-quaternary: rgba(235, 235, 245, 0.16);
+    --c-label:          255 255 255;
+
+    --separator:        rgba(84, 84, 88, 0.60);
+    --separator-opaque: #38383a;
+    --fill-1: rgba(120, 120, 128, 0.36);
+    --fill-2: rgba(120, 120, 128, 0.32);
+    --fill-3: rgba(120, 120, 128, 0.24);
+    --fill-4: rgba(120, 120, 128, 0.18);
+
+    --material-ultrathin-tint: rgba(30, 30, 32, 0.44);
+    --material-thin-tint:      rgba(30, 30, 32, 0.62);
+    --material-regular-tint:   rgba(30, 30, 32, 0.74);
+    --material-thick-tint:     rgba(30, 30, 32, 0.88);
+
+    /* In dark the top-edge highlight dims and the rim flips to a dark halo. */
+    --glass-specular: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+    --glass-inner:    inset 0 0 0 0.5px rgba(255, 255, 255, 0.07);
+    --glass-rim:      0 0 0 0.5px rgba(0, 0, 0, 0.50);
+
+    --shadow-1: 0 1px 2px rgba(0,0,0,0.30);
+    --shadow-2: 0 2px 8px rgba(0,0,0,0.36);
+    --shadow-3: 0 8px 24px rgba(0,0,0,0.44);
+    --shadow-4: 0 16px 48px rgba(0,0,0,0.52);
+    --shadow-glass: 0 8px 32px rgba(0,0,0,0.50);
+
+    --mesh-1: rgba(6, 182, 212, 0.26);
+    --mesh-1-fade: rgba(6, 182, 212, 0);
+    --mesh-2: rgba(139, 92, 246, 0.24);
+    --mesh-2-fade: rgba(139, 92, 246, 0);
+
+    --glass-tint-blend: plus-lighter;
+    --glass-tint-opacity: 0.14;
+  }
 }
 
-html {
-  scroll-behavior: smooth;
+/* Forced dark (theme toggle) — mirrors the block above. */
+[data-theme='dark'] {
+  --accent: var(--cyan-500);
+  --accent-ink: var(--cyan-400);
+  --accent-solid: var(--cyan-400);
+  --on-accent: #001519;
+  --accent-2: var(--violet-400);
+  --accent-2-ink: var(--violet-300);
+  --accent-display: var(--cyan-400);
+  --c-accent-ink: 30 214 246;
+
+  --bg: #000000;
+  --bg-secondary: #1c1c1e;
+  --bg-tertiary: #2c2c2e;
+  --bg-grouped: #000000;
+  --c-bg: 0 0 0;
+
+  --label: rgba(255, 255, 255, 1);
+  --label-secondary: rgba(235, 235, 245, 0.60);
+  --label-tertiary: rgba(235, 235, 245, 0.30);
+  --label-quaternary: rgba(235, 235, 245, 0.16);
+  --c-label: 255 255 255;
+
+  --separator: rgba(84, 84, 88, 0.60);
+  --separator-opaque: #38383a;
+  --fill-1: rgba(120, 120, 128, 0.36);
+  --fill-2: rgba(120, 120, 128, 0.32);
+  --fill-3: rgba(120, 120, 128, 0.24);
+  --fill-4: rgba(120, 120, 128, 0.18);
+
+  --material-ultrathin-tint: rgba(30, 30, 32, 0.44);
+  --material-thin-tint: rgba(30, 30, 32, 0.62);
+  --material-regular-tint: rgba(30, 30, 32, 0.74);
+  --material-thick-tint: rgba(30, 30, 32, 0.88);
+
+  --glass-specular: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  --glass-inner: inset 0 0 0 0.5px rgba(255, 255, 255, 0.07);
+  --glass-rim: 0 0 0 0.5px rgba(0, 0, 0, 0.50);
+
+  --shadow-1: 0 1px 2px rgba(0,0,0,0.30);
+  --shadow-2: 0 2px 8px rgba(0,0,0,0.36);
+  --shadow-3: 0 8px 24px rgba(0,0,0,0.44);
+  --shadow-4: 0 16px 48px rgba(0,0,0,0.52);
+  --shadow-glass: 0 8px 32px rgba(0,0,0,0.50);
+
+  --mesh-1: rgba(6, 182, 212, 0.26);
+  --mesh-1-fade: rgba(6, 182, 212, 0);
+  --mesh-2: rgba(139, 92, 246, 0.24);
+  --mesh-2-fade: rgba(139, 92, 246, 0);
+
+  --glass-tint-blend: plus-lighter;
+  --glass-tint-opacity: 0.14;
 }
 
-body {
-  margin: 0;
-  padding: 0;
-  background: var(--bg-deep);
-  color: var(--text-primary);
-  font-family: 'Inter', system-ui, sans-serif;
-  overflow-x: hidden;
+/* ============================================================================
+   5. BASE
+   ============================================================================ */
+@layer base {
+  * { box-sizing: border-box; }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+    /* Nav is fixed; keep anchor targets clear of it. */
+    scroll-padding-top: 6rem;
+  }
+
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-optical-sizing: auto;           /* SF swaps Text <-> Display by size */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-size: var(--text-body);
+    line-height: var(--leading-normal);
+    letter-spacing: var(--tracking-normal);
+    color: var(--label);
+    background: var(--bg);
+    overflow-x: hidden;
+  }
+
+  ::selection {
+    background: rgba(6, 182, 212, 0.25);
+    color: var(--label);
+  }
+
+  /* Every control gets a visible focus ring. */
+  :focus-visible {
+    outline: 2px solid var(--accent-ink);
+    outline-offset: 2px;
+    border-radius: var(--radius-xs);
+  }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--label-quaternary);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { background-clip: content-box; background-color: var(--label-tertiary); }
 }
 
-::selection {
-  background: rgba(6, 182, 212, 0.3);
-  color: #f8fafc;
-}
+/* ============================================================================
+   TYPE ROLES — size, weight, tracking and leading move together as a SET.
+   Using these instead of ad-hoc Tailwind sizes is what keeps the optics right.
+   ============================================================================ */
+@layer components {
+  .type-display {
+    font-size: clamp(2.5rem, 5.2vw + 1rem, 4.5rem);
+    font-weight: var(--weight-bold);
+    letter-spacing: var(--tracking-tight);
+    line-height: var(--leading-tight);
+    text-wrap: balance;
+  }
+  .type-title-1 {
+    font-size: clamp(1.875rem, 2.4vw + 1rem, 2.75rem);
+    font-weight: var(--weight-bold);
+    letter-spacing: var(--tracking-tight);
+    line-height: 1.1;
+    text-wrap: balance;
+  }
+  .type-title-2 {
+    font-size: clamp(1.375rem, 1.1vw + 1rem, 1.75rem);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-snug);
+    line-height: var(--leading-snug);
+  }
+  .type-title-3 {
+    font-size: var(--text-title-3);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-snug);
+    line-height: var(--leading-snug);
+  }
+  .type-headline {
+    font-size: var(--text-headline);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-normal);
+    line-height: var(--leading-snug);
+  }
+  .type-body {
+    font-size: var(--text-body);
+    font-weight: var(--weight-regular);
+    letter-spacing: var(--tracking-normal);
+    line-height: var(--leading-normal);
+  }
+  .type-body-lg {
+    font-size: clamp(1.0625rem, 0.5vw + 0.95rem, 1.3125rem);
+    font-weight: var(--weight-regular);
+    letter-spacing: var(--tracking-normal);
+    line-height: var(--leading-relaxed);
+  }
+  .type-prose {
+    font-size: var(--text-body);
+    line-height: var(--leading-relaxed);
+    letter-spacing: var(--tracking-normal);
+  }
+  .type-callout {
+    font-size: var(--text-callout);
+    line-height: var(--leading-normal);
+  }
+  .type-subhead {
+    font-size: var(--text-subhead);
+    line-height: var(--leading-normal);
+  }
+  .type-footnote {
+    font-size: var(--text-footnote);
+    letter-spacing: var(--tracking-wide);
+    line-height: var(--leading-normal);
+  }
+  .type-caption {
+    font-size: var(--text-caption-1);
+    letter-spacing: var(--tracking-wide);
+    line-height: var(--leading-normal);
+  }
+  /* Eyebrow / section label — the small tracked-out caps Apple uses above titles */
+  .type-eyebrow {
+    font-size: var(--text-footnote);
+    font-weight: var(--weight-semibold);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    line-height: var(--leading-normal);
+  }
 
-::-webkit-scrollbar {
-  width: 8px;
-}
+  /* ==========================================================================
+     LIQUID GLASS
+     --------------------------------------------------------------------------
+     A material is FOUR stacked optical effects, not one blur:
+       1. translucent tint   2. backdrop blur + saturation boost
+       3. specular top edge  4. hairline rim + soft depth shadow
+     ========================================================================== */
+  .glass {
+    background: var(--material-regular-tint);
+    -webkit-backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
+            backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
+    box-shadow:
+      var(--glass-specular),
+      var(--glass-inner),
+      var(--glass-rim),
+      var(--shadow-glass);
+    border-radius: var(--radius-lg);
+  }
 
-::-webkit-scrollbar-track {
-  background: #0f172a;
-}
+  .glass-thin {
+    background: var(--material-thin-tint);
+    -webkit-backdrop-filter: blur(var(--material-blur-thin)) saturate(170%);
+            backdrop-filter: blur(var(--material-blur-thin)) saturate(170%);
+    box-shadow: var(--glass-specular), var(--glass-inner), var(--glass-rim), var(--shadow-2);
+    border-radius: var(--radius-md);
+  }
 
-::-webkit-scrollbar-thumb {
-  background: #334155;
-  border-radius: 4px;
-}
+  .glass-thick {
+    background: var(--material-thick-tint);
+    -webkit-backdrop-filter: blur(34px) saturate(var(--material-saturate));
+            backdrop-filter: blur(34px) saturate(var(--material-saturate));
+    box-shadow: var(--glass-specular), var(--glass-inner), var(--glass-rim), var(--shadow-4);
+    border-radius: var(--radius-2xl);
+  }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  /* Hero-only: iOS-26 "wet glass". The url() filter is a progressive
+     enhancement — browsers that ignore it still get clean Recipe-1 glass. */
+  .glass-liquid {
+    background: var(--material-regular-tint);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+            backdrop-filter: blur(16px) saturate(180%) url(#uno-liquid-refraction);
+    box-shadow:
+      var(--glass-specular),
+      inset 0 -1px 1px rgba(255, 255, 255, 0.10),
+      var(--glass-rim),
+      var(--shadow-glass);
+    border-radius: var(--radius-xl);
+  }
+  @supports not (backdrop-filter: url(#uno-liquid-refraction)) {
+    .glass-liquid {
+      -webkit-backdrop-filter: blur(16px) saturate(180%);
+              backdrop-filter: blur(16px) saturate(180%);
+    }
+  }
+
+  /* Stained glass — picks up the brand accent from its context. */
+  .glass-tinted { position: relative; }
+  .glass-tinted::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: var(--accent);
+    opacity: var(--glass-tint-opacity);
+    mix-blend-mode: var(--glass-tint-blend);
+    pointer-events: none;
+  }
+
+  /* ==========================================================================
+     CONTROLS — press feedback fires on pointer-DOWN, never on release.
+     ========================================================================== */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    font: inherit;
+    font-size: var(--text-callout);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-normal);
+    border: none;
+    cursor: pointer;
+    min-height: 44px;                        /* Apple touch-target floor */
+    padding: var(--space-4) var(--space-7);
+    border-radius: var(--radius-capsule);    /* Apple controls are capsules */
+    text-decoration: none;
+    white-space: nowrap;
+    transition:
+      transform var(--duration-instant) var(--ease-out),
+      filter    var(--duration-instant) var(--ease-out),
+      background-color var(--duration-fast) var(--ease-out);
+  }
+  .btn:active { transform: scale(0.97); }    /* never scale(0) */
+
+  .btn-filled { background: var(--accent-solid); color: var(--on-accent); }
+  .btn-filled:hover  { filter: brightness(1.08); }
+  .btn-filled:active { filter: brightness(0.94); }
+
+  .btn-tinted {
+    background: rgb(var(--c-accent) / 0.14);
+    color: var(--accent-ink);
+  }
+  .btn-tinted:hover { background: rgb(var(--c-accent) / 0.22); }
+
+  .btn-glass { color: var(--label); }
+  .btn-plain { background: transparent; color: var(--accent-ink); padding-inline: var(--space-4); }
+  .btn-plain:hover { background: var(--fill-4); }
+
+  /* ==========================================================================
+     FORM FIELDS
+     --------------------------------------------------------------------------
+     Apple inputs are a filled recessed shape, not an outlined box. The border
+     only appears on focus, where it doubles as the focus ring.
+     ========================================================================== */
+  .field {
+    width: 100%;
+    min-height: 44px;
+    padding: var(--space-4) var(--space-5);
+    font: inherit;
+    font-size: var(--text-callout);
+    color: var(--label);
+    background: var(--fill-4);
+    border: none;
+    border-radius: var(--radius-md);
+    box-shadow: inset 0 0 0 0.5px var(--separator);
+    transition: box-shadow var(--duration-fast) var(--ease-out),
+                background-color var(--duration-fast) var(--ease-out);
+  }
+  .field::placeholder { color: var(--label-secondary); }
+  .field:focus {
+    outline: none;
+    background: var(--bg-tertiary);
+    box-shadow: inset 0 0 0 1.5px var(--accent-ink);
+  }
+  .field[aria-invalid='true'] { box-shadow: inset 0 0 0 1.5px #ff3b30; }
+  textarea.field { min-height: 120px; resize: vertical; }
+
+  .field-label {
+    display: block;
+    margin-bottom: var(--space-3);
+    font-size: var(--text-subhead);
+    font-weight: var(--weight-medium);
+    color: var(--label);
+  }
+
+  /* ==========================================================================
+     SURFACES
+     ========================================================================== */
+  .card {
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-2), 0 0 0 0.5px var(--separator);
+    transition:
+      transform var(--duration-base) var(--ease-out),
+      box-shadow var(--duration-base) var(--ease-out);
+  }
+  .card-interactive:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-3), 0 0 0 0.5px var(--separator);
+  }
+  .card-interactive:active { transform: translateY(0) scale(0.995); }
+
+  .hairline { border: none; height: 0.5px; background: var(--separator); }
+
+  /* ==========================================================================
+     LONG-FORM PROSE
+     --------------------------------------------------------------------------
+     The article and case-study bodies were marked up with `prose prose-invert`,
+     but @tailwindcss/typography is not installed, so those classes never
+     applied anything. This is the real implementation.
+
+     Reading copy gets --leading-relaxed (1.5) and a measure capped near 68ch;
+     headings step back UP the tracking ramp (tighter as they get larger).
+     ========================================================================== */
+  .prose-apple {
+    color: var(--label-secondary);
+    font-size: var(--text-body);
+    line-height: var(--leading-relaxed);
+    max-width: 68ch;
+  }
+  .prose-apple > * + * { margin-top: var(--space-6); }
+
+  .prose-apple h2 {
+    color: var(--label);
+    font-size: var(--text-title-2);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-snug);
+    line-height: var(--leading-snug);
+    margin-top: var(--space-10);
+    margin-bottom: var(--space-5);
+  }
+  .prose-apple h3 {
+    color: var(--label);
+    font-size: var(--text-title-3);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-snug);
+    line-height: var(--leading-snug);
+    margin-top: var(--space-8);
+    margin-bottom: var(--space-4);
+  }
+  .prose-apple h2:first-child,
+  .prose-apple h3:first-child { margin-top: 0; }
+
+  .prose-apple strong { color: var(--label); font-weight: var(--weight-semibold); }
+  .prose-apple em { font-style: italic; }
+
+  .prose-apple a {
+    color: var(--accent-ink);
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+    text-decoration-thickness: 0.06em;
+    text-decoration-color: rgb(var(--c-accent-ink) / 0.4);
+    transition: text-decoration-color var(--duration-fast) var(--ease-out);
+  }
+  .prose-apple a:hover { text-decoration-color: var(--accent-ink); }
+
+  .prose-apple ul, .prose-apple ol { padding-left: var(--space-7); }
+  .prose-apple ul { list-style: disc; }
+  .prose-apple ol { list-style: decimal; }
+  .prose-apple li + li { margin-top: var(--space-3); }
+  .prose-apple li::marker { color: var(--label-tertiary); }
+
+  .prose-apple blockquote {
+    border-left: 2px solid var(--accent);
+    padding-left: var(--space-6);
+    color: var(--label);
+    font-size: var(--text-title-3);
+    line-height: var(--leading-snug);
+    letter-spacing: var(--tracking-snug);
+  }
+
+  .prose-apple code {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    background: var(--fill-4);
+    padding: 0.15em 0.4em;
+    border-radius: var(--radius-xs);
+    color: var(--label);
+  }
+  .prose-apple pre {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    padding: var(--space-6);
+    overflow-x: auto;
+    box-shadow: 0 0 0 0.5px var(--separator);
+  }
+  .prose-apple pre code { background: none; padding: 0; }
+
+  .prose-apple hr {
+    border: none;
+    height: 0.5px;
+    background: var(--separator);
+    margin-block: var(--space-9);
+  }
+
+  .prose-apple img { max-width: 100%; height: auto; border-radius: var(--radius-md); }
+
+  /* Scroll-edge fade: Apple never divides translucent chrome from content with
+     a 1px rule — content dissolves under the bar instead. */
+  .scroll-edge {
+    height: 14px;
+    background: linear-gradient(var(--bg), transparent);
+    -webkit-mask-image: linear-gradient(black, transparent);
+            mask-image: linear-gradient(black, transparent);
+  }
 }
 
 @layer utilities {
-  .glass {
-    background: rgba(15, 23, 42, 0.6);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-  }
-  
-  .text-gradient {
-    background: linear-gradient(to right, #f8fafc, #06b6d4);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
+  .text-label      { color: var(--label); }
+  .text-secondary  { color: var(--label-secondary); }
+  .text-tertiary   { color: var(--label-tertiary); }
+  .text-accent-ink { color: var(--accent-ink); }
+  .tabular         { font-variant-numeric: tabular-nums; }
+
+  /* Continuous-corner approximation for the few large hero surfaces where the
+     difference between an arc and a superellipse is actually visible. */
+  .squircle { border-radius: var(--radius-2xl); -webkit-corner-smoothing: 60%; }
 }
 
-/* Snap scrolling for sections */
-.snap-y {
-  scroll-snap-type: y proximity;
-}
+/* ============================================================================
+   ACCESSIBILITY FALLBACKS — glass fails three ways for real users.
+   ============================================================================ */
 
-.snap-start {
-  scroll-snap-align: start;
-}
-
-.snap-mandatory {
-  scroll-snap-type: y mandatory;
-}
-
-/* Horizontal bounce animation */
-@keyframes bounce-x {
-  0%, 100% {
-    transform: translateX(0);
-  }
-  50% {
-    transform: translateX(5px);
+/* 1. No backdrop-filter support: fall back to a near-solid background. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass, .glass-thin, .glass-thick, .glass-liquid {
+    background: color-mix(in srgb, var(--bg) 92%, transparent);
   }
 }
 
-.animate-bounce-x {
-  animation: bounce-x 1s ease-in-out infinite;
-}
-
-/* Clip path reveal */
-.clip-reveal {
-  clip-path: inset(0 0 0 0);
-}
-
-/* Transform utilities for 3D effects */
-.transform-gpu {
-  transform: translateZ(0);
-  backface-visibility: hidden;
-}
-
-/* Smooth transitions for interactive elements */
-.glass-card-hover {
-  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
-}
-
-.glass-card-hover:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-}
-
-/* Line reveal animation */
-@keyframes line-grow {
-  from {
-    transform: scaleX(0);
+/* 2. Reduced transparency: drop to solid. Also helps low vision and battery. */
+@media (prefers-reduced-transparency: reduce) {
+  .glass, .glass-thin, .glass-thick, .glass-liquid, .glass-tinted {
+    background: var(--bg-tertiary);
+    -webkit-backdrop-filter: none;
+            backdrop-filter: none;
+    box-shadow: var(--shadow-2), 0 0 0 0.5px var(--separator);
   }
-  to {
-    transform: scaleX(1);
+  .glass-tinted::before { display: none; }
+}
+
+/* 3. More contrast: give glass and cards a real, unambiguous border. */
+@media (prefers-contrast: more) {
+  .glass, .glass-thin, .glass-thick, .glass-liquid, .card {
+    box-shadow: 0 0 0 1px var(--label);
   }
+  :root { --label-secondary: rgba(60, 60, 67, 0.85); }
+  [data-theme='dark'] { --label-secondary: rgba(235, 235, 245, 0.85); }
 }
 
-/* Gradient text animation */
-@keyframes gradient-shift {
-  0% {
-    background-position: 0% 50%;
+/* Reduced motion: gentler, not gone. Springs and slides become short
+   crossfades; instant tap feedback survives because cause-and-effect matters. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
+  .btn { transition: background-color 0.01ms !important; }
+  .btn:active { transform: none; }
 }
-
-.animated-gradient {
-  background-size: 200% 200%;
-  animation: gradient-shift 3s ease infinite;
-}
-
-/* Parallax layer base styles */
-.parallax-layer {
-  will-change: transform;
-  pointer-events: none;
-}
-
-/* Pinned section styles */
-.pin-spacer {
-  contain: layout style;
-}
-
-/* Horizontal scroll container */
-.horizontal-scroll-container {
-  overflow: hidden;
-  position: relative;
-}
-
-/* Word animation styles */
-.word-inner {
-  display: inline-block;
-  will-change: transform;
-}
-
-/* Counter animation styles */
-.counter-value {
-  font-variant-numeric: tabular-nums;
-}
-
-/* Card reveal animation */
-@keyframes card-reveal {
-  from {
-    opacity: 0;
-    transform: translateY(40px) scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-/* Glow effect on hover */
-.glow-hover {
-  position: relative;
-}
-
-.glow-hover::after {
-  content: '';
-  position: absolute;
-  inset: -2px;
-  background: linear-gradient(45deg, var(--primary), var(--secondary));
-  border-radius: inherit;
-  opacity: 0;
-  z-index: -1;
-  filter: blur(15px);
-  transition: opacity 0.3s ease;
-}
-
-.glow-hover:hover::after {
-  opacity: 0.5;
-}
-
-/* Stagger animation delays */
-.stagger-1 { animation-delay: 0.1s; }
-.stagger-2 { animation-delay: 0.2s; }
-.stagger-3 { animation-delay: 0.3s; }
-.stagger-4 { animation-delay: 0.4s; }
-.stagger-5 { animation-delay: 0.5s; }
-

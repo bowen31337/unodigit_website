@@ -1,12 +1,18 @@
 'use client';
 
-import { useRef } from 'react';
-import Link from 'next/link';
-import { motion, useScroll, useTransform, useSpring } from 'motion/react';
-import { ArrowRight, Zap, Shield, TrendingUp, Brain, Code, BarChart3, ChevronDown } from 'lucide-react';
-import ParticleBackground from '@/components/ParticleBackground';
+import { useEffect, useRef } from 'react';
+import { animate, motion, useInView, useReducedMotion } from 'motion/react';
+import { ArrowRight, Zap, Shield, TrendingUp, Brain, Code, BarChart3 } from 'lucide-react';
+import GradientMesh from '@/components/GradientMesh';
 import GlassCard from '@/components/GlassCard';
-import MagneticButton from '@/components/MagneticButton';
+import Button from '@/components/Button';
+import ScrollReveal, { staggerParent, staggerChild } from '@/components/ScrollReveal';
+
+const valueProps = [
+  { icon: Zap, title: 'Lightning fast', desc: 'Rapid deployment with agile methodologies.' },
+  { icon: Shield, title: 'Enterprise security', desc: 'Bank-grade security for peace of mind.' },
+  { icon: TrendingUp, title: 'Scalable growth', desc: 'Solutions that grow with your business.' },
+];
 
 const services = [
   { icon: Brain, title: 'AI Strategy', description: 'Transform your business with intelligent automation and predictive analytics.' },
@@ -15,322 +21,270 @@ const services = [
 ];
 
 const stats = [
-  { value: '150+', label: 'Projects Delivered', numValue: 150, suffix: '+' },
-  { value: '$50M+', label: 'Value Created', numValue: 50, prefix: '$', suffix: 'M+' },
-  { value: '98%', label: 'Client Satisfaction', numValue: 98, suffix: '%' },
-  { value: '24/7', label: 'Support', numValue: 24, suffix: '/7' },
+  { value: 150, prefix: '', suffix: '+', label: 'Projects delivered' },
+  { value: 50, prefix: '$', suffix: 'M+', label: 'Value created' },
+  { value: 98, prefix: '', suffix: '%', label: 'Client satisfaction' },
+  { value: 24, prefix: '', suffix: '/7', label: 'Support' },
 ];
 
-const pageVariants = {
-  initial: { opacity: 0 },
-  animate: { opacity: 1 },
-  exit: { opacity: 0 },
-};
-
-const staggerContainer = {
-  animate: {
-    transition: { staggerChildren: 0.1 },
-  },
-};
-
-const fadeInUp = {
-  initial: { opacity: 0, y: 60, scale: 0.95 },
-  animate: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.8, ease: [0.25, 0.1, 0.25, 1] as const } },
-};
-
-function AnimatedCounter({ value, prefix = '', suffix = '' }: { value: number; prefix?: string; suffix?: string }) {
+/**
+ * Counts up once when it scrolls into view, then stops.
+ *
+ * The number is written straight to textContent rather than through state:
+ * a scroll-linked MotionValue rendered as a child prints unrounded floats and
+ * runs backwards when the user scrolls up, and a setState-per-frame version
+ * would re-render the tree ~60x/second per counter for no benefit.
+ */
+function Counter({ value, prefix = '', suffix = '' }: { value: number; prefix?: string; suffix?: string }) {
   const ref = useRef<HTMLSpanElement>(null);
-  const { scrollYProgress } = useScroll({
-    target: ref,
-    offset: ['start end', 'end center'],
-  });
-  
-  const count = useTransform(scrollYProgress, [0, 0.5], [0, value]);
-  const rounded = useSpring(count, { stiffness: 50, damping: 20 });
+  const inView = useInView(ref, { once: true, margin: '0px 0px -15% 0px' });
+  const reduced = useReducedMotion();
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (!inView) {
+      el.textContent = `${prefix}0${suffix}`;
+      return;
+    }
+    if (reduced) {
+      el.textContent = `${prefix}${value}${suffix}`;
+      return;
+    }
+    const controls = animate(0, value, {
+      duration: 1.1,
+      ease: [0.23, 1, 0.32, 1],
+      onUpdate: (v) => {
+        el.textContent = `${prefix}${Math.round(v)}${suffix}`;
+      },
+    });
+    return () => controls.stop();
+  }, [inView, value, prefix, suffix, reduced]);
 
   return (
-    <motion.span ref={ref} className="text-4xl md:text-5xl font-bold text-gradient mb-2 block">
-      {prefix}
-      <motion.span>{rounded}</motion.span>
-      {suffix}
-    </motion.span>
+    <span
+      ref={ref}
+      className="tabular block"
+      style={{
+        fontSize: 'clamp(2.25rem, 3.5vw + 1rem, 3.25rem)',
+        fontWeight: 'var(--weight-bold)',
+        letterSpacing: 'var(--tracking-tight)',
+        lineHeight: 1.05,
+        color: 'var(--label)',
+      }}
+    >
+      {prefix}0{suffix}
+    </span>
   );
 }
 
 export default function HomeClient() {
-  const heroRef = useRef<HTMLDivElement>(null);
-  const { scrollYProgress: heroScrollProgress } = useScroll({
-    target: heroRef,
-    offset: ['start start', 'end start'],
-  });
-  
-  const bgY1 = useTransform(heroScrollProgress, [0, 1], [0, 100]);
-  const bgY2 = useTransform(heroScrollProgress, [0, 1], [0, 150]);
-  const heroOpacity = useTransform(heroScrollProgress, [0, 0.5], [1, 0]);
-  const heroY = useTransform(heroScrollProgress, [0, 0.5], [0, -50]);
-  const heroScale = useTransform(heroScrollProgress, [0, 0.5], [1, 0.95]);
-  const bgScale = useTransform(heroScrollProgress, [0, 1], [1, 1.2]);
+  const reduced = useReducedMotion();
+  const enter = reduced
+    ? { duration: 0.3 }
+    : ({ type: 'spring', bounce: 0, visualDuration: 0.6 } as const);
 
   return (
-    <motion.main
-      variants={pageVariants}
-      initial="initial"
-      animate="animate"
-      exit="exit"
-      transition={{ duration: 0.5 }}
-    >
-      {/* Hero Section */}
-      <section ref={heroRef} className="relative min-h-screen flex items-center justify-center overflow-hidden">
-        <motion.div style={{ scale: bgScale }} className="absolute inset-0">
-          <ParticleBackground />
-        </motion.div>
-        
-        <motion.div 
-          style={{ y: bgY1 }} 
-          className="absolute top-20 left-10 w-64 h-64 bg-primary/5 rounded-full blur-3xl" 
-        />
-        <motion.div 
-          style={{ y: bgY2 }} 
-          className="absolute bottom-20 right-10 w-96 h-96 bg-secondary/5 rounded-full blur-3xl" 
-        />
-        
-        <motion.div 
-          style={{ opacity: heroOpacity, y: heroY, scale: heroScale }}
-          className="container mx-auto px-6 pt-24 text-center relative z-10"
-        >
+    <>
+      {/* ── Hero ────────────────────────────────────────────────────────── */}
+      <section className="relative flex min-h-[86svh] items-center overflow-hidden">
+        <GradientMesh animated />
+
+        <div className="container relative z-[1] pb-s10 pt-s12 text-center">
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5 }}
-            className="inline-flex items-center gap-2 px-4 py-2 glass rounded-full mb-8"
+            initial={{ opacity: 0, y: reduced ? 0 : 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ ...enter, delay: 0.05 }}
+            className="glass-thin mb-s7 inline-flex items-center gap-s3 px-s5 py-s3"
+            style={{ borderRadius: 'var(--radius-capsule)' }}
           >
-            <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-            <span className="text-sm text-muted">Sydney&apos;s Leading AI Consultancy</span>
+            <span className="h-2 w-2 rounded-full" style={{ background: 'var(--accent)' }} />
+            <span className="type-footnote" style={{ color: 'var(--label-secondary)' }}>
+              Sydney&rsquo;s leading AI consultancy
+            </span>
           </motion.div>
 
-          <motion.h1 
-            initial={{ opacity: 0, y: 30 }}
+          <motion.h1
+            initial={{ opacity: 0, y: reduced ? 0 : 14 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 1, delay: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
-            className="text-4xl md:text-6xl lg:text-7xl font-bold mb-6 max-w-4xl mx-auto leading-tight"
+            transition={{ ...enter, delay: 0.12 }}
+            className="type-display mx-auto max-w-4xl"
           >
-            <span className="text-gradient">AI-Driven</span> Digital{' '}
-            <span className="text-gradient">Transformation</span>
+            AI-driven digital
+            <br className="hidden sm:block" />{' '}
+            {/* --accent-display, not --accent-ink: at 72px bold the WCAG bar
+                drops to 3:1, which buys a more vivid ramp stop in light mode. */}
+            <span style={{ color: 'var(--accent-display)' }}>transformation</span>
           </motion.h1>
 
           <motion.p
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: reduced ? 0 : 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5, duration: 0.6 }}
-            className="text-lg md:text-xl text-muted max-w-2xl mx-auto mb-10"
+            transition={{ ...enter, delay: 0.2 }}
+            className="type-body-lg mx-auto mt-s7 max-w-xl text-balance"
+            style={{ color: 'var(--label-secondary)' }}
           >
-            We partner with forward-thinking enterprises to build intelligent systems 
-            that drive growth, efficiency, and competitive advantage.
+            We partner with forward-thinking enterprises to build intelligent systems
+            that drive growth, efficiency and competitive advantage.
           </motion.p>
 
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: reduced ? 0 : 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.7, duration: 0.6 }}
-            className="flex flex-col sm:flex-row gap-4 justify-center"
+            transition={{ ...enter, delay: 0.28 }}
+            className="mt-s9 flex flex-col items-center justify-center gap-s4 sm:flex-row"
           >
-            <MagneticButton>
-              <Link
-                href="/contact"
-                className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-primary to-secondary text-background font-semibold rounded-full hover:shadow-lg hover:shadow-primary/25 transition-all"
-              >
-                Start Your Journey <ArrowRight size={20} />
-              </Link>
-            </MagneticButton>
-            <MagneticButton>
-              <Link
-                href="/work"
-                className="inline-flex items-center gap-2 px-8 py-4 glass rounded-full font-semibold hover:border-primary/30 transition-all"
-              >
-                View Our Work
-              </Link>
-            </MagneticButton>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 1.2, duration: 1 }}
-            className="absolute bottom-10 left-1/2 -translate-x-1/2"
-          >
-            <ChevronDown size={32} className="animate-bounce text-muted" />
-          </motion.div>
-        </motion.div>
-      </section>
-
-      {/* Value Props */}
-      <section className="py-24">
-        <div className="container mx-auto px-6">
-          <motion.div 
-            className="text-center mb-16"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-          >
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">
-              Why Choose Uno Digit
-            </h2>
-            <p className="text-muted max-w-2xl mx-auto">
-              We combine deep technical expertise with strategic thinking to deliver exceptional results.
-            </p>
-          </motion.div>
-
-          <motion.div 
-            className="grid md:grid-cols-3 gap-8"
-            variants={staggerContainer}
-            initial="initial"
-            whileInView="animate"
-            viewport={{ once: true, margin: '-20%' }}
-          >
-            {[
-              { icon: Zap, title: 'Lightning Fast', desc: 'Rapid deployment with agile methodologies' },
-              { icon: Shield, title: 'Enterprise Security', desc: 'Bank-grade security for peace of mind' },
-              { icon: TrendingUp, title: 'Scalable Growth', desc: 'Solutions that grow with your business' },
-            ].map((item) => (
-              <motion.div key={item.title} variants={fadeInUp}>
-                <GlassCard className="text-center h-full transform-gpu">
-                  <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-6">
-                    <item.icon size={28} className="text-primary" />
-                  </div>
-                  <h3 className="text-xl font-semibold mb-3">{item.title}</h3>
-                  <p className="text-muted">{item.desc}</p>
-                </GlassCard>
-              </motion.div>
-            ))}
+            <Button href="/contact" size="lg">
+              Start your journey <ArrowRight size={18} />
+            </Button>
+            <Button href="/work" variant="glass" size="lg">
+              View our work
+            </Button>
           </motion.div>
         </div>
       </section>
 
-      {/* Services Preview */}
-      <section className="py-24 bg-surface/50">
-        <div className="container mx-auto px-6">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-16 gap-4">
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-            >
-              <h2 className="text-3xl md:text-4xl font-bold mb-4">Our Services</h2>
-              <p className="text-muted max-w-xl">
-                End-to-end solutions powered by cutting-edge AI and modern development practices.
-              </p>
-            </motion.div>
-            <Link href="/services" className="text-primary hover:underline flex items-center gap-2">
-              View All Services <ArrowRight size={16} />
-            </Link>
-          </div>
+      {/* ── Why Uno Digit ─────────────────────────────────────────────────
+          The mesh is load-bearing here, not decoration: these cards are glass,
+          and a material over a flat white section has nothing to refract, so
+          all four optical layers collapse into an empty outline. */}
+      <section className="relative overflow-hidden py-s12">
+        <GradientMesh fadeOut={false} soft className="opacity-60" />
+        <div className="container relative z-[1]">
+          <ScrollReveal className="mx-auto mb-s10 max-w-2xl text-center">
+            <p className="type-eyebrow mb-s4" style={{ color: 'var(--accent-ink)' }}>
+              Why Uno Digit
+            </p>
+            <h2 className="type-title-1">
+              Deep technical expertise, applied with strategic judgement
+            </h2>
+          </ScrollReveal>
 
-          <motion.div 
-            className="grid md:grid-cols-3 gap-8"
-            variants={staggerContainer}
-            initial="initial"
-            whileInView="animate"
-            viewport={{ once: true, margin: '-20%' }}
+          <motion.ul
+            variants={staggerParent}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, margin: '0px 0px -12% 0px' }}
+            className="grid gap-s6 md:grid-cols-3"
+          >
+            {valueProps.map((item) => (
+              <motion.li key={item.title} variants={staggerChild}>
+                <GlassCard className="h-full" material="thin">
+                  <span
+                    className="mb-s6 flex h-12 w-12 items-center justify-center rounded-md"
+                    style={{ background: 'rgb(var(--c-accent) / 0.14)', color: 'var(--accent-ink)' }}
+                  >
+                    <item.icon size={22} strokeWidth={2} />
+                  </span>
+                  <h3 className="type-title-3 mb-s3">{item.title}</h3>
+                  <p className="type-callout" style={{ color: 'var(--label-secondary)' }}>
+                    {item.desc}
+                  </p>
+                </GlassCard>
+              </motion.li>
+            ))}
+          </motion.ul>
+        </div>
+      </section>
+
+      {/* ── Services ────────────────────────────────────────────────────── */}
+      <section className="py-s12" style={{ background: 'var(--bg-secondary)' }}>
+        <div className="container">
+          <ScrollReveal className="mb-s10 flex flex-col justify-between gap-s5 md:flex-row md:items-end">
+            <div className="max-w-xl">
+              <p className="type-eyebrow mb-s4" style={{ color: 'var(--accent-ink)' }}>
+                Services
+              </p>
+              <h2 className="type-title-1">End-to-end, powered by modern AI</h2>
+            </div>
+            <Button href="/services" variant="plain" size="sm" className="self-start md:self-auto">
+              View all services <ArrowRight size={16} />
+            </Button>
+          </ScrollReveal>
+
+          <motion.ul
+            variants={staggerParent}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, margin: '0px 0px -12% 0px' }}
+            className="grid gap-s6 md:grid-cols-3"
           >
             {services.map((service) => (
-              <motion.div key={service.title} variants={fadeInUp}>
-                <GlassCard className="h-full group cursor-pointer">
-                  <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                    <service.icon size={24} className="text-primary" />
-                  </div>
-                  <h3 className="text-xl font-semibold mb-3">{service.title}</h3>
-                  <p className="text-muted mb-4">{service.description}</p>
-                  <span className="text-primary text-sm font-medium flex items-center gap-1 group-hover:gap-2 transition-all">
-                    Learn More <ArrowRight size={14} />
-                  </span>
-                </GlassCard>
-              </motion.div>
-            ))}
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Stats with counter */}
-      <section className="py-24">
-        <div className="container mx-auto px-6">
-          <motion.div 
-            className="grid grid-cols-2 md:grid-cols-4 gap-8"
-            variants={staggerContainer}
-            initial="initial"
-            whileInView="animate"
-            viewport={{ once: true, margin: '-15%' }}
-          >
-            {stats.map((stat) => (
-              <motion.div 
-                key={stat.label} 
-                className="text-center"
-                variants={fadeInUp}
-              >
-                <AnimatedCounter value={stat.numValue} prefix={stat.prefix || ''} suffix={stat.suffix || ''} />
-                <div className="text-muted">{stat.label}</div>
-              </motion.div>
-            ))}
-          </motion.div>
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section className="py-24">
-        <div className="container mx-auto px-6">
-          <motion.div 
-            className="glass rounded-2xl p-12 md:p-16 text-center relative overflow-hidden"
-            initial={{ opacity: 0, scale: 0.95 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-          >
-            <motion.div 
-              className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10"
-              initial={{ scale: 0.8, opacity: 0 }}
-              whileInView={{ scale: 1, opacity: 1 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5 }}
-            />
-            <div className="relative z-10">
-              <motion.h2 
-                className="text-3xl md:text-4xl font-bold mb-4"
-                initial={{ y: 50, opacity: 0 }}
-                whileInView={{ y: 0, opacity: 1 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.2 }}
-              >
-                Ready to Transform?
-              </motion.h2>
-              <motion.p 
-                className="text-muted max-w-xl mx-auto mb-8"
-                initial={{ y: 30, opacity: 0 }}
-                whileInView={{ y: 0, opacity: 1 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.3 }}
-              >
-                Let&apos;s discuss how AI can revolutionize your business operations.
-              </motion.p>
-              <motion.div
-                initial={{ y: 30, opacity: 0, scale: 0.9 }}
-                whileInView={{ y: 0, opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.4 }}
-              >
-                <MagneticButton>
-                  <Link
-                    href="/contact"
-                    className="inline-flex items-center gap-2 px-8 py-4 bg-primary text-background font-semibold rounded-full hover:bg-primary-600 transition-colors"
+              <motion.li key={service.title} variants={staggerChild}>
+                {/* Opaque card, not glass — this section already sits on a
+                    secondary background, and stacking two translucent layers
+                    muddies both. */}
+                <a href="/services" className="card card-interactive block h-full p-s8">
+                  <span
+                    className="mb-s6 flex h-12 w-12 items-center justify-center rounded-md"
+                    style={{ background: 'rgb(var(--c-accent-2) / 0.14)', color: 'var(--accent-2-ink)' }}
                   >
-                    Get Started <ArrowRight size={20} />
-                  </Link>
-                </MagneticButton>
-              </motion.div>
-            </div>
-          </motion.div>
+                    <service.icon size={22} strokeWidth={2} />
+                  </span>
+                  <h3 className="type-title-3 mb-s3">{service.title}</h3>
+                  <p className="type-callout mb-s5" style={{ color: 'var(--label-secondary)' }}>
+                    {service.description}
+                  </p>
+                  <span
+                    className="type-subhead inline-flex items-center gap-1.5 font-medium"
+                    style={{ color: 'var(--accent-ink)' }}
+                  >
+                    Learn more <ArrowRight size={14} />
+                  </span>
+                </a>
+              </motion.li>
+            ))}
+          </motion.ul>
         </div>
       </section>
-    </motion.main>
+
+      {/* ── Stats ───────────────────────────────────────────────────────── */}
+      <section className="py-s12">
+        <div className="container">
+          <ul className="grid grid-cols-2 gap-s8 md:grid-cols-4">
+            {stats.map((stat) => (
+              <li key={stat.label} className="text-center">
+                <Counter value={stat.value} prefix={stat.prefix} suffix={stat.suffix} />
+                <span
+                  className="type-subhead mt-s3 block"
+                  style={{ color: 'var(--label-secondary)' }}
+                >
+                  {stat.label}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      {/* ── CTA ─────────────────────────────────────────────────────────── */}
+      <section className="pb-s12">
+        <div className="container">
+          <ScrollReveal>
+            <div className="relative overflow-hidden rounded-2xl">
+              <GradientMesh fadeOut={false} />
+              {/* The one liquid-glass surface on the page. Refraction is a
+                  hero-only move — using it everywhere defeats the point. */}
+              <div className="glass-liquid glass-tinted relative px-s7 py-s12 text-center sm:px-s12">
+                <div className="relative z-[1]">
+                  <h2 className="type-title-1 mx-auto max-w-xl">Ready to transform?</h2>
+                  <p
+                    className="type-body-lg mx-auto mt-s5 max-w-lg"
+                    style={{ color: 'var(--label-secondary)' }}
+                  >
+                    Let&rsquo;s discuss how AI can reshape your business operations.
+                  </p>
+                  <div className="mt-s8 flex justify-center">
+                    <Button href="/contact" size="lg">
+                      Get started <ArrowRight size={18} />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </ScrollReveal>
+        </div>
+      </section>
+    </>
   );
 }
-

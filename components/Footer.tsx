@@ -2,40 +2,56 @@ import Link from 'next/link';
 import { Linkedin, Github, Mail } from 'lucide-react';
 import Logo from './Logo';
 
+const quickLinks = ['About', 'Services', 'Work', 'Insights', 'Contact'];
+
+const socials = [
+  { href: 'https://www.linkedin.com/company/101707731', label: 'LinkedIn', Icon: Linkedin },
+  { href: 'https://github.com/organizations/unodigit/', label: 'GitHub', Icon: Github },
+  { href: 'mailto:info@unodigit.com.au', label: 'Email', Icon: Mail },
+];
+
 export default function Footer() {
   return (
-    <footer className="border-t border-white/5 py-16">
-      <div className="container mx-auto px-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-12">
-          <div className="col-span-1 md:col-span-2">
-            <Link href="/" className="inline-block mb-4">
+    <footer style={{ background: 'var(--bg-secondary)' }}>
+      <div className="container py-s12">
+        <div className="grid grid-cols-1 gap-s10 md:grid-cols-12">
+          <div className="md:col-span-5">
+            <Link href="/" className="mb-s5 inline-block rounded-md" aria-label="Uno Digit — home">
               <Logo />
             </Link>
-            <p className="text-muted max-w-md mb-6">
-              AI-Driven Digital Transformation for forward-thinking enterprises. 
-              Based in Sydney, serving the world.
+            <p className="type-body max-w-sm" style={{ color: 'var(--label-secondary)' }}>
+              AI-driven digital transformation for forward-thinking enterprises.
+              Based in Sydney, working worldwide.
             </p>
-            <div className="flex gap-4">
-              <a href="https://www.linkedin.com/company/101707731" target="_blank" rel="noopener noreferrer" className="p-2 rounded-full glass hover:border-primary/30 transition-colors">
-                <Linkedin size={20} />
-              </a>
-              <a href="https://github.com/organizations/unodigit/" target="_blank" rel="noopener noreferrer" className="p-2 rounded-full glass hover:border-primary/30 transition-colors">
-                <Github size={20} />
-              </a>
-              <a href="mailto:info@unodigit.com.au" className="p-2 rounded-full glass hover:border-primary/30 transition-colors">
-                <Mail size={20} />
-              </a>
+
+            <div className="mt-s7 flex gap-s4">
+              {socials.map(({ href, label, Icon }) => (
+                <a
+                  key={label}
+                  href={href}
+                  aria-label={label}
+                  target={href.startsWith('http') ? '_blank' : undefined}
+                  rel={href.startsWith('http') ? 'noopener noreferrer' : undefined}
+                  className="flex h-11 w-11 items-center justify-center rounded-capsule transition-[transform,background-color] duration-instant ease-out active:scale-[0.94]"
+                  style={{ background: 'var(--fill-4)', color: 'var(--label-secondary)' }}
+                >
+                  <Icon size={19} strokeWidth={1.9} />
+                </a>
+              ))}
             </div>
           </div>
 
-          <div>
-            <h4 className="font-semibold mb-4">Quick Links</h4>
-            <ul className="space-y-3">
-              {['About', 'Services', 'Work', 'Insights', 'Contact'].map((item) => (
+          <div className="md:col-span-3 md:col-start-8">
+            <h2 className="type-eyebrow mb-s5" style={{ color: 'var(--label-secondary)' }}>
+              Explore
+            </h2>
+            <ul className="space-y-s4">
+              {quickLinks.map((item) => (
                 <li key={item}>
                   <Link
                     href={`/${item.toLowerCase()}`}
-                    className="text-muted hover:text-primary transition-colors"
+                    className="type-callout transition-colors duration-fast ease-out hover:text-accent-ink"
+                    style={{ color: 'var(--label-secondary)' }}
                   >
                     {item}
                   </Link>
@@ -44,26 +60,40 @@ export default function Footer() {
             </ul>
           </div>
 
-          <div>
-            <h4 className="font-semibold mb-4">Contact</h4>
-            <ul className="space-y-3 text-muted">
+          <div className="md:col-span-2">
+            <h2 className="type-eyebrow mb-s5" style={{ color: 'var(--label-secondary)' }}>
+              Contact
+            </h2>
+            <ul className="space-y-s4 type-callout" style={{ color: 'var(--label-secondary)' }}>
               <li>Sydney, Australia</li>
-              <li>info@unodigit.com.au</li>
+              <li>
+                <a
+                  href="mailto:info@unodigit.com.au"
+                  className="transition-colors duration-fast ease-out hover:text-accent-ink"
+                >
+                  info@unodigit.com.au
+                </a>
+              </li>
             </ul>
           </div>
         </div>
 
-        <div className="border-t border-white/5 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-muted text-sm">
-            2024 Uno Digit. All rights reserved.
+        <hr className="hairline my-s9" />
+
+        <div className="flex flex-col items-start justify-between gap-s4 sm:flex-row sm:items-center">
+          <p className="type-footnote" style={{ color: 'var(--label-secondary)' }}>
+            © {new Date().getFullYear()} Uno Digit. All rights reserved.
           </p>
-          <div className="flex gap-6 text-sm text-muted">
-            <a href="#" className="hover:text-primary transition-colors">Privacy</a>
-            <a href="#" className="hover:text-primary transition-colors">Terms</a>
+          <div className="flex gap-s7 type-footnote" style={{ color: 'var(--label-secondary)' }}>
+            <Link href="/contact" className="transition-colors duration-fast hover:text-accent-ink">
+              Privacy
+            </Link>
+            <Link href="/contact" className="transition-colors duration-fast hover:text-accent-ink">
+              Terms
+            </Link>
           </div>
         </div>
       </div>
     </footer>
   );
 }
-

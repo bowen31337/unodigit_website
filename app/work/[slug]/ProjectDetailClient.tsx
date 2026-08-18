@@ -1,134 +1,145 @@
 'use client';
 
-import { useRef } from 'react';
 import Link from 'next/link';
-import { motion, useScroll, useTransform } from 'motion/react';
-import { ArrowLeft, TrendingUp } from 'lucide-react';
+import { motion, useReducedMotion } from 'motion/react';
+import { ArrowLeft, ArrowUpRight, TrendingUp } from 'lucide-react';
 import { Project, projects, featuredCase } from '@/data/projects';
-import GlassCard from '@/components/GlassCard';
+import GradientMesh from '@/components/GradientMesh';
 
 const allProjects = [featuredCase, ...projects];
 
-const pageVariants = {
-  initial: { opacity: 0 },
-  animate: { opacity: 1 },
-  exit: { opacity: 0 },
-};
+export default function ProjectDetailClient({ project }: { project: Project }) {
+  const reduced = useReducedMotion();
+  const related = allProjects.filter((p) => p.slug !== project.slug).slice(0, 3);
 
-interface Props {
-  project: Project;
-}
-
-export default function ProjectDetailClient({ project }: Props) {
-  const heroRef = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({
-    target: heroRef,
-    offset: ['start start', 'end start'],
+  const rise = (delay: number) => ({
+    initial: { opacity: 0, y: reduced ? 0 : 12 },
+    animate: { opacity: 1, y: 0 },
+    transition: reduced
+      ? { duration: 0.3 }
+      : ({ type: 'spring', bounce: 0, visualDuration: 0.55, delay } as const),
   });
-  
-  const bgY = useTransform(scrollYProgress, [0, 1], [0, 100]);
 
   return (
-    <motion.main
-      className="pt-24 min-h-screen"
-      variants={pageVariants}
-      initial="initial"
-      animate="animate"
-      exit="exit"
-      transition={{ duration: 0.5 }}
-    >
-      {/* Header */}
-      <section ref={heroRef} className="relative py-20 overflow-hidden">
-        <motion.div 
-          style={{ y: bgY }} 
-          className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/5 rounded-full blur-3xl" 
-        />
-        
-        <div className="container mx-auto px-6 relative z-10">
-          <Link href="/work" className="inline-flex items-center gap-2 text-muted hover:text-primary transition-colors mb-8">
-            <ArrowLeft size={20} /> Back to Work
-          </Link>
-          
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="max-w-4xl"
+    <>
+      <section className="relative overflow-hidden pb-s10 pt-32 sm:pt-40">
+        <GradientMesh />
+        <div className="container relative z-[1]">
+          <Link
+            href="/work"
+            className="type-subhead mb-s8 inline-flex items-center gap-s3 font-medium transition-colors duration-fast hover:text-accent-ink"
+            style={{ color: 'var(--label-secondary)' }}
           >
-            <div className="flex flex-wrap items-center gap-4 mb-6">
-              <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium">
-                {project.category}
+            <ArrowLeft size={17} /> Back to work
+          </Link>
+
+          <motion.div {...rise(0)} className="mb-s6 flex flex-wrap items-center gap-s4">
+            <span
+              className="type-footnote px-s4 py-1.5 font-medium"
+              style={{
+                background: 'rgb(var(--c-accent) / 0.14)',
+                color: 'var(--accent-ink)',
+                borderRadius: 'var(--radius-capsule)',
+              }}
+            >
+              {project.category}
+            </span>
+            {project.client && (
+              <span className="type-footnote" style={{ color: 'var(--label-secondary)' }}>
+                {project.client}
               </span>
-              {project.client && (
-                <span className="text-muted text-sm border-l border-white/10 pl-4">
-                  Client: {project.client}
-                </span>
-              )}
-            </div>
-            
-            <h1 className="text-3xl md:text-5xl lg:text-6xl font-bold mb-6 leading-tight">
-              {project.title}
-            </h1>
-            
-            <div className="flex items-center gap-3 text-xl md:text-2xl font-bold text-gradient">
-              <TrendingUp className="text-primary" />
-              {project.result}
-            </div>
+            )}
           </motion.div>
+
+          <motion.h1 {...rise(0.07)} className="type-display max-w-4xl">
+            {project.title}
+          </motion.h1>
+
+          <motion.p {...rise(0.14)} className="mt-s7 flex items-center gap-s3">
+            <TrendingUp size={24} strokeWidth={2.2} style={{ color: 'var(--accent-ink)' }} />
+            <span className="type-title-2" style={{ color: 'var(--label)' }}>
+              {project.result}
+            </span>
+          </motion.p>
         </div>
       </section>
 
-      {/* Content */}
-      <section className="pb-24">
-        <div className="container mx-auto px-6">
-          <div className="grid lg:grid-cols-12 gap-12">
+      <section className="pb-s12">
+        <div className="container">
+          <div className="grid gap-s12 lg:grid-cols-12">
+            {/* Reading copy sits directly on the page background. Long-form
+                text on a translucent material is the one place glass actively
+                hurts — the backdrop shifts as you scroll and contrast with it. */}
             <div className="lg:col-span-8">
-              <GlassCard className="p-8 md:p-12">
-                <div className="prose prose-invert prose-lg max-w-none prose-headings:text-foreground prose-p:text-muted prose-strong:text-primary">
-                  {project.content}
-                </div>
-              </GlassCard>
+              <div className="prose-apple">{project.content}</div>
             </div>
-            
-            {/* Sidebar / Stats / Tags */}
-            <div className="lg:col-span-4 space-y-8">
-              <div className="sticky top-32">
+
+            <aside className="lg:col-span-4">
+              <div className="sticky top-28 space-y-s8">
                 {project.tags && project.tags.length > 0 && (
-                  <GlassCard className="p-6 mb-6">
-                    <h3 className="text-sm font-semibold text-muted uppercase tracking-wider mb-4">Technologies</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {project.tags.map(tag => (
-                        <span key={tag} className="px-3 py-1 bg-white/5 rounded-full text-xs text-primary-200">
+                  <div>
+                    <h2 className="type-eyebrow mb-s5" style={{ color: 'var(--label-secondary)' }}>
+                      Technologies
+                    </h2>
+                    <ul className="flex flex-wrap gap-s3">
+                      {project.tags.map((tag) => (
+                        <li
+                          key={tag}
+                          className="type-footnote px-s4 py-1.5"
+                          style={{
+                            background: 'var(--fill-4)',
+                            borderRadius: 'var(--radius-capsule)',
+                            color: 'var(--label-secondary)',
+                          }}
+                        >
                           {tag}
-                        </span>
+                        </li>
                       ))}
-                    </div>
-                  </GlassCard>
+                    </ul>
+                  </div>
                 )}
-                
-                <h3 className="text-lg font-bold mb-4">More Projects</h3>
-                <div className="space-y-4">
-                  {allProjects
-                    .filter(p => p.slug !== project.slug)
-                    .slice(0, 3)
-                    .map(related => (
-                      <Link key={related.slug} href={`/work/${related.slug}`} className="block group">
-                        <GlassCard className="p-4 hover:border-primary/30 transition-all">
-                          <span className="text-xs text-primary font-medium">{related.category}</span>
-                          <h4 className="font-semibold mt-1 mb-2 group-hover:text-primary transition-colors">
-                            {related.title}
-                          </h4>
-                          <span className="text-xs text-muted block">{related.result}</span>
-                        </GlassCard>
-                      </Link>
+
+                <div>
+                  <h2 className="type-eyebrow mb-s5" style={{ color: 'var(--label-secondary)' }}>
+                    More projects
+                  </h2>
+                  <ul className="space-y-s4">
+                    {related.map((item) => (
+                      <li key={item.slug}>
+                        <Link
+                          href={`/work/${item.slug}`}
+                          className="card card-interactive group block p-s6"
+                        >
+                          <span
+                            className="type-caption-1 mb-s2 block font-semibold uppercase tracking-wide"
+                            style={{ color: 'var(--accent-ink)' }}
+                          >
+                            {item.category}
+                          </span>
+                          <span className="type-headline mb-s2 flex items-start justify-between gap-s4">
+                            {item.title}
+                            <ArrowUpRight
+                              size={16}
+                              className="mt-0.5 shrink-0 transition-transform duration-fast ease-out group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+                              style={{ color: 'var(--accent-ink)' }}
+                            />
+                          </span>
+                          <span
+                            className="type-footnote block"
+                            style={{ color: 'var(--label-secondary)' }}
+                          >
+                            {item.result}
+                          </span>
+                        </Link>
+                      </li>
                     ))}
+                  </ul>
                 </div>
               </div>
-            </div>
+            </aside>
           </div>
         </div>
       </section>
-    </motion.main>
+    </>
   );
 }
-

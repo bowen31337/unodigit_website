@@ -1,297 +1,219 @@
 'use client';
 
-import { useRef } from 'react';
-import Link from 'next/link';
-import { motion, useScroll, useTransform, useSpring } from 'motion/react';
+import { motion } from 'motion/react';
 import { Brain, Code, Database, LineChart, Cog, Cloud, ArrowRight, Check } from 'lucide-react';
-import GlassCard from '@/components/GlassCard';
+import PageHero from '@/components/PageHero';
+import Button from '@/components/Button';
+import ScrollReveal, { staggerParent, staggerChild } from '@/components/ScrollReveal';
 
 const services = [
   {
     icon: Brain,
     title: 'AI Strategy & Consulting',
     description: 'Strategic roadmaps for AI adoption that align with your business objectives.',
-    features: ['AI Readiness Assessment', 'Use Case Identification', 'ROI Analysis', 'Implementation Planning'],
+    features: ['AI readiness assessment', 'Use case identification', 'ROI analysis', 'Implementation planning'],
   },
   {
     icon: LineChart,
     title: 'Machine Learning Solutions',
-    description: 'Custom ML models for predictive analytics, NLP, and computer vision.',
-    features: ['Predictive Analytics', 'Natural Language Processing', 'Computer Vision', 'Recommendation Systems'],
+    description: 'Custom ML models for predictive analytics, NLP and computer vision.',
+    features: ['Predictive analytics', 'Natural language processing', 'Computer vision', 'Recommendation systems'],
   },
   {
     icon: Database,
     title: 'Data Engineering',
-    description: 'Robust data pipelines and infrastructure for AI-ready organizations.',
-    features: ['Data Pipeline Design', 'ETL Development', 'Data Warehouse', 'Real-time Processing'],
+    description: 'Robust data pipelines and infrastructure for AI-ready organisations.',
+    features: ['Data pipeline design', 'ETL development', 'Data warehouse', 'Real-time processing'],
   },
   {
     icon: Code,
     title: 'Web & App Development',
-    description: 'Modern, scalable applications built with cutting-edge technology.',
-    features: ['React/Next.js', 'Mobile Apps', 'API Development', 'Cloud Architecture'],
+    description: 'Modern, scalable applications built with current technology.',
+    features: ['React / Next.js', 'Mobile apps', 'API development', 'Cloud architecture'],
   },
   {
     icon: Cog,
     title: 'Process Automation',
-    description: 'Intelligent automation to streamline operations and reduce costs.',
-    features: ['RPA Implementation', 'Workflow Automation', 'Document Processing', 'Integration Services'],
+    description: 'Intelligent automation to streamline operations and reduce cost.',
+    features: ['RPA implementation', 'Workflow automation', 'Document processing', 'Integration services'],
   },
   {
     icon: Cloud,
     title: 'Cloud & MLOps',
     description: 'Enterprise-grade infrastructure for deploying and scaling AI solutions.',
-    features: ['AWS/GCP/Azure', 'Model Deployment', 'CI/CD Pipelines', 'Monitoring & Maintenance'],
+    features: ['AWS / GCP / Azure', 'Model deployment', 'CI/CD pipelines', 'Monitoring & maintenance'],
   },
 ];
 
 const process = [
-  { step: '01', title: 'Discovery', description: 'Deep dive into your business challenges and objectives' },
-  { step: '02', title: 'Strategy', description: 'Define the roadmap and technical approach' },
-  { step: '03', title: 'Build', description: 'Agile development with continuous feedback' },
-  { step: '04', title: 'Deploy', description: 'Launch, monitor, and iterate for optimal results' },
+  { step: '01', title: 'Discovery', description: 'A deep dive into your business challenges and objectives.' },
+  { step: '02', title: 'Strategy', description: 'Define the roadmap and the technical approach.' },
+  { step: '03', title: 'Build', description: 'Agile development with continuous feedback.' },
+  { step: '04', title: 'Deploy', description: 'Launch, monitor and iterate for optimal results.' },
 ];
 
-const pageVariants = {
-  initial: { opacity: 0 },
-  animate: { opacity: 1 },
-  exit: { opacity: 0 },
-};
-
-const staggerContainer = {
-  animate: { transition: { staggerChildren: 0.05 } },
-};
-
-const fadeInUp = {
-  initial: { opacity: 0, y: 60, scale: 0.95 },
-  animate: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.8, ease: [0.25, 0.1, 0.25, 1] as const } },
-};
+const stack = ['Python', 'TensorFlow', 'PyTorch', 'React', 'Node.js', 'AWS', 'GCP', 'Docker', 'Kubernetes', 'PostgreSQL', 'MongoDB', 'Redis'];
 
 export default function ServicesClient() {
-  const heroRef = useRef<HTMLDivElement>(null);
-  const horizontalRef = useRef<HTMLDivElement>(null);
-  const processRef = useRef<HTMLDivElement>(null);
-  
-  const { scrollYProgress: heroProgress } = useScroll({
-    target: heroRef,
-    offset: ['start start', 'end start'],
-  });
-  
-  const { scrollYProgress: horizontalProgress } = useScroll({
-    target: horizontalRef,
-    offset: ['start start', 'end end'],
-  });
-  
-  const { scrollYProgress: processProgress } = useScroll({
-    target: processRef,
-    offset: ['start end', 'end center'],
-  });
-  
-  const bgY1 = useTransform(heroProgress, [0, 1], [0, 100]);
-  const bgY2 = useTransform(heroProgress, [0, 1], [0, 150]);
-  const x = useTransform(horizontalProgress, [0, 1], ['0%', '-66%']);
-  const smoothX = useSpring(x, { stiffness: 100, damping: 30 });
-  const lineScaleX = useTransform(processProgress, [0, 1], [0, 1]);
-
   return (
-    <motion.main
-      className="pt-24"
-      variants={pageVariants}
-      initial="initial"
-      animate="animate"
-      exit="exit"
-      transition={{ duration: 0.5 }}
-    >
-      {/* Hero */}
-      <section ref={heroRef} className="py-24 relative overflow-hidden">
-        <motion.div 
-          style={{ y: bgY1 }} 
-          className="absolute top-0 left-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl" 
-        />
-        <motion.div 
-          style={{ y: bgY2 }} 
-          className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-secondary/5 rounded-full blur-3xl" 
-        />
-        
-        <div className="container mx-auto px-6 relative z-10">
-          <motion.div
-            initial={{ opacity: 0, y: 30, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.6 }}
-            className="max-w-4xl"
-          >
-            <span className="text-primary font-medium mb-4 block">Our Services</span>
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6">
-              End-to-End <span className="text-gradient">AI Solutions</span>
-            </h1>
-            <p className="text-xl text-muted max-w-2xl">
-              From strategy to deployment, we provide comprehensive services to help 
-              you leverage the full potential of artificial intelligence.
-            </p>
-          </motion.div>
-        </div>
-      </section>
+    <>
+      <PageHero
+        eyebrow="Services"
+        title={
+          <>
+            End-to-end <span style={{ color: 'var(--accent-display)' }}>AI solutions</span>
+          </>
+        }
+        lede="From strategy through to deployment, we provide the full set of services needed to realise the potential of artificial intelligence."
+      />
 
-      {/* Horizontal Scroll Services Section */}
-      <section ref={horizontalRef} className="h-[300vh] relative">
-        <div className="sticky top-0 h-screen overflow-hidden flex items-center">
-          <div className="absolute top-8 left-6 z-10">
-            <h2 className="text-2xl md:text-3xl font-bold mb-2">Our Expertise</h2>
-            <p className="text-muted text-sm">Scroll to explore our services</p>
-          </div>
-          
-          <motion.div 
-            style={{ x: smoothX }}
-            className="flex items-center h-full gap-8 px-6 pt-20"
+      {/* ── Service grid ────────────────────────────────────────────────────
+          Replaces the previous 300vh pinned horizontal scroll. Hijacking three
+          viewports of scrolling to reveal six cards costs the reader control
+          of the page and hides the content from anyone who scrolls past — a
+          plain grid shows all six at once and is fully keyboard reachable. */}
+      <section className="py-s12" style={{ background: 'var(--bg-secondary)' }}>
+        <div className="container">
+          <ScrollReveal className="mb-s10 max-w-2xl">
+            <p className="type-eyebrow mb-s4" style={{ color: 'var(--accent-ink)' }}>
+              Expertise
+            </p>
+            <h2 className="type-title-1">Six disciplines, one delivery team</h2>
+          </ScrollReveal>
+
+          <motion.ul
+            variants={staggerParent}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, margin: '0px 0px -10% 0px' }}
+            className="grid gap-s6 md:grid-cols-2 xl:grid-cols-3"
           >
             {services.map((service) => (
-              <motion.div
-                key={service.title}
-                className="w-[400px] h-[480px] flex-shrink-0 transform-gpu"
-                initial={{ opacity: 0.5, scale: 0.85, rotateY: -15 }}
-                whileInView={{ opacity: 1, scale: 1, rotateY: 0 }}
-                viewport={{ margin: '-30%' }}
-                transition={{ duration: 0.5 }}
-              >
-                <GlassCard className="h-full flex flex-col">
-                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center mb-6">
-                    <service.icon size={28} className="text-primary" />
-                  </div>
-                  <h3 className="text-xl font-semibold mb-3">{service.title}</h3>
-                  <p className="text-muted mb-6">{service.description}</p>
-                  <ul className="space-y-2 mt-auto">
+              <motion.li key={service.title} variants={staggerChild}>
+                <div className="card flex h-full flex-col p-s8">
+                  <span
+                    className="mb-s6 flex h-12 w-12 items-center justify-center rounded-md"
+                    style={{ background: 'rgb(var(--c-accent) / 0.14)', color: 'var(--accent-ink)' }}
+                  >
+                    <service.icon size={22} strokeWidth={2} />
+                  </span>
+                  <h3 className="type-title-3 mb-s3">{service.title}</h3>
+                  <p className="type-callout mb-s6" style={{ color: 'var(--label-secondary)' }}>
+                    {service.description}
+                  </p>
+                  <ul className="mt-auto space-y-s3">
                     {service.features.map((feature) => (
-                      <li key={feature} className="flex items-center gap-2 text-sm">
-                        <Check size={16} className="text-primary shrink-0" />
-                        <span className="text-muted">{feature}</span>
+                      <li key={feature} className="flex items-start gap-s3 type-subhead">
+                        <Check
+                          size={16}
+                          strokeWidth={2.4}
+                          className="mt-0.5 shrink-0"
+                          style={{ color: 'var(--accent-ink)' }}
+                        />
+                        <span style={{ color: 'var(--label-secondary)' }}>{feature}</span>
                       </li>
                     ))}
                   </ul>
-                </GlassCard>
-              </motion.div>
+                </div>
+              </motion.li>
             ))}
-            <div className="w-[100px] flex-shrink-0" />
-          </motion.div>
-          
-          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 text-muted text-sm">
-            <div className="w-8 h-[2px] bg-primary/50 rounded animate-pulse" />
-            <span>Scroll horizontally</span>
-            <ArrowRight size={14} className="animate-bounce" />
-          </div>
+          </motion.ul>
         </div>
       </section>
 
-      {/* Process */}
-      <section className="py-24 bg-surface/50">
-        <div className="container mx-auto px-6">
-          <motion.div 
-            className="text-center mb-16"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-          >
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Our Process</h2>
-            <p className="text-muted max-w-2xl mx-auto">
-              A proven methodology that delivers results on time and within budget.
+      {/* ── Process ─────────────────────────────────────────────────────── */}
+      <section className="py-s12">
+        <div className="container">
+          <ScrollReveal className="mx-auto mb-s10 max-w-2xl text-center">
+            <p className="type-eyebrow mb-s4" style={{ color: 'var(--accent-ink)' }}>
+              Process
             </p>
-          </motion.div>
+            <h2 className="type-title-1">A methodology that delivers on time</h2>
+          </ScrollReveal>
 
-          <div ref={processRef} className="relative">
-            <motion.div 
-              className="hidden md:block absolute top-1/2 left-0 right-0 h-[2px] bg-gradient-to-r from-primary/20 via-primary to-secondary/20 origin-left"
-              style={{ scaleX: lineScaleX }}
-            />
-            
-            <div className="grid md:grid-cols-4 gap-8 relative">
-              {process.map((step, i) => (
-                <motion.div 
-                  key={step.step} 
-                  className="text-center relative"
-                  initial={{ opacity: 0, y: 60, scale: 0.8 }}
-                  whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                  viewport={{ once: true, margin: '-15%' }}
-                  transition={{ delay: i * 0.1, type: 'spring', bounce: 0.4 }}
+          <motion.ol
+            variants={staggerParent}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, margin: '0px 0px -12% 0px' }}
+            className="grid gap-s8 md:grid-cols-4"
+          >
+            {process.map((step) => (
+              <motion.li key={step.step} variants={staggerChild} className="relative">
+                {/* A hairline rule instead of the old scroll-scrubbed gradient
+                    bar — it marks the sequence without competing with it. */}
+                <hr className="hairline mb-s5" />
+                <span
+                  className="type-footnote tabular mb-s4 block font-semibold"
+                  style={{ color: 'var(--accent-ink)' }}
                 >
-                  <motion.div 
-                    className="text-5xl font-bold text-gradient mb-4 inline-block"
-                    initial={{ scale: 0, rotate: -180 }}
-                    whileInView={{ scale: 1, rotate: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: i * 0.1 + 0.2, type: 'spring', bounce: 0.5 }}
-                  >
-                    {step.step}
-                  </motion.div>
-                  <h3 className="text-xl font-semibold mb-2">{step.title}</h3>
-                  <p className="text-muted text-sm">{step.description}</p>
-                </motion.div>
-              ))}
-            </div>
-          </div>
+                  {step.step}
+                </span>
+                <h3 className="type-title-3 mb-s3">{step.title}</h3>
+                <p className="type-subhead" style={{ color: 'var(--label-secondary)' }}>
+                  {step.description}
+                </p>
+              </motion.li>
+            ))}
+          </motion.ol>
         </div>
       </section>
 
-      {/* Tech Stack */}
-      <section className="py-24">
-        <div className="container mx-auto px-6">
-          <motion.div 
-            className="text-center mb-16"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-          >
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Technology Stack</h2>
-            <p className="text-muted max-w-2xl mx-auto">
-              We use the latest technologies to build robust, scalable solutions.
+      {/* ── Stack ───────────────────────────────────────────────────────── */}
+      <section className="py-s12" style={{ background: 'var(--bg-secondary)' }}>
+        <div className="container">
+          <ScrollReveal className="mx-auto mb-s9 max-w-2xl text-center">
+            <p className="type-eyebrow mb-s4" style={{ color: 'var(--accent-ink)' }}>
+              Technology
             </p>
-          </motion.div>
+            <h2 className="type-title-1">The tools we build with</h2>
+          </ScrollReveal>
 
-          <motion.div 
-            className="flex flex-wrap justify-center gap-4"
-            variants={staggerContainer}
-            initial="initial"
-            whileInView="animate"
-            viewport={{ once: true, margin: '-20%' }}
+          <motion.ul
+            variants={staggerParent}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, margin: '0px 0px -10% 0px' }}
+            className="mx-auto flex max-w-3xl flex-wrap justify-center gap-s3"
           >
-            {['Python', 'TensorFlow', 'PyTorch', 'React', 'Node.js', 'AWS', 'GCP', 'Docker', 'Kubernetes', 'PostgreSQL', 'MongoDB', 'Redis'].map((tech) => (
-              <motion.div 
-                key={tech} 
-                variants={fadeInUp}
-                whileHover={{ scale: 1.05, borderColor: 'rgba(var(--primary), 0.3)' }}
-                whileTap={{ scale: 0.95 }}
-                className="px-6 py-3 glass rounded-full text-sm font-medium cursor-default transition-colors"
+            {stack.map((tech) => (
+              <motion.li
+                key={tech}
+                variants={staggerChild}
+                className="type-subhead px-s6 py-s4 font-medium"
+                style={{
+                  background: 'var(--bg-tertiary)',
+                  borderRadius: 'var(--radius-capsule)',
+                  boxShadow: 'var(--shadow-1), 0 0 0 0.5px var(--separator)',
+                  color: 'var(--label-secondary)',
+                }}
               >
                 {tech}
-              </motion.div>
+              </motion.li>
             ))}
-          </motion.div>
+          </motion.ul>
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="py-24 bg-surface/50">
-        <div className="container mx-auto px-6">
-          <motion.div 
-            className="text-center"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-          >
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Ready to Get Started?</h2>
-            <p className="text-muted max-w-xl mx-auto mb-8">
-              Let&apos;s discuss your project and find the right solution for your needs.
+      {/* ── CTA ─────────────────────────────────────────────────────────── */}
+      <section className="py-s12">
+        <div className="container text-center">
+          <ScrollReveal>
+            <h2 className="type-title-1 mx-auto max-w-xl">Ready to get started?</h2>
+            <p
+              className="type-body-lg mx-auto mt-s5 max-w-lg"
+              style={{ color: 'var(--label-secondary)' }}
+            >
+              Let&rsquo;s talk through your project and find the right approach.
             </p>
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-              <Link
-                href="/contact"
-                className="inline-flex items-center gap-2 px-8 py-4 bg-primary text-background font-semibold rounded-full hover:bg-primary-600 transition-colors"
-              >
-                Schedule a Consultation <ArrowRight size={20} />
-              </Link>
-            </motion.div>
-          </motion.div>
+            <div className="mt-s8 flex justify-center">
+              <Button href="/contact" size="lg">
+                Schedule a consultation <ArrowRight size={18} />
+              </Button>
+            </div>
+          </ScrollReveal>
         </div>
       </section>
-    </motion.main>
+    </>
   );
 }
-

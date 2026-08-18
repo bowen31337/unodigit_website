@@ -3,10 +3,12 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { Menu, X } from 'lucide-react';
-import MagneticButton from './MagneticButton';
 import Logo from './Logo';
+import Button from './Button';
+import ThemeToggle from './ThemeToggle';
+import { cn } from '@/lib/utils';
 
 const navLinks = [
   { path: '/', label: 'Home' },
@@ -16,112 +18,182 @@ const navLinks = [
   { path: '/insights', label: 'Insights' },
 ];
 
+/** Apple's drawer/sheet spring: damping 0.8 / response 0.3. */
+const sheetSpring = { type: 'spring', bounce: 0.2, visualDuration: 0.3 } as const;
+/** Apple's reposition spring: damping 1.0 / response 0.4. */
+const moveSpring = { type: 'spring', bounce: 0, visualDuration: 0.35 } as const;
+
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const pathname = usePathname();
+  const reduced = useReducedMotion();
 
   useEffect(() => {
-    const handleScroll = () => setIsScrolled(window.scrollY > 50);
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    const onScroll = () => setIsScrolled(window.scrollY > 24);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  useEffect(() => setIsMenuOpen(false), [pathname]);
+
+  // Lock the page behind the sheet, and close on Escape.
   useEffect(() => {
-    setIsMobileMenuOpen(false);
-  }, [pathname]);
+    if (!isMenuOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setIsMenuOpen(false);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [isMenuOpen]);
 
   return (
     <>
-      <motion.nav
-        initial={{ y: -100 }}
-        animate={{ y: 0 }}
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-          isScrolled ? 'py-3' : 'py-5'
-        }`}
+      <header
+        className={cn(
+          'fixed inset-x-0 top-0 z-50 transition-[padding] duration-base ease-out',
+          isScrolled ? 'py-s3' : 'py-s5'
+        )}
       >
-        <div className="container mx-auto px-6">
+        <div className="container">
+          {/*
+            The bar only materialises once you scroll. At the top of the page
+            the chrome is invisible and content owns the screen; as soon as
+            content would pass under it, the material appears to separate them.
+          */}
           <div
-            className={`flex items-center justify-between px-6 py-3 rounded-full transition-all duration-300 ${
-              isScrolled ? 'glass' : ''
-            }`}
+            className={cn(
+              'flex items-center justify-between gap-s5 rounded-capsule px-s5 py-s3',
+              'transition-[background-color,box-shadow,padding] duration-base ease-out',
+              isScrolled ? 'glass' : 'bg-transparent shadow-none'
+            )}
+            style={!isScrolled ? { boxShadow: 'none', background: 'transparent' } : undefined}
           >
-            <Link href="/" className="block">
-              <Logo />
+            <Link href="/" className="shrink-0 rounded-md" aria-label="Uno Digit — home">
+              <Logo size={isScrolled ? 28 : 30} />
             </Link>
 
-            <div className="hidden md:flex items-center gap-8">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.path}
-                  href={link.path}
-                  className={`relative text-sm font-medium transition-colors hover:text-primary ${
-                    pathname === link.path ? 'text-primary' : 'text-muted'
-                  }`}
-                >
-                  {link.label}
-                  {pathname === link.path && (
-                    <motion.div
-                      layoutId="activeNav"
-                      className="absolute -bottom-1 left-0 right-0 h-0.5 bg-primary"
-                    />
-                  )}
-                </Link>
-              ))}
-            </div>
+            <nav aria-label="Primary" className="hidden items-center gap-s2 lg:flex">
+              {navLinks.map((link) => {
+                const isActive = pathname === link.path;
+                return (
+                  <Link
+                    key={link.path}
+                    href={link.path}
+                    aria-current={isActive ? 'page' : undefined}
+                    className="relative rounded-capsule px-s5 py-s3 text-subhead font-medium transition-colors duration-fast ease-out"
+                    style={{ color: isActive ? 'var(--label)' : 'var(--label-secondary)' }}
+                  >
+                    {/*
+                      A filled pill that FLIPs between items rather than an
+                      underline that fades in and out — the indicator is one
+                      object moving, so the eye can follow where it went.
+                    */}
+                    {isActive && (
+                      <motion.span
+                        layoutId="nav-indicator"
+                        transition={reduced ? { duration: 0 } : moveSpring}
+                        className="absolute inset-0 rounded-capsule"
+                        style={{ background: 'var(--fill-4)' }}
+                      />
+                    )}
+                    <span className="relative z-[1]">{link.label}</span>
+                  </Link>
+                );
+              })}
+            </nav>
 
-            <div className="hidden md:block">
-              <MagneticButton>
-                <Link
-                  href="/contact"
-                  className="px-6 py-2.5 bg-primary text-background font-medium rounded-full hover:bg-primary-600 transition-colors"
-                >
-                  Contact
-                </Link>
-              </MagneticButton>
-            </div>
+            <div className="flex items-center gap-s4">
+              <ThemeToggle className="hidden sm:inline-flex" />
+              <Button href="/contact" size="sm" className="hidden lg:inline-flex">
+                Contact
+              </Button>
 
-            <button
-              className="md:hidden p-2"
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            >
-              {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-            </button>
+              <button
+                type="button"
+                onClick={() => setIsMenuOpen((v) => !v)}
+                aria-expanded={isMenuOpen}
+                aria-controls="mobile-menu"
+                aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
+                className="flex h-11 w-11 items-center justify-center rounded-capsule transition-transform duration-instant ease-out active:scale-[0.94] lg:hidden"
+                style={{ color: 'var(--label)' }}
+              >
+                {isMenuOpen ? <X size={22} /> : <Menu size={22} />}
+              </button>
+            </div>
           </div>
         </div>
-      </motion.nav>
+      </header>
 
       <AnimatePresence>
-        {isMobileMenuOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-40 glass md:hidden"
-          >
-            <div className="flex flex-col items-center justify-center h-full gap-8">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.path}
-                  href={link.path}
-                  className={`text-2xl font-medium ${
-                    pathname === link.path ? 'text-primary' : 'text-foreground'
-                  }`}
-                >
-                  {link.label}
-                </Link>
-              ))}
-              <Link
-                href="/contact"
-                className="mt-4 px-8 py-3 bg-primary text-background font-medium rounded-full"
-              >
-                Contact
-              </Link>
-            </div>
-          </motion.div>
+        {isMenuOpen && (
+          <>
+            <motion.div
+              key="scrim"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              onClick={() => setIsMenuOpen(false)}
+              className="fixed inset-0 z-40 lg:hidden"
+              style={{ background: 'rgba(0,0,0,0.4)' }}
+            />
+
+            {/*
+              The sheet springs down from the top edge it belongs to, and
+              exits back the same way — enter and exit share one path, so the
+              menu reads as an object that lives above the screen rather than
+              a panel that materialises out of nowhere.
+            */}
+            <motion.div
+              key="sheet"
+              id="mobile-menu"
+              initial={reduced ? { opacity: 0 } : { y: '-100%' }}
+              animate={reduced ? { opacity: 1 } : { y: 0 }}
+              exit={reduced ? { opacity: 0 } : { y: '-100%' }}
+              transition={reduced ? { duration: 0.2 } : sheetSpring}
+              className="glass-thick fixed inset-x-0 top-0 z-40 px-s7 pb-s9 pt-24 lg:hidden"
+              style={{ borderRadius: '0 0 var(--radius-2xl) var(--radius-2xl)' }}
+            >
+              <nav aria-label="Mobile" className="flex flex-col">
+                {navLinks.map((link) => {
+                  const isActive = pathname === link.path;
+                  return (
+                    <Link
+                      key={link.path}
+                      href={link.path}
+                      aria-current={isActive ? 'page' : undefined}
+                      className="flex min-h-[52px] items-center justify-between rounded-md px-s3 text-title-3 font-semibold transition-colors duration-instant"
+                      style={{ color: isActive ? 'var(--accent-ink)' : 'var(--label)' }}
+                    >
+                      {link.label}
+                      {isActive && (
+                        <span
+                          className="h-1.5 w-1.5 rounded-full"
+                          style={{ background: 'var(--accent)' }}
+                        />
+                      )}
+                    </Link>
+                  );
+                })}
+              </nav>
+
+              <hr className="hairline my-s6" />
+
+              <div className="flex items-center justify-between gap-s5">
+                <ThemeToggle />
+                <Button href="/contact" size="sm">
+                  Contact
+                </Button>
+              </div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
     </>
   );
 }
-

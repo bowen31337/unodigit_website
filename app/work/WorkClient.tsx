@@ -1,264 +1,260 @@
 'use client';
 
-import { useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { motion, useScroll, useTransform, useSpring } from 'motion/react';
-import { ArrowRight, ExternalLink, TrendingUp } from 'lucide-react';
+import { animate, motion, useInView, useReducedMotion } from 'motion/react';
+import { ArrowRight, ArrowUpRight, TrendingUp } from 'lucide-react';
+import PageHero from '@/components/PageHero';
 import GlassCard from '@/components/GlassCard';
+import Button from '@/components/Button';
+import Segmented from '@/components/Segmented';
+import ScrollReveal, { staggerParent, staggerChild } from '@/components/ScrollReveal';
 import { projects, featuredCase } from '@/data/projects';
 
 const stats = [
-  { value: '$50M+', label: 'Value Created', numValue: 50, prefix: '$', suffix: 'M+' },
-  { value: '150+', label: 'Projects Completed', numValue: 150, suffix: '+' },
-  { value: '40+', label: 'Happy Clients', numValue: 40, suffix: '+' },
+  { value: 50, prefix: '$', suffix: 'M+', label: 'Value created' },
+  { value: 150, prefix: '', suffix: '+', label: 'Projects completed' },
+  { value: 40, prefix: '', suffix: '+', label: 'Happy clients' },
 ];
 
-const pageVariants = {
-  initial: { opacity: 0 },
-  animate: { opacity: 1 },
-  exit: { opacity: 0 },
-};
+function Counter({ value, prefix, suffix }: { value: number; prefix: string; suffix: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const inView = useInView(ref, { once: true, margin: '0px 0px -15% 0px' });
+  const reduced = useReducedMotion();
 
-const staggerContainer = {
-  animate: { transition: { staggerChildren: 0.08 } },
-};
-
-const fadeInUp = {
-  initial: { opacity: 0, y: 60, scale: 0.95 },
-  animate: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.8, ease: [0.25, 0.1, 0.25, 1] as const } },
-};
-
-function AnimatedCounter({ value, prefix = '', suffix = '' }: { value: number; prefix?: string; suffix?: string }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({
-    target: ref,
-    offset: ['start end', 'end center'],
-  });
-  
-  const count = useTransform(scrollYProgress, [0, 0.5], [0, value]);
-  const rounded = useSpring(count, { stiffness: 50, damping: 20 });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (!inView) return;
+    if (reduced) {
+      el.textContent = `${prefix}${value}${suffix}`;
+      return;
+    }
+    const controls = animate(0, value, {
+      duration: 1.1,
+      ease: [0.23, 1, 0.32, 1],
+      onUpdate: (v) => {
+        el.textContent = `${prefix}${Math.round(v)}${suffix}`;
+      },
+    });
+    return () => controls.stop();
+  }, [inView, value, prefix, suffix, reduced]);
 
   return (
-    <motion.div ref={ref} className="text-3xl md:text-5xl font-bold text-gradient mb-2">
-      {prefix}<motion.span>{rounded}</motion.span>{suffix}
-    </motion.div>
+    <span
+      ref={ref}
+      className="tabular block"
+      style={{
+        fontSize: 'clamp(2rem, 3vw + 1rem, 3rem)',
+        fontWeight: 'var(--weight-bold)',
+        letterSpacing: 'var(--tracking-tight)',
+        lineHeight: 1.05,
+      }}
+    >
+      {prefix}0{suffix}
+    </span>
   );
 }
 
 export default function WorkClient() {
-  const heroRef = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({
-    target: heroRef,
-    offset: ['start start', 'end start'],
-  });
-  
-  const bgY = useTransform(scrollYProgress, [0, 1], [0, 100]);
+  const categories = useMemo(() => {
+    const unique = Array.from(new Set(projects.map((p) => p.category)));
+    return [{ value: 'All', label: 'All' }, ...unique.map((c) => ({ value: c, label: c }))];
+  }, []);
+
+  const [filter, setFilter] = useState('All');
+  const visible = filter === 'All' ? projects : projects.filter((p) => p.category === filter);
 
   return (
-    <motion.main
-      className="pt-24"
-      variants={pageVariants}
-      initial="initial"
-      animate="animate"
-      exit="exit"
-      transition={{ duration: 0.5 }}
-    >
-      {/* Hero */}
-      <section ref={heroRef} className="py-24 relative overflow-hidden">
-        <motion.div 
-          style={{ y: bgY }} 
-          className="absolute top-0 right-0 w-[600px] h-[600px] bg-primary/5 rounded-full blur-3xl" 
-        />
-        
-        <div className="container mx-auto px-6 relative z-10">
-          <motion.div
-            initial={{ opacity: 0, y: 30, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.6 }}
-            className="max-w-4xl"
-          >
-            <span className="text-primary font-medium mb-4 block">Our Work</span>
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6">
-              Proven Results, <span className="text-gradient">Real Impact</span>
-            </h1>
-            <p className="text-xl text-muted max-w-2xl">
-              Explore our portfolio of successful projects and discover how we&apos;ve helped 
-              businesses achieve transformational outcomes.
-            </p>
-          </motion.div>
-        </div>
-      </section>
+    <>
+      <PageHero
+        eyebrow="Our work"
+        title={
+          <>
+            Proven results, <span style={{ color: 'var(--accent-display)' }}>real impact</span>
+          </>
+        }
+        lede="A portfolio of projects where AI moved a genuine business metric — not a proof of concept that never left the lab."
+      />
 
-      {/* Featured Case */}
-      <section className="py-12">
-        <div className="container mx-auto px-6">
-          <motion.div
-            initial={{ opacity: 0, y: 50 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-          >
-            <GlassCard className="p-0 overflow-hidden">
-              <div className="grid lg:grid-cols-2">
-                <motion.div 
-                  className="p-12 lg:p-16 flex flex-col justify-center"
-                  initial="initial"
-                  whileInView="animate"
-                  viewport={{ once: true }}
-                >
-                  <motion.span 
-                    className="text-primary text-sm font-medium mb-4"
-                    initial={{ opacity: 0, x: -30 }}
-                    whileInView={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.1 }}
-                  >
-                    Featured Case Study
-                  </motion.span>
-                  <motion.h2 
-                    className="text-3xl md:text-4xl font-bold mb-4"
-                    initial={{ opacity: 0, x: -30 }}
-                    whileInView={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.2 }}
-                  >
-                    {featuredCase.title}
-                  </motion.h2>
-                  <motion.p 
-                    className="text-muted mb-4"
-                    initial={{ opacity: 0, x: -30 }}
-                    whileInView={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.3 }}
-                  >
+      {/* ── Featured case ───────────────────────────────────────────────── */}
+      <section className="pb-s12">
+        <div className="container">
+          <ScrollReveal>
+            <GlassCard className="overflow-hidden !p-0" material="thin">
+              <div className="grid lg:grid-cols-5">
+                <div className="p-s9 lg:col-span-3 lg:p-s12">
+                  <p className="type-eyebrow mb-s4" style={{ color: 'var(--accent-ink)' }}>
+                    Featured case study
+                  </p>
+                  <h2 className="type-title-1 mb-s5">{featuredCase.title}</h2>
+                  <p className="type-body mb-s6" style={{ color: 'var(--label-secondary)' }}>
                     {featuredCase.description}
-                  </motion.p>
-                  <motion.div 
-                    className="flex items-center gap-2 text-2xl font-bold text-gradient mb-6"
-                    initial={{ opacity: 0, x: -30 }}
-                    whileInView={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.4 }}
-                  >
-                    <TrendingUp className="text-primary" />
-                    {featuredCase.result}
-                  </motion.div>
-                  <motion.div 
-                    className="flex flex-wrap gap-2 mb-8"
-                    initial={{ opacity: 0 }}
-                    whileInView={{ opacity: 1 }}
-                    transition={{ delay: 0.5 }}
-                  >
-                    {featuredCase.tags?.map((tag, i) => (
-                      <motion.span 
-                        key={tag} 
-                        className="px-3 py-1 glass rounded-full text-sm"
-                        initial={{ opacity: 0, scale: 0.8 }}
-                        whileInView={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: 0.5 + i * 0.05, type: 'spring', bounce: 0.5 }}
+                  </p>
+
+                  <p className="mb-s7 flex items-center gap-s3">
+                    <TrendingUp size={22} strokeWidth={2.2} style={{ color: 'var(--accent-ink)' }} />
+                    <span className="type-title-3" style={{ color: 'var(--label)' }}>
+                      {featuredCase.result}
+                    </span>
+                  </p>
+
+                  <ul className="mb-s8 flex flex-wrap gap-s3">
+                    {featuredCase.tags?.map((tag) => (
+                      <li
+                        key={tag}
+                        className="type-footnote px-s5 py-s3"
+                        style={{
+                          background: 'var(--fill-4)',
+                          borderRadius: 'var(--radius-capsule)',
+                          color: 'var(--label-secondary)',
+                        }}
                       >
                         {tag}
-                      </motion.span>
+                      </li>
                     ))}
-                  </motion.div>
-                  <Link href={`/work/${featuredCase.slug}`} className="inline-flex items-center gap-2 text-primary hover:underline">
-                    Read Full Case Study <ExternalLink size={16} />
-                  </Link>
-                </motion.div>
-                <motion.div 
-                  className="bg-gradient-to-br from-primary/20 to-secondary/20 min-h-[300px] lg:min-h-0 flex items-center justify-center overflow-hidden"
-                  initial={{ scale: 1.2, opacity: 0 }}
-                  whileInView={{ scale: 1, opacity: 1 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 1 }}
+                  </ul>
+
+                  <Button href={`/work/${featuredCase.slug}`} variant="tinted" size="sm">
+                    Read the case study <ArrowRight size={16} />
+                  </Button>
+                </div>
+
+                {/*
+                  A calm two-tone wash drawn from the logo's own colours,
+                  standing in for imagery. The initials sit at low contrast on
+                  purpose — this is a surface, not a headline.
+                */}
+                <div
+                  className="relative flex min-h-[240px] items-center justify-center lg:col-span-2"
+                  style={{
+                    background:
+                      'linear-gradient(140deg, rgb(var(--c-accent) / 0.22), rgb(var(--c-accent-2) / 0.20))',
+                  }}
                 >
-                  <div className="text-6xl font-bold text-white/10">TC</div>
-                </motion.div>
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      fontSize: 'clamp(3rem, 8vw, 5rem)',
+                      fontWeight: 'var(--weight-bold)',
+                      letterSpacing: 'var(--tracking-tight)',
+                      color: 'var(--label)',
+                      opacity: 0.14,
+                    }}
+                  >
+                    {featuredCase.client
+                      ?.split(' ')
+                      .slice(0, 2)
+                      .map((w) => w[0])
+                      .join('') ?? 'UD'}
+                  </span>
+                </div>
               </div>
             </GlassCard>
-          </motion.div>
+          </ScrollReveal>
         </div>
       </section>
 
-      {/* Stats */}
-      <section className="py-24">
-        <div className="container mx-auto px-6">
-          <motion.div 
-            className="grid grid-cols-3 gap-8"
-            variants={staggerContainer}
-            initial="initial"
-            whileInView="animate"
-            viewport={{ once: true, margin: '-15%' }}
-          >
+      {/* ── Stats ───────────────────────────────────────────────────────── */}
+      <section className="pb-s12">
+        <div className="container">
+          <ul className="grid grid-cols-1 gap-s8 sm:grid-cols-3">
             {stats.map((stat) => (
-              <motion.div key={stat.label} className="text-center" variants={fadeInUp}>
-                <AnimatedCounter value={stat.numValue} prefix={stat.prefix || ''} suffix={stat.suffix || ''} />
-                <div className="text-muted">{stat.label}</div>
-              </motion.div>
+              <li key={stat.label} className="text-center">
+                <Counter value={stat.value} prefix={stat.prefix} suffix={stat.suffix} />
+                <span
+                  className="type-subhead mt-s3 block"
+                  style={{ color: 'var(--label-secondary)' }}
+                >
+                  {stat.label}
+                </span>
+              </li>
             ))}
-          </motion.div>
+          </ul>
         </div>
       </section>
 
-      {/* Project Grid */}
-      <section className="py-24 bg-surface/50">
-        <div className="container mx-auto px-6">
-          <motion.h2 
-            className="text-3xl md:text-4xl font-bold mb-12"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-          >
-            All Projects
-          </motion.h2>
+      {/* ── All projects ────────────────────────────────────────────────── */}
+      <section className="py-s12" style={{ background: 'var(--bg-secondary)' }}>
+        <div className="container">
+          <ScrollReveal className="mb-s9 flex flex-col justify-between gap-s6 md:flex-row md:items-end">
+            <h2 className="type-title-1">All projects</h2>
+            {categories.length > 2 && (
+              <div className="overflow-x-auto">
+                <Segmented
+                  aria-label="Filter projects by category"
+                  options={categories}
+                  value={filter}
+                  onChange={setFilter}
+                />
+              </div>
+            )}
+          </ScrollReveal>
 
-          <motion.div 
-            className="grid md:grid-cols-2 lg:grid-cols-3 gap-8"
-            variants={staggerContainer}
-            initial="initial"
-            whileInView="animate"
-            viewport={{ once: true, margin: '-20%' }}
+          {/*
+            `layout` on each card means filtering reflows with a spring instead
+            of a hard cut, so items that survive the filter visibly slide to
+            their new position rather than teleporting. `key={filter}` on the
+            list restarts the stagger for the incoming set.
+          */}
+          <motion.ul
+            key={filter}
+            variants={staggerParent}
+            initial="hidden"
+            animate="show"
+            className="grid gap-s6 md:grid-cols-2 xl:grid-cols-3"
           >
-            {projects.map((project) => (
-              <motion.div key={project.title} variants={fadeInUp}>
-                <Link href={`/work/${project.slug}`}>
-                  <GlassCard className="h-full group cursor-pointer hover:border-primary/30 transition-all">
-                    <span className="text-primary text-xs font-medium uppercase tracking-wider">{project.category}</span>
-                    <h3 className="text-xl font-semibold mt-2 mb-2 group-hover:text-primary transition-colors">{project.title}</h3>
-                    <p className="text-muted text-sm mb-4">{project.description}</p>
-                    <div className="flex items-center justify-between mt-auto pt-4 border-t border-white/5">
-                      <span className="text-primary font-semibold">{project.result}</span>
-                      <ArrowRight size={16} className="text-muted group-hover:text-primary group-hover:translate-x-1 transition-all" />
-                    </div>
-                  </GlassCard>
+            {visible.map((project) => (
+              <motion.li key={project.slug} variants={staggerChild} layout>
+                <Link
+                  href={`/work/${project.slug}`}
+                  className="card card-interactive group flex h-full flex-col p-s8"
+                >
+                  <span className="type-eyebrow mb-s4" style={{ color: 'var(--accent-ink)' }}>
+                    {project.category}
+                  </span>
+                  <h3 className="type-title-3 mb-s3">{project.title}</h3>
+                  <p className="type-subhead mb-s7" style={{ color: 'var(--label-secondary)' }}>
+                    {project.description}
+                  </p>
+
+                  <hr className="hairline mb-s5 mt-auto" />
+                  <span className="flex items-center justify-between gap-s4">
+                    <span className="type-subhead font-semibold" style={{ color: 'var(--label)' }}>
+                      {project.result}
+                    </span>
+                    <ArrowUpRight
+                      size={18}
+                      className="shrink-0 transition-transform duration-fast ease-out group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+                      style={{ color: 'var(--accent-ink)' }}
+                    />
+                  </span>
                 </Link>
-              </motion.div>
+              </motion.li>
             ))}
-          </motion.div>
+          </motion.ul>
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="py-24">
-        <div className="container mx-auto px-6">
-          <motion.div 
-            className="text-center"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-          >
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Have a Project in Mind?</h2>
-            <p className="text-muted max-w-xl mx-auto mb-8">
-              Let&apos;s discuss how we can help you achieve similar results.
+      {/* ── CTA ─────────────────────────────────────────────────────────── */}
+      <section className="py-s12">
+        <div className="container text-center">
+          <ScrollReveal>
+            <h2 className="type-title-1 mx-auto max-w-xl">Have a project in mind?</h2>
+            <p
+              className="type-body-lg mx-auto mt-s5 max-w-lg"
+              style={{ color: 'var(--label-secondary)' }}
+            >
+              Let&rsquo;s discuss how we can help you reach similar results.
             </p>
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-              <Link
-                href="/contact"
-                className="inline-flex items-center gap-2 px-8 py-4 bg-primary text-background font-semibold rounded-full hover:bg-primary-600 transition-colors"
-              >
-                Start a Conversation <ArrowRight size={20} />
-              </Link>
-            </motion.div>
-          </motion.div>
+            <div className="mt-s8 flex justify-center">
+              <Button href="/contact" size="lg">
+                Start a conversation <ArrowRight size={18} />
+              </Button>
+            </div>
+          </ScrollReveal>
         </div>
       </section>
-    </motion.main>
+    </>
   );
 }
-

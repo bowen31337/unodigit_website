@@ -1,195 +1,166 @@
 'use client';
 
-import { useRef } from 'react';
-import { motion, useScroll, useTransform, useSpring } from 'motion/react';
+import { useEffect, useRef } from 'react';
+import { animate, motion, useInView, useReducedMotion } from 'motion/react';
 import { Target, Lightbulb, Users } from 'lucide-react';
+import PageHero from '@/components/PageHero';
 import GlassCard from '@/components/GlassCard';
+import ScrollReveal, { staggerParent, staggerChild } from '@/components/ScrollReveal';
 
 const values = [
   { icon: Target, title: 'Transparency', description: 'Open communication and honest partnerships built on trust.' },
-  { icon: Lightbulb, title: 'Innovation', description: 'Pushing boundaries with cutting-edge technology solutions.' },
-  { icon: Users, title: 'Collaboration', description: 'Working together to achieve exceptional outcomes.' },
+  { icon: Lightbulb, title: 'Innovation', description: 'Pushing boundaries with proven, current technology.' },
+  { icon: Users, title: 'Collaboration', description: 'Working alongside your team to reach exceptional outcomes.' },
 ];
 
-const pageVariants = {
-  initial: { opacity: 0 },
-  animate: { opacity: 1 },
-  exit: { opacity: 0 },
-};
+const facts = [
+  { value: 2018, label: 'Founded', suffix: '', plain: true },
+  { value: 50, label: 'Team members', suffix: '+' },
+  { value: 150, label: 'Projects', suffix: '+' },
+  { value: 95, label: 'Retention rate', suffix: '%' },
+];
 
-const staggerContainer = {
-  animate: { transition: { staggerChildren: 0.1 } },
-};
+/**
+ * `plain` skips the count-up for the founding year — animating a year from 0
+ * up to 2018 reads as a number rolling, not as a date, and the digits are the
+ * content here rather than the magnitude.
+ */
+function Fact({ value, suffix, plain }: { value: number; suffix: string; plain?: boolean }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const inView = useInView(ref, { once: true, margin: '0px 0px -15% 0px' });
+  const reduced = useReducedMotion();
 
-const fadeInUp = {
-  initial: { opacity: 0, y: 60, scale: 0.95 },
-  animate: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.8, ease: [0.25, 0.1, 0.25, 1] as const } },
-};
-
-function AnimatedCounter({ value, suffix = '' }: { value: number; suffix?: string }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({
-    target: ref,
-    offset: ['start end', 'end center'],
-  });
-  
-  const count = useTransform(scrollYProgress, [0, 0.5], [0, value]);
-  const rounded = useSpring(count, { stiffness: 50, damping: 20 });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (plain || reduced || !inView) {
+      el.textContent = inView || plain ? `${value}${suffix}` : `0${suffix}`;
+      return;
+    }
+    const controls = animate(0, value, {
+      duration: 1,
+      ease: [0.23, 1, 0.32, 1],
+      onUpdate: (v) => {
+        el.textContent = `${Math.round(v)}${suffix}`;
+      },
+    });
+    return () => controls.stop();
+  }, [inView, value, suffix, plain, reduced]);
 
   return (
-    <motion.div ref={ref} className="text-3xl font-bold text-gradient mb-2">
-      <motion.span>{rounded}</motion.span>{suffix}
-    </motion.div>
+    <span
+      ref={ref}
+      className="tabular block"
+      style={{
+        fontSize: 'var(--text-title-1)',
+        fontWeight: 'var(--weight-bold)',
+        letterSpacing: 'var(--tracking-tight)',
+        lineHeight: 1.1,
+      }}
+    >
+      {plain ? `${value}${suffix}` : `0${suffix}`}
+    </span>
   );
 }
 
 export default function AboutClient() {
-  const heroRef = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({
-    target: heroRef,
-    offset: ['start start', 'end start'],
-  });
-  
-  const bgY1 = useTransform(scrollYProgress, [0, 1], [0, 100]);
-  const bgY2 = useTransform(scrollYProgress, [0, 1], [0, 150]);
-
   return (
-    <motion.main
-      className="pt-24"
-      variants={pageVariants}
-      initial="initial"
-      animate="animate"
-      exit="exit"
-      transition={{ duration: 0.5 }}
-    >
-      {/* Hero with parallax elements */}
-      <section ref={heroRef} className="py-24 relative overflow-hidden">
-        <motion.div 
-          style={{ y: bgY1 }} 
-          className="absolute -top-20 -left-20 w-96 h-96 bg-primary/5 rounded-full blur-3xl" 
-        />
-        <motion.div 
-          style={{ y: bgY2 }} 
-          className="absolute top-40 right-0 w-[500px] h-[500px] bg-secondary/5 rounded-full blur-3xl" 
-        />
-        
-        <div className="container mx-auto px-6 relative z-10">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="max-w-4xl"
-          >
-            <span className="text-primary font-medium mb-4 block">About Uno Digit</span>
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6">
-              Building the Future of <span className="text-gradient">Intelligent Business</span>
-            </h1>
-            <p className="text-xl text-muted max-w-2xl">
-              We are a Sydney-based AI consultancy helping enterprises harness the power 
-              of artificial intelligence to transform operations and drive growth.
-            </p>
-          </motion.div>
-        </div>
-      </section>
+    <>
+      <PageHero
+        eyebrow="About Uno Digit"
+        title={
+          <>
+            Building the future of{' '}
+            <span style={{ color: 'var(--accent-display)' }}>intelligent business</span>
+          </>
+        }
+        lede="We are a Sydney-based AI consultancy helping enterprises harness artificial intelligence to transform operations and drive growth."
+      />
 
-      {/* Mission */}
-      <section className="py-24 bg-surface/50">
-        <div className="container mx-auto px-6">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
-            <div>
-              <motion.h2 
-                className="text-3xl md:text-4xl font-bold mb-6"
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-              >
-                Our Mission
-              </motion.h2>
-              <motion.p 
-                className="text-lg text-muted mb-6"
-                initial={{ opacity: 0, x: -50 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.1 }}
-              >
-                To democratize AI technology for enterprises of all sizes, enabling them to 
-                compete in an increasingly digital world. We believe that intelligent automation 
-                should be accessible, practical, and transformative.
-              </motion.p>
-              <motion.p 
-                className="text-lg text-muted"
-                initial={{ opacity: 0, x: 50 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.2 }}
-              >
-                Founded in 2018, Uno Digit has grown from a small team of passionate engineers 
-                to a full-service AI consultancy serving clients across Australia and beyond.
-              </motion.p>
-            </div>
-            
-            <motion.div 
-              className="grid grid-cols-2 gap-4"
-              variants={staggerContainer}
-              initial="initial"
-              whileInView="animate"
-              viewport={{ once: true, margin: '-15%' }}
+      {/* ── Mission ─────────────────────────────────────────────────────── */}
+      <section className="py-s12" style={{ background: 'var(--bg-secondary)' }}>
+        <div className="container">
+          <div className="grid items-center gap-s12 lg:grid-cols-2">
+            <ScrollReveal>
+              <p className="type-eyebrow mb-s4" style={{ color: 'var(--accent-ink)' }}>
+                Our mission
+              </p>
+              <h2 className="type-title-1 mb-s7">
+                Make AI practical for enterprises of every size
+              </h2>
+              <div className="space-y-s5 type-body-lg" style={{ color: 'var(--label-secondary)' }}>
+                <p>
+                  We believe intelligent automation should be accessible, practical and
+                  genuinely transformative — not a research project that never ships.
+                </p>
+                <p>
+                  Founded in 2018, Uno Digit has grown from a small team of engineers into a
+                  full-service AI consultancy serving clients across Australia and beyond.
+                </p>
+              </div>
+            </ScrollReveal>
+
+            <motion.ul
+              variants={staggerParent}
+              initial="hidden"
+              whileInView="show"
+              viewport={{ once: true, margin: '0px 0px -12% 0px' }}
+              className="grid grid-cols-2 gap-s5"
             >
-              {[
-                { value: 2018, label: 'Founded', suffix: '' },
-                { value: 50, label: 'Team Members', suffix: '+' },
-                { value: 150, label: 'Projects', suffix: '+' },
-                { value: 95, label: 'Retention Rate', suffix: '%' },
-              ].map((stat) => (
-                <motion.div key={stat.label} variants={fadeInUp}>
-                  <GlassCard className="text-center transform-gpu">
-                    <AnimatedCounter value={stat.value} suffix={stat.suffix} />
-                    <div className="text-sm text-muted">{stat.label}</div>
-                  </GlassCard>
-                </motion.div>
+              {facts.map((fact) => (
+                <motion.li key={fact.label} variants={staggerChild}>
+                  <div className="card h-full p-s7 text-center">
+                    <Fact value={fact.value} suffix={fact.suffix} plain={fact.plain} />
+                    <span
+                      className="type-footnote mt-s3 block"
+                      style={{ color: 'var(--label-secondary)' }}
+                    >
+                      {fact.label}
+                    </span>
+                  </div>
+                </motion.li>
               ))}
-            </motion.div>
+            </motion.ul>
           </div>
         </div>
       </section>
 
-      {/* Values */}
-      <section className="py-24">
-        <div className="container mx-auto px-6">
-          <motion.div 
-            className="text-center mb-16"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-          >
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Our Core Values</h2>
-            <p className="text-muted max-w-2xl mx-auto">
-              The principles that guide every decision we make.
+      {/* ── Values ──────────────────────────────────────────────────────── */}
+      <section className="py-s12">
+        <div className="container">
+          <ScrollReveal className="mx-auto mb-s10 max-w-2xl text-center">
+            <p className="type-eyebrow mb-s4" style={{ color: 'var(--accent-ink)' }}>
+              Values
             </p>
-          </motion.div>
+            <h2 className="type-title-1">The principles behind every decision</h2>
+          </ScrollReveal>
 
-          <motion.div 
-            className="grid md:grid-cols-3 gap-8"
-            variants={staggerContainer}
-            initial="initial"
-            whileInView="animate"
-            viewport={{ once: true, margin: '-20%' }}
+          <motion.ul
+            variants={staggerParent}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, margin: '0px 0px -12% 0px' }}
+            className="grid gap-s6 md:grid-cols-3"
           >
             {values.map((value) => (
-              <motion.div key={value.title} variants={fadeInUp}>
-                <GlassCard className="text-center h-full">
-                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center mx-auto mb-6">
-                    <value.icon size={32} className="text-primary" />
-                  </div>
-                  <h3 className="text-xl font-semibold mb-3">{value.title}</h3>
-                  <p className="text-muted">{value.description}</p>
+              <motion.li key={value.title} variants={staggerChild}>
+                <GlassCard className="h-full text-center" material="thin">
+                  <span
+                    className="mx-auto mb-s6 flex h-14 w-14 items-center justify-center rounded-lg"
+                    style={{ background: 'rgb(var(--c-accent) / 0.14)', color: 'var(--accent-ink)' }}
+                  >
+                    <value.icon size={26} strokeWidth={1.9} />
+                  </span>
+                  <h3 className="type-title-3 mb-s3">{value.title}</h3>
+                  <p className="type-callout" style={{ color: 'var(--label-secondary)' }}>
+                    {value.description}
+                  </p>
                 </GlassCard>
-              </motion.div>
+              </motion.li>
             ))}
-          </motion.div>
+          </motion.ul>
         </div>
       </section>
-    </motion.main>
+    </>
   );
 }
-
