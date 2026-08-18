@@ -20,6 +20,12 @@ export interface Env {
   ALLOWED_ORIGIN: string
 }
 
-declare module 'cloudflare:test' {
-  interface ProvidedEnv extends Env {}
+// Alias to avoid `interface Env extends Env {}` resolving to itself inside the
+// `Cloudflare` namespace below (same identifier, different scope, would self-reference).
+type WorkerEnv = Env
+
+declare global {
+  namespace Cloudflare {
+    interface Env extends WorkerEnv {}
+  }
 }
