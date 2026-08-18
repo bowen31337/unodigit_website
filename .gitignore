@@ -43,3 +43,9 @@ pnpm-debug.log*
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# Claude Code worktrees
+.claude/worktrees/
+
+# Superpowers SDD workspace (scratch: ledger, briefs, review packages)
+.superpowers/
