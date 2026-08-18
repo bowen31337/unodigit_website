@@ -1,0 +1,67 @@
+# Plan 2 — Estimator & Artifacts — progress log
+
+Committed to git deliberately: the Plan 1 ledger lived in a gitignored worktree
+directory and was destroyed when the worktree was removed. Git history survived;
+the reasoning did not. This file must survive compaction, worktree removal, and
+a fresh session, so it lives in the repo.
+
+Plan:  docs/superpowers/plans/2026-08-18-ba-bot-estimator-artifacts.md
+Spec:  docs/superpowers/specs/2026-08-18-ba-bot-design.md  (binding authority)
+State: prd.json  (per-story pass/fail — the resume point)
+
+## Baseline at start
+
+Plan 1 merged. Worker suite 68 tests / 8 files, zero warnings. Root
+`pnpm build` emits apps/web/out with 22 pages. Never regress either.
+
+## Codebase patterns an implementer must know
+
+- Monorepo: pnpm workspace + Turbo 2. Worker at apps/ba-bot-api, shared wire
+  types at packages/ba-bot-contract, Next site at apps/web.
+- `pnpm test -- <name>` does NOT narrow under vitest 4. Run the full suite (~2s).
+- Tests: `import { env, exports } from 'cloudflare:workers'`; invoke via
+  `exports.default.fetch(input, init?)` — pre-bound, no env/ctx args.
+  `cloudflare:test` is deprecated for `env` (still correct for applyD1Migrations).
+- Mocks MUST build Response lazily: `mockImplementation(async () => new Response(...))`.
+  The eager `mockResolvedValue(new Response(...))` fails under workerd with
+  "Cannot perform I/O on behalf of a different request".
+- `step()` returns `slots`/`forcedAdvances` BY REFERENCE when unchanged. Never
+  push or assign into them; always spread.
+- Session persistence goes through `persistSession()` in src/session.ts, which
+  writes KV and D1 together. Writing only one is a defect class already fixed
+  twice; do not reintroduce it.
+- D1 enforces foreign keys (PRAGMA foreign_keys = 1). Ordering matters: check a
+  row exists before writing anything that references it.
+
+## Constraints that are not negotiable
+
+- NO lead field (name, email) may reach src/llm/, src/graph/prompts.ts, or
+  src/estimator/. DeepSeek is hosted in China; Australian Privacy Act APP 8 makes
+  this the highest-consequence constraint in the project.
+  Guard: grep -rnE "\b(name|email)\b" src/llm/ src/graph/prompts.ts src/estimator/
+  must return only the prompt line telling the model NOT to ask.
+- The frozen system prompts must stay byte-identical across requests. No
+  timestamps, ids, or interpolation — DeepSeek's prefix cache is a byte match and
+  ~98% cheaper on hits.
+- Test output must stay pristine. Zero warnings.
+
+## Known placeholders — must be settled before any client sees a quote
+
+- RATE_PER_TASK_AUD = 10          (wrangler.toml, placeholder)
+- MINIMUM_ENGAGEMENT_AUD = 6000   (wrangler.toml, placeholder)
+- TASKS_PER_WEEK = 25             (UNCALIBRATED — this is a delivery commitment)
+- src/estimator/calibration.ts    (plausible placeholders, NOT real claw-forge
+                                   plan output; the whole estimate is only as
+                                   good as this constant)
+
+## Carried forward to Plan 3 as LAUNCH BLOCKERS
+
+- Turnstile + rate limiting on POST /api/chat (spec section 10). Deferred because
+  enforcement needs a client-supplied token that does not exist until the widget
+  does. Without it /api/chat is open to unmetered DeepSeek spend.
+- DELETE /admin/lead/:id (spec section 8). Privacy Act deletion path; must sit
+  behind Cloudflare Access, which does not exist until the dashboard does.
+
+## Log
+
+(iterations append below)

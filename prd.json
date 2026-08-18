@@ -1,0 +1,173 @@
+{
+  "project": "unodigit-ba-bot",
+  "branchName": "feat/ba-bot-estimator",
+  "description": "Plan 2 — Estimator & Artifacts. Turns the GENERATE state from wired-but-inert into the step that produces a project brief, an indicative quote, and an email.",
+  "plan": "docs/superpowers/plans/2026-08-18-ba-bot-estimator-artifacts.md",
+  "spec": "docs/superpowers/specs/2026-08-18-ba-bot-design.md",
+  "complexity": {
+    "score": 7,
+    "category": "medium",
+    "estimated_iterations": 14,
+    "reasoning": "9 functional requirements x2, 3 integration points x3 (DeepSeek, Resend, D1), 1 database change x2, 2 external APIs x3 => 35/5 = 7"
+  },
+  "reviewPolicy": "per-story",
+  "baseline": {
+    "tests": 68,
+    "testFiles": 8,
+    "note": "Plan 1 merged at ff1ae4d. Suite must never regress below this and must stay warning-free."
+  },
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Contract additions",
+      "description": "As the UI and the Worker, we need shared wire types for the estimator, quote, and generate response so they cannot drift.",
+      "planTask": 1,
+      "acceptanceCriteria": [
+        "packages/ba-bot-contract exports CategoryNameSchema, ConfidenceSchema, EstimateCategorySchema, SubsystemSchema, EstimateShapeSchema, QuoteSchema, GenerateResponseSchema and their inferred types",
+        "EstimateShapeSchema is a discriminatedUnion on mode with single and program variants",
+        "Contract package typecheck clean; Worker typecheck clean",
+        "No Cloudflare imports in the contract package"
+      ],
+      "expectedTests": 68,
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Category-weighted banded pricing",
+      "description": "As the business, I want task counts converted to a defensible price band so the quote reflects real complexity variance.",
+      "planTask": 2,
+      "acceptanceCriteria": [
+        "CATEGORY_WEIGHTS covers all 7 categories; Integrations weighted above UI/UX",
+        "weightedTasks sums across categories and across subsystems in program mode",
+        "Bands are +/-25/35/50 percent for high/medium/low confidence",
+        "belowFloor is true when the midpoint is under MINIMUM_ENGAGEMENT_AUD",
+        "weeks rounds up and is never zero",
+        "Module is pure: no I/O, no LLM"
+      ],
+      "expectedTests": 80,
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Shape estimator, single mode",
+      "description": "As the quoting system, I want the model to return the SHAPE of a claw-forge decomposition rather than 100-300 bullets, cutting output tokens ~45x.",
+      "planTask": 3,
+      "acceptanceCriteria": [
+        "runEstimate returns a Zod-validated EstimateShape",
+        "ESTIMATOR_SYSTEM_PROMPT is byte-frozen and sent as the first message",
+        "Exactly one repair retry on malformed JSON; empty and truncated short-circuit without retrying",
+        "A shape whose category counts contradict total_tasks is rejected as unparseable",
+        "PII grep over src/llm, src/graph/prompts.ts and src/estimator returns only the do-not-ask prompt line"
+      ],
+      "expectedTests": 88,
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Estimator program mode",
+      "description": "As a large project, I want to be split into subsystems, because claw-forge targets 100-300 bullets per spec and a phased first-subsystem price converts better than one large total.",
+      "planTask": 4,
+      "acceptanceCriteria": [
+        "A first pass over PROGRAM_MODE_THRESHOLD triggers a second program-mode pass",
+        "Under the threshold makes exactly one call",
+        "A failed program pass falls back to the valid oversized single estimate rather than erroring",
+        "Token usage is summed across both passes",
+        "The frozen prompt is the first system message in both passes so the cached prefix is shared"
+      ],
+      "expectedTests": 92,
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Brief and quote markdown renderers",
+      "description": "As the dashboard and the email, we need markdown as the single canonical artifact form.",
+      "planTask": 5,
+      "acceptanceCriteria": [
+        "buildBriefSections degrades to a visible placeholder for missing slots rather than omitting headings",
+        "renderBrief never contains a lead field",
+        "renderQuote omits the per-task rate when rateShown is false",
+        "belowFloor replaces the band with a starter-engagement message",
+        "Program mode lists subsystems in dependency order labelled Phase 1..N; a cycle falls back to declaration order without throwing",
+        "Both renderers are pure"
+      ],
+      "expectedTests": 104,
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Brief and quote persistence",
+      "description": "As sales, I want every brief and quote stored as markdown in D1 so the dashboard can render them.",
+      "planTask": 6,
+      "acceptanceCriteria": [
+        "insertBrief, insertQuote, getQuoteById, getBriefByConversation exported and tested against real D1",
+        "insertQuote column/placeholder/bind counts are all 15 and stated in the report",
+        "A quote insert with an unknown brief_id throws (foreign keys are enforced)",
+        "subsystems_json round-trips as null in single mode"
+      ],
+      "expectedTests": 110,
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "POST /api/generate orchestration",
+      "description": "As a visitor who finished the interview, I want a brief and an indicative quote produced and persisted.",
+      "planTask": 7,
+      "acceptanceCriteria": [
+        "404 unknown conversation; 409 unless the session is at GENERATE",
+        "Idempotent: an existing brief for the conversation is returned without a second estimate",
+        "Rate-limited requests return the brief with quote null AND make no LLM call (assert the fetch spy)",
+        "Estimator failure still returns the brief with a graceful headline, never a 500",
+        "conversations.ended_at is written; abandoned_at_state is written when a session ends before DONE",
+        "headline never contains the per-task rate"
+      ],
+      "expectedTests": 122,
+      "priority": 7,
+      "passes": false,
+      "notes": "Closes the R4 gap from Plan 1: nothing has ever written abandoned_at_state."
+    },
+    {
+      "id": "US-008",
+      "title": "HMAC-signed quote retrieval",
+      "description": "As a client following an emailed link, I want to read my quote without an account, while quote ids stay unguessable.",
+      "planTask": 8,
+      "acceptanceCriteria": [
+        "signId/verifyId round-trip; tampered id, tampered signature, and wrong key all fail",
+        "Verification is constant-time and length-safe",
+        "GET /api/quote/:id returns 403 on bad signature AND 403 on unknown id, so ids are not enumerable",
+        "200 returns markdown and the quote payload"
+      ],
+      "expectedTests": 132,
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Resend email delivery",
+      "description": "As a client, I want the full cost breakdown emailed to me, with a link to the hosted quote.",
+      "planTask": 9,
+      "acceptanceCriteria": [
+        "HTML only, no attachment; fetch against api.resend.com with no SDK dependency added",
+        "A send failure logs an event and does NOT fail the request",
+        "The recipient address is read from the leads row at send time and never passes through the estimator, renderers, or any prompt",
+        "SETUP.md and scripts/sync-secrets.sh updated for RESEND_API_KEY and QUOTE_LINK_SIGNING_KEY"
+      ],
+      "expectedTests": 140,
+      "priority": 9,
+      "passes": false,
+      "notes": "QUOTE_LINK_SIGNING_KEY needs a new 1Password entry: openssl rand -hex 32."
+    }
+  ]
+}
