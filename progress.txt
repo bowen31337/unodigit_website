@@ -81,3 +81,18 @@ Nothing to relearn here beyond what's already in this file — StateIdSchema (us
 by GenerateResponseSchema) already existed at the top of index.ts, so no new
 import was needed. Next implementer (Task 2, pricing) can import EstimateShape,
 Quote, CategoryName directly from '@unodigit/ba-bot-contract'.
+
+### 2026-08-18 — US-002: Category-weighted banded pricing
+
+Created two pure modules (no I/O, no LLM):
+- src/estimator/categories.ts: CATEGORY_WEIGHTS Record mapping all 7 claw-forge
+  categories to commercial cost multipliers (Integrations 1.5 down to UI/UX 0.8).
+- src/pricing/quote.ts: weightedTasks() sums bullets × category weight across both
+  single and program modes; priceQuote() applies confidence-dependent band widths
+  (high ±25%, medium ±35%, low ±50%) and flags belowFloor when midpoint < minimumAud.
+  Math.max(1, ceil(weighted / tasksPerWeek)) ensures weeks ≥ 1.
+
+All 12 test cases from the plan pass verbatim. Suite now 80 tests / 9 files / zero
+warnings. Typecheck clean. Purity verified: no imports from src/db/, src/llm/, or
+any I/O-bearing module. A later story (Task 3) will import these and use them to
+price estimates.

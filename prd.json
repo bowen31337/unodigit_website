@@ -48,8 +48,8 @@
       ],
       "expectedTests": 80,
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "CATEGORY_WEIGHTS is a pure data module; priceQuote applies confidence-dependent band widths (±25/35/50%) and enforces belowFloor flag for engagement floor. Both modules are pure and import only from @unodigit/ba-bot-contract."
     },
     {
       "id": "US-003",
