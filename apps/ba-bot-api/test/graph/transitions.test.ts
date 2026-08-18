@@ -95,4 +95,34 @@ describe('step()', () => {
     step(before, { slots: { project_name: 'A' }, readyToAdvance: true, offTopic: false })
     expect(JSON.stringify(before)).toBe(snapshot)
   })
+
+  it('CONTACT never force-advances at maxTurns with an unmet exit gate', () => {
+    // CONTACT.maxTurns is 3; no lead_id means the exit gate is unmet.
+    const r = step(at('CONTACT', { turnsInState: 3 }), {
+      slots: {}, readyToAdvance: false, offTopic: false,
+    })
+    expect(r.next.state).toBe('CONTACT')
+    expect(r.forced).toBe(false)
+    expect(r.advanced).toBe(false)
+    expect(r.next.forcedAdvances).toEqual([])
+  })
+
+  it('CONTACT still advances normally to GENERATE once the form submits', () => {
+    const r = step(at('CONTACT'), {
+      slots: { lead_id: 'lead_123' }, readyToAdvance: true, offTopic: false,
+    })
+    expect(r.next.state).toBe('GENERATE')
+    expect(r.advanced).toBe(true)
+    expect(r.forced).toBe(false)
+  })
+
+  it('other states still force-advance at their cap (mechanism intact)', () => {
+    // PROJECT_IDENTITY.maxTurns is 6
+    const r = step(at('PROJECT_IDENTITY', { turnsInState: 6 }), {
+      slots: {}, readyToAdvance: false, offTopic: false,
+    })
+    expect(r.next.state).toBe('SOLUTION_SHAPE')
+    expect(r.forced).toBe(true)
+    expect(r.advanced).toBe(true)
+  })
 })

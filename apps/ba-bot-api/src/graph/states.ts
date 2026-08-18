@@ -13,6 +13,14 @@ export interface StateDef {
   slotSchema: z.ZodTypeAny
   exitGate: (slots: Slots) => boolean
   maxTurns: number
+  /**
+   * Whether `maxTurns` is allowed to force-advance this state when its exit
+   * gate is unmet. Defaults to true. Set false for states whose exit gate is
+   * satisfied by an out-of-band I/O effect (not by anything step() can see in
+   * `slots` from the LLM turn alone) where reaching maxTurns without that
+   * effect means the visitor abandoned, not that the state timed out.
+   */
+  forceAdvance?: boolean
 }
 
 /** The seven categories claw-forge's create-spec walks. Order is stable. */
@@ -110,12 +118,17 @@ export const STATES: Record<StateId, StateDef> = {
   },
 
   // Handled by POST /api/contact, not by the LLM. The graph only waits here.
+  // Must never force-advance: doing so would push a visitor into GENERATE
+  // with no lead_id and no lead row in D1. A visitor who ignores the form
+  // stays here until the global MAX_TOTAL_TURNS cap ends the session, so the
+  // abandonment is correctly recorded as abandoned_at_state = 'CONTACT'.
   CONTACT: {
     id: 'CONTACT',
     next: 'GENERATE',
     slotSchema: z.object({}).strict(),
     exitGate: (s) => !!str(s, 'lead_id'),
     maxTurns: 3,
+    forceAdvance: false,
   },
 
   // Orchestrator-driven; no LLM conversation turns occur in this state.

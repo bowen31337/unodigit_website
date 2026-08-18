@@ -46,7 +46,8 @@ export function step(current: ConversationState, input: TurnInput): StepResult {
   const turnsInState = current.turnsInState + 1
 
   const gateMet = def.exitGate(slots) && input.readyToAdvance
-  const forced = !gateMet && turnsInState >= def.maxTurns
+  const canForce = def.forceAdvance ?? true
+  const forced = !gateMet && canForce && turnsInState >= def.maxTurns
 
   if (!gateMet && !forced) {
     return {
