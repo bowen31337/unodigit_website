@@ -30,6 +30,8 @@ pnpm wrangler secret put LLM_BASE_URL      # https://api.deepseek.com/v1
 pnpm wrangler secret put LLM_MODEL         # DeepSeek V4-Flash model id
 pnpm wrangler secret put LLM_MODEL_HEAVY   # DeepSeek V4-Pro model id
 pnpm wrangler secret put LLM_API_KEY
+pnpm wrangler secret put TURNSTILE_SECRET  # Cloudflare dashboard → Turnstile → your site → secret key
+pnpm wrangler secret put IP_HASH_SALT      # generate once: openssl rand -hex 32
 ```
 
 Secrets cannot be read back from Cloudflare once set — record each value in a password
