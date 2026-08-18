@@ -266,3 +266,74 @@ is tighter than the "100-300 typical" language in the estimator prompt, which is
 intentional headroom for the over-threshold-but-still-single-mode window
 (program threshold 300 < schema max 400), not a bug — only the plan's own 540
 literal was out of range.
+
+### 2026-08-19 — US-005: Brief and quote markdown renderers
+
+Created two pure modules, transcribed verbatim from the plan's Task 5:
+- src/render/brief.ts: buildBriefSections(slots) -> BriefSections, degrading
+  every missing/empty slot to a visible "_Not captured during the interview._"
+  placeholder rather than omitting the heading; renderBrief(sections,
+  projectName) -> markdown. Never reads a lead field — only project_name,
+  audience, problem, solution_summary, differentiator, personas, mvp_must,
+  mvp_wont, timeline, budget_band, stack_preference, integrations.
+- src/render/quote.ts: phaseOrder(subsystems) — Kahn-style topological sort
+  that appends any subsystems left over (a cycle, or an unknown depends_on
+  name) in declaration order rather than throwing or looping; renderQuote(...)
+  -> markdown, gating the band/breakdown on q.belowFloor (a starter-engagement
+  message replaces the band entirely) and the per-task-rate section on
+  `rateShown && !belowFloor`.
+
+TDD: wrote test/render/render.test.ts first (verbatim from the plan), ran
+against a nonexistent src/render/ — RED for the expected reason (Cannot find
+module '../../src/render/brief'). Implemented both files verbatim from the
+plan, reran — 2 of 10 new tests failed unexpectedly ("shows the band and the
+task count" expected 601/1247 in the output; "includes the per-task rate only
+when rateShown is true" expected 'per task' to be present). Root cause: the
+plan's own shared `quote` fixture sets `belowFloor: true` unconditionally, but
+per the deliberate design (belowFloor replaces the band and suppresses the
+per-task-rate section — see plan's "six things deliberate" #3/#4), that
+fixture value is incompatible with 4 of the 6 sibling tests in the same
+describe block, which assume the normal band-showing path. This is the same
+class of defect as US-004's `540` fixture: the plan's literal test data
+contradicts the plan's own specified behavior. Fixed minimally, preserving
+each test's intent: flipped the shared fixture's default to `belowFloor:
+false`, and overrode it to `true` only inside the one test that actually wants
+the floor-message path ("flags a project below the engagement floor"). Reran —
+GREEN, all 10 pass.
+
+Self-review verification beyond the plan's own assertions (run as a scratch
+test, then deleted before commit — not part of the committed diff): a
+temporary test asserted that with belowFloor:true and rateShown:true, the
+output contains neither '601' nor '1247'/'1,247' nor 'per task' — i.e. the
+band and rate are genuinely ABSENT, not merely that the starter-engagement
+message is present alongside them. Passed.
+
+Dependency-cycle hand-trace (A depends_on [B], B depends_on [A]): byName =
+{A,B}, done = {}. First while-iteration: for A, ready = every(d='B' ->
+byName.has('B') true, done.has('B') false -> false) = false, not pushed; for B
+symmetric, not pushed. progressed stays false for the whole for-loop, so the
+while-loop exits after one pass (out.length 0 < 2 but progressed false). The
+trailing `for (const s of subsystems) if (!done.has(s.name)) out.push(s)` then
+appends A, then B — declaration order. No throw, no infinite loop; the
+Phase-labelled output is simply mis-ordered rather than incomplete or crashed.
+
+Verification: suite 106 tests / 12 files, zero warnings (was 96/11; +10
+tests/+1 file for this story alone). Both apps/ba-bot-api and
+packages/ba-bot-contract typecheck clean (tsc --noEmit, exit 0, no output).
+Note the plan's own stated post-Task-5 total ("104 tests / 12 files") assumed
+the pre-US-004a baseline of 92/11; against the actual current baseline of
+96/11 the correct total is 106/12, not a regression.
+
+Purity self-review: grep -nE "Date\.|fetch|\benv\b|\bDB\b|await" across both
+new files returned zero matches. src/render/quote.ts does call `new Date(ts)`
+inside day(), but `ts` is the caller-supplied `validUntil` argument, never
+`Date.now()` — the function remains a pure function of its input.
+
+PII grep `grep -rnE "\b(name|email)\b" src/llm/ src/graph/prompts.ts
+src/estimator/` returns the same 4 previously-adjudicated lines as US-003/
+US-004 (prompts.ts do-not-ask line; calibration.ts's "email + SMS reminders"
+prose; two prompt.ts JSON-schema "name": string fields) — this story touched
+neither directory. A second grep scoped to the new src/render/ files matches
+only `s.name`/`c.name`/`byName` (subsystem and category labels) and a local
+`name` variable in brief.ts bound to the `project_name` slot — none read a
+lead's actual name or email.

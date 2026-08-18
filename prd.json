@@ -117,8 +117,8 @@
       ],
       "expectedTests": 104,
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Actual suite is 106/12 (baseline 96/11 per US-004a, +10 tests/1 file), not the plan's 104/12 (which assumed the pre-US-004a 92/11 baseline). Fixed a self-contradictory plan test fixture: the shared belowFloor:true Quote fixture broke 2 sibling tests expecting the band/per-task-rate path; flipped the default to false and overrode true only in the floor-specific test."
     },
     {
       "id": "US-006",
