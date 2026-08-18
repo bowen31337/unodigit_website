@@ -15,10 +15,22 @@ const REPAIR =
  *  where they disagree is not a shape we can price, so treat it as unparseable
  *  rather than silently trusting either number. */
 function totalsAgree(shape: EstimateShape): boolean {
-  const sum =
-    shape.mode === 'single'
-      ? shape.categories.reduce((n, c) => n + c.bullets, 0)
-      : shape.subsystems.reduce((n, s) => n + s.categories.reduce((m, c) => m + c.bullets, 0), 0)
+  if (shape.mode === 'single') {
+    const sum = shape.categories.reduce((n, c) => n + c.bullets, 0)
+    return sum === shape.total_tasks
+  }
+
+  // Each subsystem must also agree with ITSELF, not just contribute to a
+  // correct umbrella total. Checking only the umbrella lets one subsystem
+  // overstate its categories while another understates them, netting out to a
+  // valid grand total — and the renderer prints per-subsystem totals as
+  // delivery phases, so an internally inconsistent subsystem becomes a phase
+  // whose task count contradicts its own breakdown.
+  for (const s of shape.subsystems) {
+    if (s.categories.reduce((n, c) => n + c.bullets, 0) !== s.total_tasks) return false
+  }
+
+  const sum = shape.subsystems.reduce((n, s) => n + s.total_tasks, 0)
   return sum === shape.total_tasks
 }
 

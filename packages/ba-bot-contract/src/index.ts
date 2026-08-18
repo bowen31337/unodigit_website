@@ -164,7 +164,13 @@ export type Confidence = z.infer<typeof ConfidenceSchema>
 export const EstimateCategorySchema = z
   .object({
     name: CategoryNameSchema,
-    bullets: z.number().int().min(0).max(400),
+    // max(2000), not max(400): this schema is also used for single-mode's
+    // whole-project category breakdown (see EstimateShapeSchema below), so the
+    // ceiling must sit above any plausible project — an oversized first pass
+    // needs to validate so it can route to program mode instead of failing
+    // parse and never reaching it. Per-subsystem breakdowns are naturally kept
+    // well under this by SubsystemSchema.total_tasks staying at max(400).
+    bullets: z.number().int().min(0).max(2000),
     sample: z.string().min(1).max(300),
   })
   .strict()
@@ -188,7 +194,12 @@ export const EstimateShapeSchema = z.discriminatedUnion('mode', [
     .object({
       mode: z.literal('single'),
       categories: z.array(EstimateCategorySchema).min(1),
-      total_tasks: z.number().int().min(1).max(400),
+      // max(2000), not max(400): the single-mode ceiling must sit above any
+      // plausible project so an oversized first pass can still be represented
+      // and validate, letting runEstimate's total_tasks > programThreshold
+      // check route it into program mode — rather than failing schema
+      // validation and never reaching that check at all (US-004a).
+      total_tasks: z.number().int().min(1).max(2000),
       confidence: ConfidenceSchema,
       drivers: z.array(z.string().max(200)).default([]),
     })

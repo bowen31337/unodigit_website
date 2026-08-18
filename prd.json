@@ -1,7 +1,7 @@
 {
   "project": "unodigit-ba-bot",
   "branchName": "feat/ba-bot-estimator",
-  "description": "Plan 2 — Estimator & Artifacts. Turns the GENERATE state from wired-but-inert into the step that produces a project brief, an indicative quote, and an email.",
+  "description": "Plan 2 \u2014 Estimator & Artifacts. Turns the GENERATE state from wired-but-inert into the step that produces a project brief, an indicative quote, and an email.",
   "plan": "docs/superpowers/plans/2026-08-18-ba-bot-estimator-artifacts.md",
   "spec": "docs/superpowers/specs/2026-08-18-ba-bot-design.md",
   "complexity": {
@@ -31,7 +31,7 @@
       "expectedTests": 68,
       "priority": 1,
       "passes": true,
-      "notes": "StateIdSchema already existed in the file; appended new section directly after ErrorCodeSchema. All new types are plain interfaces/schemas with no I/O — safe for Task 2 (pricing) and Task 3 (estimator) to import directly."
+      "notes": "StateIdSchema already existed in the file; appended new section directly after ErrorCodeSchema. All new types are plain interfaces/schemas with no I/O \u2014 safe for Task 2 (pricing) and Task 3 (estimator) to import directly."
     },
     {
       "id": "US-002",
@@ -49,7 +49,7 @@
       "expectedTests": 80,
       "priority": 2,
       "passes": true,
-      "notes": "CATEGORY_WEIGHTS is a pure data module; priceQuote applies confidence-dependent band widths (±25/35/50%) and enforces belowFloor flag for engagement floor. Both modules are pure and import only from @unodigit/ba-bot-contract."
+      "notes": "CATEGORY_WEIGHTS is a pure data module; priceQuote applies confidence-dependent band widths (\u00b125/35/50%) and enforces belowFloor flag for engagement floor. Both modules are pure and import only from @unodigit/ba-bot-contract."
     },
     {
       "id": "US-003",
@@ -84,6 +84,23 @@
       "priority": 4,
       "passes": true,
       "notes": "92/11 zero warnings, typecheck clean. Fixed plan's bigSingle fixture (540) to 350: it violated the Task-1 schema's own max(400) on bullets/total_tasks, making tests 3-4 structurally unsatisfiable regardless of implementation; corrected to stay schema-valid and still over programThreshold."
+    },
+    {
+      "id": "US-004a",
+      "title": "Oversized first pass reaches program mode",
+      "description": "As a large project, I want an over-400-task first pass to route to program mode instead of failing schema validation, because the spec sets no upper bound on the program-mode trigger.",
+      "planTask": null,
+      "acceptanceCriteria": [
+        "A first pass over 400 tasks reaches program mode instead of returning reason:'parse'",
+        "The ceiling is raised (2000), not removed: an absurd 5000-task pass is still rejected",
+        "SubsystemSchema.total_tasks stays at max(400) \u2014 the per-subsystem bound is intentional",
+        "totalsAgree requires each subsystem to agree with its own total, not just the umbrella",
+        "Frozen ESTIMATOR_SYSTEM_PROMPT, PROGRAM_MODE_ADDENDUM and CALIBRATION are byte-unchanged"
+      ],
+      "expectedTests": 96,
+      "priority": 4.5,
+      "passes": true,
+      "notes": "Controller ruling, not a plan task \u2014 spec beats plan. RED confirmed for both fixes by reverting source and re-running, not by assertion. Deferred: askOnce maxTokens 1600 may truncate a 6-subsystem program shape; degrades gracefully to the single estimate."
     },
     {
       "id": "US-005",

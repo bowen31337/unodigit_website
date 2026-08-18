@@ -145,6 +145,63 @@ single-mode result's total_tasks exceeds programThreshold, re-ask using
 PROGRAM_MODE_ADDENDUM (already written, unused until Task 4) and return the
 program-mode shape instead.
 
+### 2026-08-19 — US-004a: oversized first passes can now reach program mode
+
+CONTROLLER RULING, not a plan task. Plan 2 has no Task 4a; this fixes a defect
+found reviewing US-004.
+
+Defect. The spec (design doc ~line 245) says "when the first-pass estimate
+exceeds 300 tasks, the estimator re-runs in program mode", with no upper bound.
+But US-001's contract capped single-mode total_tasks and EstimateCategorySchema
+.bullets at max(400), and runEstimate only reaches the program pass via
+`first.shape.total_tasks > programThreshold` — which requires the first pass to
+have VALIDATED. So a project the model sized over 400 failed schema validation,
+burned its one repair retry, and returned {ok:false, reason:'parse'}; program
+mode never fired. Program mode worked across a 100-task window (301-400) while
+the failure zone above 400 was unbounded — and the frozen prompt steers into it
+("platforms are larger"). Program-mode total_tasks already had NO max, which is
+the tell: large numbers were always meant to live there.
+
+Ruling: spec beats plan. Raised the single-mode ceilings so an oversized first
+pass is representable and can route to the program pass:
+- EstimateCategorySchema.bullets: max(400) -> max(2000)
+- single-mode total_tasks:        max(400) -> max(2000)
+- SubsystemSchema.total_tasks:    UNCHANGED at max(400) — the spec targets
+  80-250 tasks per subsystem, so 400 is a correct per-subsystem bound.
+Frozen ESTIMATOR_SYSTEM_PROMPT, PROGRAM_MODE_ADDENDUM and CALIBRATION are
+byte-unchanged (verified by empty `git diff --stat` on those paths). Cost if the
+ruling is wrong: one small revert.
+
+Second defect, found while making the first and caused to widen by it.
+totalsAgree() in program mode summed ALL subsystem category bullets and compared
+that to the UMBRELLA total. It never checked that a subsystem's own categories
+sum to its own total_tasks. So one subsystem could overstate and another
+understate, netting out to a valid grand total. Previously bounded (categories
+capped at 400); raising to 2000 widened it, and US-005's renderer prints
+per-subsystem totals as delivery phases, so an inconsistent subsystem becomes a
+phase whose task count contradicts its own breakdown. totalsAgree now requires
+each subsystem to agree with itself, then sums subsystem totals against the
+umbrella.
+
+Verification. Suite 96 tests / 11 files, zero warnings (was 92/11); both
+apps/ba-bot-api and packages/ba-bot-contract typecheck exit 0. RED was confirmed
+for BOTH fixes by reverting the source and re-running, not by assertion:
+- ceiling: with max(400) restored, exactly one test failed — the 600-task first
+  pass returned ok:false, never reaching program mode.
+- per-subsystem: with the old totalsAgree restored, the self-contradictory shape
+  was ACCEPTED and returned ('expected program to be single') — i.e. it would
+  have been quoted to a visitor.
+
+Note for a later story, NOT fixed here: askOnce uses maxTokens 1600. A
+program-mode shape with 6 subsystems is far larger than a single-mode one, and
+deepseek-v4-flash spends most of its completion budget on reasoning tokens (a
+measured chat turn: 487 completion, 356 of them reasoning — which is why
+llm/turn.ts is at 4000). If a program pass truncates, askOnce returns
+'truncated' and runEstimate falls back to the valid oversized single estimate,
+so it degrades gracefully rather than failing — but the program artifact is
+silently lost. Worth calibrating against a real 6-subsystem response before
+launch.
+
 ### 2026-08-18 — US-004: Estimator program mode
 
 Refactored the Task 3 body of runEstimate into a private askOnce(client, model,
