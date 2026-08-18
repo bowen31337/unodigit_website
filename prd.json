@@ -65,8 +65,8 @@
       ],
       "expectedTests": 88,
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "88/10 pass, zero warnings; typecheck clean; PII grep clean (extra src/estimator hits are the schema field name \"name\" and calibration prose \"email\", not lead data)."
     },
     {
       "id": "US-004",

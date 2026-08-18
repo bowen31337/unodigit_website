@@ -109,3 +109,38 @@ NOT fixed: the divergence is cents on a four-figure quote, and the band is
 labelled indicative anyway. Recorded so a future refactor of the rounding order
 is a known-unpinned change rather than a surprise. Plan-level fixture gap, not an
 implementer defect.
+
+### 2026-08-18 — US-003: Shape estimator, single mode
+
+Created src/estimator/calibration.ts (frozen CALIBRATION with three reference
+decompositions), src/estimator/prompt.ts (frozen ESTIMATOR_SYSTEM_PROMPT +
+PROGRAM_MODE_ADDENDUM, composed only from the frozen CALIBRATION constant — no
+per-request interpolation), and src/estimator/estimate.ts (runEstimate: sends
+the frozen prompt as the first message, checks finishReason === 'length' before
+empty content before parse, retries malformed JSON exactly once via a REPAIR
+message, and rejects a shape whose per-category bullet sum disagrees with
+total_tasks as unparseable rather than trusting either number). All transcribed
+verbatim from the plan's Task 3.
+
+Verification: suite now 88 tests / 10 files / zero warnings (was 80/9);
+apps/ba-bot-api typecheck clean. TDD: wrote test/estimator/estimate.test.ts
+first, confirmed RED (Cannot find module '../../src/estimator/estimate', 80
+baseline tests still passing), then added the three source files and confirmed
+GREEN (88/10).
+
+PII grep `grep -rnE "\b(name|email)\b" src/llm/ src/graph/prompts.ts
+src/estimator/` returns four lines, not one: the expected prompts.ts
+do-not-ask line, plus three under src/estimator/ that are false positives of
+the same class the plan already anticipated for category names —
+prompt.ts's JSON schema field `"name": string` (EstimateCategory.name /
+Subsystem.name, a category label, not a lead's name) appears twice, and
+calibration.ts's prose "email + SMS reminders" (describing a reference
+project's notification feature, not a lead's email address). No lead field
+(a visitor's actual name or email value) is read, threaded, or interpolated
+anywhere in src/estimator/. Reported verbatim rather than filtered, per
+instructions.
+
+Next implementer (Task 4, program mode) extends runEstimate in-place: when a
+single-mode result's total_tasks exceeds programThreshold, re-ask using
+PROGRAM_MODE_ADDENDUM (already written, unused until Task 4) and return the
+program-mode shape instead.
