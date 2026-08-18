@@ -96,3 +96,16 @@ All 12 test cases from the plan pass verbatim. Suite now 80 tests / 9 files / ze
 warnings. Typecheck clean. Purity verified: no imports from src/db/, src/llm/, or
 any I/O-bearing module. A later story (Task 3) will import these and use them to
 price estimates.
+
+### Deferred minor (from US-002 review)
+
+Rounding order in priceQuote is asserted by code inspection only, not by any
+test. With rateAud=10 and weights that are multiples of 0.1, every midpoint in
+all 12 fixtures lands on a whole number, so "round then band" and "band then
+round" are mathematically indistinguishable in the suite. A fixture with a
+fractional midpoint (e.g. rateAud 12.5) would pin it.
+
+NOT fixed: the divergence is cents on a four-figure quote, and the band is
+labelled indicative anyway. Recorded so a future refactor of the rounding order
+is a known-unpinned change rather than a surprise. Plan-level fixture gap, not an
+implementer defect.
