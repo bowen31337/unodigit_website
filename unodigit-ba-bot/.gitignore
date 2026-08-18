@@ -1,0 +1,8 @@
+# Local wrangler state: miniflare's D1/KV databases, build cache, dev server temp.
+# Machine-local and regenerable — never commit.
+.wrangler/
+
+# Local secrets for `wrangler dev`. Real credential values live here at runtime.
+# NEVER commit. Populate from 1Password — see SETUP.md.
+.dev.vars
+.dev.vars.*

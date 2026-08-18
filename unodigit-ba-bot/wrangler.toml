@@ -16,6 +16,17 @@ binding = "SESSIONS"
 id = "00000000-0000-0000-0000-000000000000"
 
 [vars]
+# Provider config. Not confidential, so kept here rather than as secrets:
+# visible in review, diffable, and changing a model is a normal code change.
+# The API key itself is a secret — see scripts/sync-secrets.sh.
+#
+# DeepSeek exposes two wire formats. This must stay the OpenAI one, because
+# src/llm/openai-compat.ts speaks chat/completions. The Anthropic-format
+# endpoint (https://api.deepseek.com/anthropic) would need a different adapter.
+LLM_BASE_URL = "https://api.deepseek.com"
+LLM_MODEL = "deepseek-v4-flash"
+LLM_MODEL_HEAVY = "deepseek-v4-pro"
+
 RATE_PER_TASK_AUD = "10"
 MINIMUM_ENGAGEMENT_AUD = "6000"
 TASKS_PER_WEEK = "25"

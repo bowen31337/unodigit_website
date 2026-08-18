@@ -2,15 +2,15 @@ export interface Env {
   DB: D1Database
   SESSIONS: KVNamespace
 
-  // secrets — set via `wrangler secret put`
-  LLM_BASE_URL: string
-  LLM_MODEL: string
-  LLM_MODEL_HEAVY: string
+  // secrets — set via scripts/sync-secrets.sh (never in wrangler.toml)
   LLM_API_KEY: string
   TURNSTILE_SECRET: string
   IP_HASH_SALT: string
 
-  // vars
+  // vars — plaintext in wrangler.toml, safe to review and diff
+  LLM_BASE_URL: string
+  LLM_MODEL: string
+  LLM_MODEL_HEAVY: string
   RATE_PER_TASK_AUD: string
   MINIMUM_ENGAGEMENT_AUD: string
   TASKS_PER_WEEK: string
