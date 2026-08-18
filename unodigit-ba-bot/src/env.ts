@@ -27,5 +27,10 @@ type WorkerEnv = Env
 declare global {
   namespace Cloudflare {
     interface Env extends WorkerEnv {}
+    // Required for `exports.default` (from `cloudflare:workers`) to be typed —
+    // `Cloudflare.Exports` is keyed off this module's exports.
+    interface GlobalProps {
+      mainModule: typeof import('./index')
+    }
   }
 }
