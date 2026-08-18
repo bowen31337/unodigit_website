@@ -49,3 +49,6 @@ next-env.d.ts
 
 # Superpowers SDD workspace (scratch: ledger, briefs, review packages)
 .superpowers/
+
+# Turborepo local task cache (root and per-package)
+.turbo/
