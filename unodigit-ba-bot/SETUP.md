@@ -18,4 +18,19 @@ Then copy the printed `database_id` (from the `d1 create` output) and `id` (from
 `00000000-0000-0000-0000-000000000000` placeholders.
 
 Secrets (`LLM_BASE_URL`, `LLM_MODEL`, `LLM_MODEL_HEAVY`, `LLM_API_KEY`, `TURNSTILE_SECRET`,
-`IP_HASH_SALT`) are not set here — they're configured in Task 5 via `wrangler secret put`.
+`IP_HASH_SALT`) are not set here — they require an authenticated Cloudflare session that
+isn't available in this environment. Local tests don't need real secrets —
+`vitest.config.ts` supplies stub values (`test-model`, `test-key`, etc.) directly as
+miniflare bindings.
+
+Before the first real (non-test) deploy, a human with Cloudflare access must run:
+
+```bash
+pnpm wrangler secret put LLM_BASE_URL      # https://api.deepseek.com/v1
+pnpm wrangler secret put LLM_MODEL         # DeepSeek V4-Flash model id
+pnpm wrangler secret put LLM_MODEL_HEAVY   # DeepSeek V4-Pro model id
+pnpm wrangler secret put LLM_API_KEY
+```
+
+Secrets cannot be read back from Cloudflare once set — record each value in a password
+manager as you set it.
