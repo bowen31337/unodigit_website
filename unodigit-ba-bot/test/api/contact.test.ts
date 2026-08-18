@@ -33,7 +33,7 @@ async function seedConversation(): Promise<string> {
 }
 
 const valid = {
-  name: 'Jane Doe', email: 'jane@acme.com', mobile: '+61411222333',
+  name: 'Jane Doe', email: 'jane@acme.com',
   company: 'Acme', consent: true, turnstileToken: 'tok',
 }
 
@@ -49,10 +49,9 @@ describe('POST /api/contact', () => {
 
     const { leadId } = await res.json<{ leadId: string }>()
     const lead = await env.DB.prepare('SELECT * FROM leads WHERE id = ?').bind(leadId)
-      .first<{ name: string; email: string; mobile: string; ip_hash: string; consent_marketing: number }>()
+      .first<{ name: string; email: string; ip_hash: string; consent_marketing: number }>()
 
     expect(lead!.name).toBe('Jane Doe')
-    expect(lead!.mobile).toBe('+61411222333')
     expect(lead!.consent_marketing).toBe(1)
 
     const conv = await env.DB.prepare('SELECT lead_id FROM conversations WHERE id = ?')
@@ -86,11 +85,17 @@ describe('POST /api/contact', () => {
     expect(res.status).toBe(400)
   })
 
-  it('rejects a missing mobile number', async () => {
+  it('accepts a lead with no name', async () => {
     mockTurnstile(true)
     const conversationId = await seedConversation()
-    const res = await postContact({ ...valid, mobile: '', conversationId })
-    expect(res.status).toBe(400)
+    const { name: _name, ...withoutName } = valid
+    const res = await postContact({ ...withoutName, conversationId })
+    expect(res.status).toBe(200)
+
+    const { leadId } = await res.json<{ leadId: string }>()
+    const lead = await env.DB.prepare('SELECT name FROM leads WHERE id = ?').bind(leadId)
+      .first<{ name: string | null }>()
+    expect(lead!.name).toBeNull()
   })
 
   it('rejects withheld consent', async () => {

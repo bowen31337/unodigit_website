@@ -36,9 +36,8 @@ export interface MessageInsert {
 export interface LeadInsert {
   id: string
   createdAt: number
-  name: string
+  name: string | null
   email: string
-  mobile: string
   company: string | null
   role: string | null
   ipHash: string
@@ -114,12 +113,12 @@ export async function insertLead(db: D1Database, row: LeadInsert): Promise<strin
   await db
     .prepare(
       `INSERT INTO leads (
-         id, created_at, name, email, mobile, company, role, ip_hash, country, asn, user_agent,
+         id, created_at, name, email, company, role, ip_hash, country, asn, user_agent,
          utm_source, utm_medium, utm_campaign, referrer, landing_page, consent_marketing, consent_ts
-       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     )
     .bind(
-      row.id, row.createdAt, row.name, row.email, row.mobile, row.company, row.role,
+      row.id, row.createdAt, row.name, row.email, row.company, row.role,
       row.ipHash, row.country, row.asn, row.userAgent, row.utmSource, row.utmMedium,
       row.utmCampaign, row.referrer, row.landingPage, row.consentMarketing ? 1 : 0, row.consentTs,
     )

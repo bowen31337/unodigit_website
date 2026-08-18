@@ -1,9 +1,8 @@
 CREATE TABLE leads (
   id                TEXT PRIMARY KEY,
   created_at        INTEGER NOT NULL,
-  name              TEXT NOT NULL,
+  name              TEXT,
   email             TEXT NOT NULL,
-  mobile            TEXT NOT NULL,
   company           TEXT,
   role              TEXT,
   ip_hash           TEXT NOT NULL,

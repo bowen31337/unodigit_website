@@ -8,14 +8,10 @@ import { newId } from '../util/ids'
 import { step } from '../graph/transitions'
 import { loadSession, saveSession } from '../session'
 
-// Deliberately permissive on format, strict on presence: international mobile
-// numbers vary too much to regex safely, and rejecting a real lead is worse
-// than storing one we have to normalise later.
 const Body = z.object({
   conversationId: z.string(),
-  name: z.string().min(1).max(120),
+  name: z.string().min(1).max(120).optional(),
   email: z.string().email().max(200),
-  mobile: z.string().min(6).max(30),
   company: z.string().max(160).optional(),
   role: z.string().max(120).optional(),
   consent: z.literal(true),
@@ -53,9 +49,8 @@ export function registerContactRoutes(app: Hono<{ Bindings: Env }>): void {
     await insertLead(c.env.DB, {
       id: leadId,
       createdAt: now,
-      name: b.name,
+      name: b.name ?? null,
       email: b.email,
-      mobile: b.mobile,
       company: b.company ?? null,
       role: b.role ?? null,
       ipHash: await hashIp(ip ?? 'unknown', c.env.IP_HASH_SALT),
