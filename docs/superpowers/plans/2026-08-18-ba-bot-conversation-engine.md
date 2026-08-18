@@ -345,7 +345,7 @@ git commit -m "feat(ba-bot): scaffold Worker with health endpoint and test harne
 `test/db/queries.test.ts`:
 
 ```ts
-import { env } from 'cloudflare:test'
+import { env } from 'cloudflare:workers'
 import { describe, it, expect } from 'vitest'
 import {
   createConversation, getConversation, updateConversationState,
@@ -1563,9 +1563,8 @@ Session `ConversationState` is stored in KV under `conv:<id>` with a 24-hour TTL
 `test/api/chat.test.ts`:
 
 ```ts
-import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test'
+import { env, exports } from 'cloudflare:workers'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import worker from '../../src/index'
 
 function mockLlm(body: unknown) {
   return vi.spyOn(globalThis, 'fetch').mockResolvedValue(
@@ -1576,16 +1575,14 @@ function mockLlm(body: unknown) {
   )
 }
 
+// `exports.default` is a pre-bound loopback stub: fetch(input, init?) only —
+// no env/ctx arguments, and no execution context to await.
 async function post(body: unknown) {
-  const req = new Request('https://api.test/api/chat', {
+  return await exports.default.fetch('https://api.test/api/chat', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   })
-  const ctx = createExecutionContext()
-  const res = await worker.fetch(req, env, ctx)
-  await waitOnExecutionContext(ctx)
-  return res
 }
 
 beforeEach(() => vi.restoreAllMocks())
@@ -1900,7 +1897,7 @@ Per spec §10 the limit applies to **quote generation only**. Nothing here may b
 `test/guards/ratelimit.test.ts`:
 
 ```ts
-import { env } from 'cloudflare:test'
+import { env } from 'cloudflare:workers'
 import { describe, it, expect } from 'vitest'
 import { quotesToday, recordQuote, utcDay } from '../../src/guards/ratelimit'
 import { hashIp } from '../../src/util/hash'
@@ -2050,9 +2047,8 @@ The only path that touches PII. It must never call the LLM.
 `test/api/contact.test.ts`:
 
 ```ts
-import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test'
+import { env, exports } from 'cloudflare:workers'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import worker from '../../src/index'
 import { createConversation } from '../../src/db/queries'
 import { newId } from '../../src/util/ids'
 
@@ -2062,16 +2058,14 @@ function mockTurnstile(success: boolean) {
   )
 }
 
+// `exports.default` is a pre-bound loopback stub: fetch(input, init?) only —
+// no env/ctx arguments, and no execution context to await.
 async function postContact(body: unknown) {
-  const req = new Request('https://api.test/api/contact', {
+  return await exports.default.fetch('https://api.test/api/contact', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'cf-connecting-ip': '203.0.113.1' },
     body: JSON.stringify(body),
   })
-  const ctx = createExecutionContext()
-  const res = await worker.fetch(req, env, ctx)
-  await waitOnExecutionContext(ctx)
-  return res
 }
 
 async function seedConversation(): Promise<string> {
