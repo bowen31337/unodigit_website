@@ -30,8 +30,8 @@
       ],
       "expectedTests": 68,
       "priority": 1,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "StateIdSchema already existed in the file; appended new section directly after ErrorCodeSchema. All new types are plain interfaces/schemas with no I/O — safe for Task 2 (pricing) and Task 3 (estimator) to import directly."
     },
     {
       "id": "US-002",

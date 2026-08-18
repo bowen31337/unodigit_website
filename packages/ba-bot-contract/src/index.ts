@@ -136,3 +136,100 @@ export const ErrorCodeSchema = z.enum([
 ])
 
 export type ErrorCode = z.infer<typeof ErrorCodeSchema>
+
+// ---------------------------------------------------------------------------
+// Estimator, pricing, and POST /api/generate
+// ---------------------------------------------------------------------------
+
+/** The seven categories claw-forge's create-spec walks. Order is stable and
+ *  load-bearing: the estimator prompt lists them in this order, and the
+ *  pricing weights are keyed off these exact strings. */
+export const CategoryNameSchema = z.enum([
+  'Authentication & User Management',
+  'Core functionality',
+  'Data management',
+  'UI/UX',
+  'API layer',
+  'Admin features',
+  'Integrations',
+])
+export type CategoryName = z.infer<typeof CategoryNameSchema>
+
+export const ConfidenceSchema = z.enum(['high', 'medium', 'low'])
+export type Confidence = z.infer<typeof ConfidenceSchema>
+
+/** One category's share of the decomposition. `sample` is a single example
+ *  bullet — enough to show the visitor the granularity without paying output
+ *  tokens for all 100-300 of them. */
+export const EstimateCategorySchema = z
+  .object({
+    name: CategoryNameSchema,
+    bullets: z.number().int().min(0).max(400),
+    sample: z.string().min(1).max(300),
+  })
+  .strict()
+export type EstimateCategory = z.infer<typeof EstimateCategorySchema>
+
+export const SubsystemSchema = z
+  .object({
+    name: z.string().min(1).max(120),
+    categories: z.array(EstimateCategorySchema).min(1),
+    total_tasks: z.number().int().min(1).max(400),
+    depends_on: z.array(z.string()).default([]),
+  })
+  .strict()
+export type Subsystem = z.infer<typeof SubsystemSchema>
+
+/** Estimator output. `single` is one claw-forge spec; `program` splits a large
+ *  project into subsystems because create-spec targets 100-300 bullets per spec
+ *  and beyond that one run is unwieldy. */
+export const EstimateShapeSchema = z.discriminatedUnion('mode', [
+  z
+    .object({
+      mode: z.literal('single'),
+      categories: z.array(EstimateCategorySchema).min(1),
+      total_tasks: z.number().int().min(1).max(400),
+      confidence: ConfidenceSchema,
+      drivers: z.array(z.string().max(200)).default([]),
+    })
+    .strict(),
+  z
+    .object({
+      mode: z.literal('program'),
+      umbrella: z.string().min(1).max(160),
+      subsystems: z.array(SubsystemSchema).min(2),
+      total_tasks: z.number().int().min(1),
+      confidence: ConfidenceSchema,
+      drivers: z.array(z.string().max(200)).default([]),
+    })
+    .strict(),
+])
+export type EstimateShape = z.infer<typeof EstimateShapeSchema>
+
+export const QuoteSchema = z
+  .object({
+    mode: z.enum(['single', 'program']),
+    totalTasks: z.number().int(),
+    weightedTasks: z.number(),
+    rateAud: z.number(),
+    lowAud: z.number().int(),
+    highAud: z.number().int(),
+    weeks: z.number().int(),
+    confidence: ConfidenceSchema,
+    belowFloor: z.boolean(),
+  })
+  .strict()
+export type Quote = z.infer<typeof QuoteSchema>
+
+/** POST /api/generate. `quote` is absent when the rate limit was hit or the
+ *  project priced below the engagement floor — the brief is still delivered. */
+export const GenerateResponseSchema = z
+  .object({
+    briefId: z.string(),
+    quoteId: z.string().nullable(),
+    quote: QuoteSchema.nullable(),
+    headline: z.string(),
+    state: StateIdSchema,
+  })
+  .strict()
+export type GenerateResponse = z.infer<typeof GenerateResponseSchema>

@@ -65,3 +65,19 @@ Plan 1 merged. Worker suite 68 tests / 8 files, zero warnings. Root
 ## Log
 
 (iterations append below)
+
+### 2026-08-18 — US-001: Contract additions
+
+Appended CategoryNameSchema, ConfidenceSchema, EstimateCategorySchema,
+SubsystemSchema, EstimateShapeSchema (discriminatedUnion on `mode`), QuoteSchema,
+and GenerateResponseSchema to packages/ba-bot-contract/src/index.ts, verbatim from
+the plan's Task 1. Transcription only, no deviation.
+
+Verification: contract typecheck exit 0, Worker typecheck exit 0, Worker suite
+still 68 tests / 8 files / zero warnings, grep for cloudflare|D1Database|KVNamespace
+in packages/ba-bot-contract/src returned zero matches.
+
+Nothing to relearn here beyond what's already in this file — StateIdSchema (used
+by GenerateResponseSchema) already existed at the top of index.ts, so no new
+import was needed. Next implementer (Task 2, pricing) can import EstimateShape,
+Quote, CategoryName directly from '@unodigit/ba-bot-contract'.
