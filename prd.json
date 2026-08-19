@@ -118,8 +118,8 @@
       "expectedTests": 184,
       "priority": 4,
       "blockedBy": null,
-      "passes": false,
-      "notes": "Replaces the Access-gated admin API for now. Spec section 12 deviation, user-approved 2026-08-19."
+      "passes": true,
+      "notes": "Replaces the Access-gated admin API for now. Spec section 12 deviation, user-approved 2026-08-19. scripts/admin/ (6 scripts + _lib.sh, _format.py, README); delete order quotes→briefs→messages→events→conversations→leads derived from the REFERENCES clauses in 0001_initial.sql; cascade and --dry-run-changes-nothing both proven against a local miniflare fixture; rate_limit/rate_limit_turns verified intact; every caller value escaped via sql_lit; 184 tests / 18 files unchanged."
     },
     {
       "id": "US-004",

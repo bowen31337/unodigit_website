@@ -1342,3 +1342,62 @@ was described as live. It is not. REQUIRED_SECRETS gained QUOTE_LINK_SIGNING_KEY
 in a commit that has never been deployed, so the RUNNING Worker does not check
 for it and is serving normally. The hazard is ordering, not a present outage:
 the secret must reach Cloudflare before that code does.
+
+### 2026-08-19 — US-004s: admin surface shipped as scripts
+
+`apps/ba-bot-api/scripts/admin/` — leads.sh, read-artifact.sh, funnel.sh,
+costs.sh, export-leads-csv.sh, delete-lead.sh, plus _lib.sh, _format.py and a
+README. Every statement goes through `wrangler d1 execute <name> --remote
+--json --command`, authenticated by wrangler's own Cloudflare credentials. No
+Worker source changed, no HTTP endpoint added, no dependency added. Suite
+unchanged at 184 tests / 18 files; both packages typecheck.
+
+This closes the requirement US-004..US-008 were carrying, and unblocks the
+Privacy Act deletion path today. US-004..US-008 stay DEFERRED, not abandoned.
+
+DELETION ORDER, derived from the REFERENCES clauses in 0001_initial.sql
+(conversations.lead_id→leads, messages/briefs/events.conversation_id→
+conversations, quotes.brief_id→briefs):
+
+  quotes → briefs → messages → events → conversations → leads
+
+The order is about REACHABILITY as much as foreign keys. Delete the
+conversations rows first and there is no path left to that lead's messages,
+briefs or events — they would sit orphaned in the database forever. Bottom-up
+is what makes the cascade complete.
+
+rate_limit and rate_limit_turns are deliberately NOT deleted. They hold salted
+SHA-256 of an IP, which is not personal information, and they are the only
+meter on DeepSeek spend. If deletion cleared them, "delete my data" would
+double as a quota reset and an abuser would ask for it daily. The lead's own
+ip_hash column is on the leads row and goes with it.
+
+VERIFIED against a local miniflare D1, never against production. Migrations
+applied with `wrangler d1 migrations apply ba_bot --local`, then a fixture of
+three leads with rows in every table. `BA_BOT_D1_LOCAL=1` (an env var, not a
+flag, so it cannot be reached by a typo) points the scripts at it.
+  - --dry-run: full row-count snapshot before and after was byte-identical.
+  - real run on the ordinary lead: leads 3→2, conversations 5→3, messages 6→3,
+    briefs 4→2, quotes 4→2; rate_limit 2→2 and rate_limit_turns 2→2 INTACT.
+  - the second lead and an unrelated lead-less conversation survived untouched.
+  - typing "y" at the prompt aborts; the prompt requires the lead id back.
+
+SQL INJECTION: one fixture lead was given the id  lead_x' OR '1'='1  and a
+company of  Evil' Corp . Deleting it removed exactly that lead and left the
+other intact; a search for  '; DROP TABLE leads; --  matched nothing and the
+table survived. Every caller value reaches SQL only through sql_lit(), which
+wraps in single quotes and doubles any quote inside. Found and fixed a real
+bug here first: `${v//\'/\'\'}` keeps the backslashes in bash's REPLACEMENT
+and emits \'\', which is invalid SQL — the quote character now goes through a
+variable instead.
+
+NO SCRIPT WRITES A LEAD EMAIL TO DISK. export-leads-csv.sh goes to stdout, and
+the README says why: a CSV in a working directory is a second copy of personal
+information that delete-lead.sh cannot reach, so honouring a deletion request
+would empty D1 and leave that file intact. CSV quoting is Python's csv module,
+not shell concatenation — `Keep, Pty "Ltd"` round-trips exactly.
+
+The deletion is logged as an `events` row of type 'lead_deleted' with a NULL
+conversation_id and a payload naming the source and reason only — no lead id,
+email, name or conversation id. The fact and the timestamp are what a
+compliance question asks; the identifiers are what the request destroyed.
