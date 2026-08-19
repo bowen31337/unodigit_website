@@ -26,6 +26,10 @@ export interface Env {
   PROGRAM_MODE_THRESHOLD: string
   QUOTE_VALID_DAYS: string
   MAX_TOTAL_TURNS: string
+  // Per-IP daily turn cap. MAX_TOTAL_TURNS bounds one session; this bounds how
+  // many sessions one address can open in a day, which is the only thing that
+  // actually meters DeepSeek spend.
+  MAX_TURNS_PER_IP_PER_DAY: string
   ALLOWED_ORIGIN: string
   // Origin the emailed quote link points at. Deliberately NOT derived from the
   // first entry of ALLOWED_ORIGIN: that is a CORS allowlist containing

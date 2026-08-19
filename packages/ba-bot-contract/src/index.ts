@@ -37,6 +37,13 @@ export type StateId = z.infer<typeof StateIdSchema>
 export const ChatRequestSchema = z.object({
   conversationId: z.string().optional(),
   message: z.string().min(1).max(4000),
+  // Optional at the schema level and required by the route on the FIRST turn
+  // only (spec 10.1) — re-challenging every turn would interrupt the
+  // interview, and the schema cannot see the turn count. Deliberately NOT
+  // `.min(1)`: an empty string must reach the route and be rejected there as
+  // `turnstile_required`, identically to an omitted field, rather than
+  // becoming a differently-shaped 400.
+  turnstileToken: z.string().optional(),
 })
 
 export type ChatRequest = z.infer<typeof ChatRequestSchema>
@@ -116,6 +123,16 @@ export const ErrorResponseSchema = z.union([
     error: z.enum([
       'invalid_body', // 400
       'challenge_failed', // 403
+      // Both 403, from POST /api/chat. `turnstile_required` means the first
+      // message carried no token and the widget should render a fresh
+      // challenge; `turnstile_failed` means the token was presented and
+      // rejected. They are separate codes because the widget's remedy differs.
+      'turnstile_required', // 403
+      'turnstile_failed', // 403
+      // 429, from POST /api/chat once MAX_TURNS_PER_IP_PER_DAY is reached.
+      // Deliberately not a 403: the widget must be able to tell "slow down"
+      // from "rejected", and only the former is worth retrying tomorrow.
+      'rate_limited', // 429
       // 403, from GET /api/quote/:id — a bad signature and an unknown id are
       // deliberately indistinguishable, so this is the ONLY code that route
       // ever returns. Its absence here meant a client validating errors
@@ -142,6 +159,9 @@ export type ErrorResponse = z.infer<typeof ErrorResponseSchema>
 export const ErrorCodeSchema = z.enum([
   'invalid_body',
   'challenge_failed',
+  'turnstile_required',
+  'turnstile_failed',
+  'rate_limited',
   'forbidden',
   'not_found',
   'wrong_state',

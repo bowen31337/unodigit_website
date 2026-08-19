@@ -45,6 +45,11 @@ TASKS_PER_WEEK = "25"
 PROGRAM_MODE_THRESHOLD = "300"
 QUOTE_VALID_DAYS = "30"
 MAX_TOTAL_TURNS = "40"
+# Per-IP daily cap on chat turns. MAX_TOTAL_TURNS caps a single session, not how
+# many sessions one attacker opens — without this an attacker creates unlimited
+# conversations, each spending up to 40 DeepSeek turns. 120 is three full
+# 40-turn interviews from one address per day, which no genuine visitor reaches.
+MAX_TURNS_PER_IP_PER_DAY = "120"
 # Comma-separated allowlist, split in src/index.ts. The site is unodigit.com.AU —
 # the old value (`https://unodigit.com`) was a different domain entirely and would
 # have failed every browser call with an opaque CORS error. The apex is listed for

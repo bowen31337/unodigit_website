@@ -5,14 +5,38 @@ import { createConversation, updateConversationState } from '../../src/db/querie
 import { sessionKey } from '../../src/session'
 import { newId } from '../../src/util/ids'
 
+const TURNSTILE_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify'
+
+function urlOf(input: unknown): string {
+  if (typeof input === 'string') return input
+  if (input instanceof URL) return input.href
+  return (input as Request).url
+}
+
+// Turnstile now guards the first turn of a conversation, and verification is
+// itself a `fetch`. A mock that answered every request with the LLM body would
+// make `verifyTurnstile` read `success: undefined` and 403 the request before
+// the model was ever reached, so every mock here routes by URL.
+//
 // Response bodies are I/O objects tied to the request context that created
 // them; `exports.default.fetch()` below runs the handler in its own context,
 // so the mock Response must be constructed lazily (inside the implementation,
 // at call time) rather than eagerly via `mockResolvedValue` — otherwise
 // workerd rejects the read with "Cannot perform I/O on behalf of a different
-// request." The scenario and assertions are unchanged; only this mechanic is.
+// request."
+function mockFetch(onLlm: () => Response | Promise<Response>) {
+  return vi.spyOn(globalThis, 'fetch').mockImplementation((async (input: unknown) => {
+    if (urlOf(input).startsWith(TURNSTILE_URL)) {
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { 'content-type': 'application/json' },
+      })
+    }
+    return await onLlm()
+  }) as unknown as typeof fetch)
+}
+
 function mockLlm(body: unknown) {
-  return vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+  return mockFetch(() =>
     new Response(JSON.stringify({
       choices: [{ message: { content: JSON.stringify(body) }, finish_reason: 'stop' }],
       usage: { prompt_tokens: 100, completion_tokens: 20 },
@@ -20,12 +44,19 @@ function mockLlm(body: unknown) {
   )
 }
 
+// One IP per test. `rate_limit_turns` is keyed on (ip_hash, day) and D1
+// persists across tests within a file, so a shared address would eventually
+// rate-limit later tests and they would fail for a reason unrelated to what
+// they test.
+let ip = '192.0.2.1'
+let ipCounter = 0
+
 // `exports.default` is a pre-bound loopback stub: fetch(input, init?) only —
 // no env/ctx arguments, and no execution context to await.
 async function post(body: unknown) {
   return await exports.default.fetch('https://api.test/api/chat', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', 'cf-connecting-ip': ip },
     body: JSON.stringify(body),
   })
 }
@@ -44,13 +75,17 @@ async function seedCappedConversation(): Promise<string> {
   return id
 }
 
-beforeEach(() => vi.restoreAllMocks())
+beforeEach(() => {
+  vi.restoreAllMocks()
+  ipCounter += 1
+  ip = `192.0.2.${ipCounter}`
+})
 
 describe('POST /api/chat', () => {
   it('starts a conversation and returns an id', async () => {
     mockLlm({ reply: 'Hi, what are you building?', slots: {}, ready_to_advance: true, off_topic: false })
 
-    const res = await post({ message: 'hello' })
+    const res = await post({ message: 'hello', turnstileToken: 'tok' })
     expect(res.status).toBe(200)
 
     const json = await res.json<{ conversationId: string; reply: string; state: string }>()
@@ -61,7 +96,7 @@ describe('POST /api/chat', () => {
 
   it('persists both messages to D1', async () => {
     mockLlm({ reply: 'Hi there', slots: {}, ready_to_advance: true, off_topic: false })
-    const res = await post({ message: 'hello' })
+    const res = await post({ message: 'hello', turnstileToken: 'tok' })
     const { conversationId } = await res.json<{ conversationId: string }>()
 
     const { results } = await env.DB
@@ -75,7 +110,7 @@ describe('POST /api/chat', () => {
 
   it('resumes an existing conversation', async () => {
     mockLlm({ reply: 'one', slots: {}, ready_to_advance: true, off_topic: false })
-    const first = await post({ message: 'hello' })
+    const first = await post({ message: 'hello', turnstileToken: 'tok' })
     const { conversationId } = await first.json<{ conversationId: string }>()
 
     mockLlm({ reply: 'two', slots: { project_name: 'Acme' }, ready_to_advance: false, off_topic: false })
@@ -87,7 +122,7 @@ describe('POST /api/chat', () => {
 
   it('does not advance on an off-topic message', async () => {
     mockLlm({ reply: 'Let us stay on your project.', slots: {}, ready_to_advance: true, off_topic: true })
-    const res = await post({ message: 'write me a poem' })
+    const res = await post({ message: 'write me a poem', turnstileToken: 'tok' })
     const json = await res.json<{ state: string }>()
 
     expect(json.state).toBe('GREETING')
@@ -95,7 +130,7 @@ describe('POST /api/chat', () => {
 
   it('flags off-topic messages in D1', async () => {
     mockLlm({ reply: 'Back to your project.', slots: {}, ready_to_advance: true, off_topic: true })
-    const res = await post({ message: 'what is the capital of France' })
+    const res = await post({ message: 'what is the capital of France', turnstileToken: 'tok' })
     const { conversationId } = await res.json<{ conversationId: string }>()
 
     const row = await env.DB
@@ -106,9 +141,9 @@ describe('POST /api/chat', () => {
   })
 
   it('returns a graceful reply when the provider fails', async () => {
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('boom', { status: 502 }))
+    mockFetch(() => new Response('boom', { status: 502 }))
 
-    const res = await post({ message: 'hello' })
+    const res = await post({ message: 'hello', turnstileToken: 'tok' })
     expect(res.status).toBe(200)
 
     const json = await res.json<{ reply: string; state: string }>()
@@ -117,9 +152,9 @@ describe('POST /api/chat', () => {
   })
 
   it('keeps D1 turn_count in lockstep with KV after a provider failure', async () => {
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('boom', { status: 502 }))
+    mockFetch(() => new Response('boom', { status: 502 }))
 
-    const res = await post({ message: 'hello' })
+    const res = await post({ message: 'hello', turnstileToken: 'tok' })
     const { conversationId } = await res.json<{ conversationId: string }>()
 
     const row = await env.DB
@@ -223,7 +258,7 @@ describe('POST /api/chat', () => {
 
   it('keeps slots the current state does declare', async () => {
     mockLlm({ reply: 'one', slots: {}, ready_to_advance: true, off_topic: false })
-    const first = await post({ message: 'hello' })
+    const first = await post({ message: 'hello', turnstileToken: 'tok' })
     const { conversationId } = await first.json<{ conversationId: string }>()
 
     mockLlm({
@@ -242,7 +277,7 @@ describe('POST /api/chat', () => {
   // the widget is enough to trigger it.
   it('survives two concurrent turns on one conversation', async () => {
     mockLlm({ reply: 'one', slots: {}, ready_to_advance: false, off_topic: false })
-    const first = await post({ message: 'hello' })
+    const first = await post({ message: 'hello', turnstileToken: 'tok' })
     const { conversationId } = await first.json<{ conversationId: string }>()
 
     vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
@@ -299,7 +334,7 @@ describe('POST /api/chat', () => {
     const req = () => new Request('https://api.test/api/chat', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ message: 'hello' }),
+      body: JSON.stringify({ message: 'hello', turnstileToken: 'tok' }),
     })
 
     for (const secret of ['LLM_API_KEY', 'IP_HASH_SALT', 'TURNSTILE_SECRET']) {

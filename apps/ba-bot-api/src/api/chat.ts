@@ -10,6 +10,9 @@ import {
   appendMessageAtNextSeq, createConversation, getConversation, listMessages,
   recordEvent,
 } from '../db/queries'
+import { recordTurn, turnsToday, utcDay } from '../guards/ratelimit'
+import { verifyTurnstile } from '../guards/turnstile'
+import { hashIp } from '../util/hash'
 import { newId } from '../util/ids'
 import { loadSession, persistSession } from '../session'
 
@@ -45,7 +48,7 @@ export function registerChatRoutes(
     const parsed = Body.safeParse(await c.req.json().catch(() => null))
     if (!parsed.success) return c.json({ error: 'invalid_body' }, 400)
 
-    const { conversationId, message } = parsed.data
+    const { conversationId, message, turnstileToken } = parsed.data
     const now = Date.now()
 
     let convId = conversationId
@@ -57,6 +60,44 @@ export function registerChatRoutes(
     }
 
     const session = await loadSession(c.env, convId)
+
+    // MAX_TOTAL_TURNS caps a single session, not how many sessions one
+    // attacker opens. Without the two guards below, an attacker creates
+    // unlimited conversations, each spending up to 40 DeepSeek turns, and the
+    // spend is unmetered. Both run before the message is persisted and before
+    // any model call, so abusive traffic costs a counter read and nothing else.
+    const ip = c.req.header('cf-connecting-ip') ?? null
+    const ipHash = await hashIp(ip ?? 'unknown', c.env.IP_HASH_SALT)
+    const day = utcDay(now)
+
+    // Turnstile guards the FIRST message only (spec 10.1). Re-challenging on
+    // every turn would interrupt the interview mid-question. An empty string is
+    // not a token, so `!turnstileToken` deliberately covers both an omitted
+    // field and a blank one — there is no shape of request that reaches the
+    // model on turn zero without a token the schema let through.
+    if (session.totalTurns === 0) {
+      if (!turnstileToken) {
+        return c.json({ error: 'turnstile_required' }, 403)
+      }
+      if (!(await verifyTurnstile(turnstileToken, c.env.TURNSTILE_SECRET, ip))) {
+        // `events.conversation_id` is a foreign key and `convId` is either an
+        // existing row or one created above, so this cannot turn the 403 into
+        // a 500 the way it would on an unknown conversation.
+        await recordEvent(c.env.DB, convId, 'turnstile_failed', {})
+        return c.json({ error: 'turnstile_failed' }, 403)
+      }
+    }
+
+    // 429, not 403: the widget must be able to tell "slow down" from
+    // "rejected".
+    if ((await turnsToday(c.env.DB, ipHash, day)) >= Number(c.env.MAX_TURNS_PER_IP_PER_DAY)) {
+      return c.json({ error: 'rate_limited' }, 429)
+    }
+    // Recorded BEFORE the model call. Recording after would let a burst of
+    // concurrent requests all read the pre-increment count and all proceed,
+    // and would leave a provider outage costing nothing — an unlimited free
+    // retry loop against a failing provider.
+    await recordTurn(c.env.DB, ipHash, day)
 
     // Read the history before the new user message is appended: it is the
     // prompt context, and the visitor's own message is added separately by

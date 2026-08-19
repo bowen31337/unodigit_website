@@ -157,6 +157,7 @@ describe('pricing configuration is internally coherent', () => {
     }
     const q = priceQuote(shape, {
       rateAud: rate, minimumAud: minimum, tasksPerWeek: Number(env.TASKS_PER_WEEK),
+      quoteValidDays: Number(env.QUOTE_VALID_DAYS),
     })
     expect(q.belowFloor).toBe(false)
     expect(q.lowAud).toBeGreaterThan(0)

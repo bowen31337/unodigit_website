@@ -56,11 +56,11 @@
         "Raw IP is never stored; every rate_limit ip_hash is 64 hex chars",
         "Mutation-checked: moving recordTurn after the LLM call, and returning 403 instead of 429, each fail a distinct test"
       ],
-      "expectedTests": 182,
+      "expectedTests": 184,
       "priority": 1,
       "blockedBy": null,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Turnstile on the first turn only (session.totalTurns === 0) plus a 120-turn per-IP daily cap in a new rate_limit_turns table; recorded before the model call. 184 tests / 18 files, both packages typecheck. 9 tests (plan's 7 plus an empty-token bypass test and a turnstile-verification-failure test); 4 mutations each caught by exactly one test."
     },
     {
       "id": "US-002",

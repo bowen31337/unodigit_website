@@ -1031,3 +1031,136 @@ the gate and report.
 QUOTE_LINK_SIGNING_KEY is in REQUIRED_SECRETS but does not exist in 1Password.
 Deploying before it is created returns 503 on EVERY /api/* route — including the
 currently-live /api/chat. Do not deploy or push to main until P1 is done.
+
+### 2026-08-19 — US-001: Turnstile and per-IP rate limiting on /api/chat
+
+The top launch blocker, closed. `/api/chat` now requires a Turnstile token on
+the FIRST message of a conversation (`session.totalTurns === 0`, spec 10.1) and
+enforces a 120-turn per-IP daily cap from a new `rate_limit_turns` table. Both
+guards sit immediately after `loadSession`, before the visitor's message is
+persisted and before any model call, so abusive traffic costs a counter read and
+nothing else.
+
+Files: src/api/chat.ts, src/guards/ratelimit.ts (+turnsToday/+recordTurn, both
+verbatim from the plan), migrations/0002_rate_limit_turns.sql, src/env.ts,
+wrangler.toml (MAX_TURNS_PER_IP_PER_DAY = "120"), packages/ba-bot-contract, and
+test/api/chat-guards.test.ts.
+
+Suite 175 -> 184 tests / 17 -> 18 files, zero warnings. Both apps/ba-bot-api and
+packages/ba-bot-contract typecheck (tsc --noEmit, exit 0).
+
+TDD. Wrote the tests first. The migration and the `MAX_TURNS_PER_IP_PER_DAY` var
+were added BEFORE the RED run, deliberately: both are inert (nothing reads or
+writes either until the guard lands), and without them the failures would have
+been "no such table: rate_limit_turns" and `Number(undefined)` = NaN — schema
+noise rather than the behavioural RED the story needs. With them in place 8 of 9
+new tests failed behaviourally: "expected 200 to be 403" (missing token, empty
+token, failed verification), "expected 200 to be 429" (cap), "expected 1 to be
++0" (LLM called on the no-token path), "expected 1 to be +0" (LLM called on the
+rate-limited path), "expected +0 to be 1" (turn not recorded), and "expected
+[hash] to be included" (nothing in the ledger). The 9th — "does not require a
+turnstile token after the first turn" — passes against an unguarded endpoint by
+construction; it is a negative assertion and is pinned by mutation instead.
+
+Mutation check, one at a time, each reverted from a backup. Every mutant was
+caught by exactly one test in the new file:
+- recordTurn moved to AFTER the model call => ONLY "records the turn before
+  calling the model, not after" failed ("expected +0 to be 1"). Note the mutant
+  used was the GENEROUS placement — immediately after `runTurn`, before its
+  error branch — so the ledger really was incremented on the failing turn. A
+  test that only compared the count before and after the request would have
+  passed it. What catches it is that the test reads the ledger from D1 from
+  INSIDE the fetch mock, at the moment the model call is made, and asserts the
+  increment had already happened then. Any placement after the call fails.
+- 429 changed to 403 on the cap => ONLY "429s once the per-IP daily turn cap is
+  exceeded" failed ("expected 403 to be 429").
+- Turnstile required on EVERY turn (`session.totalTurns === 0` -> `true`) =>
+  "does not require a turnstile token after the first turn" failed ("expected
+  403 to be 200"), plus 6 pre-existing chat.test.ts tests. This is what makes
+  the first-turn-only rule non-vacuous.
+- `!turnstileToken` weakened to `turnstileToken === undefined` => ONLY "rejects
+  an empty turnstile token exactly as it rejects a missing one" failed
+  ("expected 200 to be 403").
+
+Zero-LLM proof. `expect(spy).not.toHaveBeenCalled()` is too coarse now that
+Turnstile verification is itself a `fetch`: a rate-limited request legitimately
+makes the siteverify call and must still make zero MODEL calls. The tests count
+only calls whose URL starts with LLM_BASE_URL (`https://llm.test`), via an
+`llmCalls()` helper. The no-token path asserts both — zero LLM calls AND zero
+fetches of any kind, since with no token there is not even a siteverify call.
+Asserting the status alone would have passed on an implementation that called
+the model and then returned 403/429, which is exactly the spend these guards
+exist to prevent.
+
+Deviations from the plan, all reported:
+- The plan's "never stores a raw IP" test queries `rate_limit`. Nothing in this
+  file writes that table, so it would have passed vacuously over zero rows. It
+  queries `rate_limit_turns` instead, first drives a real request to guarantee a
+  row, asserts `results.length > 0`, and asserts the ledger key equals
+  `hashIp(IP_E, IP_HASH_SALT)` — not merely that it looks like a hash.
+- `hashIp` is imported from `src/util/hash.ts`, not `src/guards/ratelimit.ts` as
+  the plan's Interfaces section states. The plan is wrong about the location;
+  the function is the existing one either way.
+- Two tests beyond the plan's seven: the empty-token bypass (an empty string is
+  not a token and must be rejected identically to an omitted field — the schema
+  cannot do this, so the route must) and a Turnstile-verification-FAILURE test
+  that also asserts the `turnstile_failed` event row, which decision 5 requires
+  and none of the plan's seven covered.
+- Contract: beyond the plan's `turnstileToken`, the three new error codes
+  (`turnstile_required`, `turnstile_failed`, `rate_limited`) were added to
+  ErrorResponseSchema and ErrorCodeSchema. Without them a widget validating
+  errors against the contract cannot parse a single one of these responses —
+  the same defect Plan 2's final wave fixed for `forbidden`.
+- `turnstileToken` is `z.string().optional()`, deliberately NOT `.min(1)` like
+  ContactRequestSchema's. `.min(1)` would turn an empty token into a 400
+  `invalid_body` with a different shape from the 403 an omitted token gets, for
+  what is the same client mistake.
+
+test/api/chat.test.ts had to change, and this is the part a future implementer
+should expect to repeat. Turnstile verification is a `fetch`, so its existing
+mocks — which answered EVERY request with the LLM body — made `verifyTurnstile`
+read `success: undefined` and 403 the request before the model was reached. All
+mocks in that file now route by URL (`mockFetch(onLlm)`), and the eight
+first-turn posts carry `turnstileToken: 'tok'`. The file also had no
+`cf-connecting-ip` header at all, so every test shared the '0.0.0.0' bucket; it
+now assigns one IP per test (`192.0.2.${n}` in beforeEach), per the discipline
+US-007 established. No assertion was weakened.
+
+Pre-existing defect fixed in passing, NOT part of this story: `tsc --noEmit`
+already failed at HEAD (5adc53d) with
+test/pricing/quote.test.ts(158,33) TS2345 — the "Pricing configuration made
+coherent" wave added three tests calling priceQuote without `quoteValidDays`.
+Confirmed pre-existing empirically, in a detached `git worktree` at HEAD, not by
+inspection. Vitest does not typecheck, so all 175 tests passed over it. Fixed
+with the one missing field so the "both packages typecheck" constraint is
+actually true.
+
+Known gaps, recorded not fixed (all YAGNI-deferred, none in this story's scope):
+- A first message with no token still CREATES the conversation row before the
+  403, because the row must exist for the `turnstile_failed` event's foreign
+  key. So an attacker gets unbounded free D1 INSERTs into `conversations` — one
+  row per rejected request, no LLM spend and no quota consumed. Cheap, and
+  Cloudflare's own edge rate limiting fronts it, but it is the one path that
+  costs something and meters nothing.
+- `MAX_TURNS_PER_IP_PER_DAY` is a var, not a secret, so it is not in
+  REQUIRED_SECRETS. If the line were deleted from wrangler.toml, `Number(undefined)`
+  is NaN and `count >= NaN` is false — the cap would fail OPEN and silently. Not
+  guarded in code (that would be the config-validation layer the plan forbids),
+  but the 429 test asserts `expect(cap).toBeGreaterThan(0)` against the SHIPPED
+  wrangler.toml (vitest binds via configPath), and `NaN > 0` is false, so a
+  deleted or garbage var fails the suite.
+- POST /api/chat returns `turnstile_failed` where POST /api/contact returns
+  `challenge_failed` for the same underlying event. The plan's literal code says
+  `turnstile_failed`, and chat needs the required/failed pair that contact does
+  not, so both codes now exist in the contract. A widget author must handle both
+  spellings.
+- The turn is recorded before the model call, which closes the concurrent-burst
+  hole for the CHAT limit. The equivalent gap on the QUOTE limit (the
+  rate-check / recordQuote atomicity gap noted at the end of Plan 2) is
+  untouched and still open.
+
+Next implementer (Task 2, commit the widget): the widget must send
+`turnstileToken` on its FIRST /api/chat post and may omit it thereafter, and it
+must handle 403 `turnstile_required` (render a fresh challenge), 403
+`turnstile_failed` (the token was rejected), and 429 `rate_limited` (slow down,
+not rejected) as three distinct states.
