@@ -81,6 +81,57 @@ beforeEach(() => {
   ip = `192.0.2.${ipCounter}`
 })
 
+describe('prompt history', () => {
+  // The bug: assistant turns were replayed to the model as their bare `reply`
+  // text while `response_format: json_object` demanded a JSON object, and the
+  // model answered that contradiction with whitespace. Assert on the wire
+  // format of the SECOND turn's request, which is where history first appears.
+  it('replays prior assistant turns as JSON envelopes, not prose', async () => {
+    const sent: unknown[] = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation((async (input: unknown, init?: RequestInit) => {
+      if (urlOf(input).startsWith(TURNSTILE_URL)) {
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      sent.push(JSON.parse(String(init!.body)))
+      return new Response(JSON.stringify({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              reply: 'Who is it for?', slots: { project_name: 'StockWatch' },
+              ready_to_advance: false, off_topic: false,
+            }),
+          },
+          finish_reason: 'stop',
+        }],
+        usage: { prompt_tokens: 100, completion_tokens: 20 },
+      }), { headers: { 'content-type': 'application/json' } })
+    }) as unknown as typeof fetch)
+
+    const first = await post({ message: 'stock tracking', turnstileToken: 'tok' })
+    const { conversationId } = await first.json<{ conversationId: string }>()
+    await post({ conversationId, message: 'call it StockWatch' })
+
+    const second = sent[1] as { messages: { role: string; content: string }[]; thinking?: unknown }
+    const assistants = second.messages.filter((m) => m.role === 'assistant')
+    expect(assistants).toHaveLength(1)
+
+    // Prose would fail JSON.parse; that is the regression.
+    const envelope = JSON.parse(assistants[0]!.content) as Record<string, unknown>
+    expect(Object.keys(envelope)).toEqual(['reply', 'slots', 'ready_to_advance', 'off_topic'])
+    expect(envelope['reply']).toBe('Who is it for?')
+    // The slots that were MERGED, not the ones the model proposed: turn one ran
+    // in GREETING, whose schema declares no slots, so `project_name` was
+    // rejected. The replayed envelope must agree with the session that was
+    // actually built, or it teaches the model that rejected slots stuck.
+    expect(envelope['slots']).toEqual({})
+
+    // And with history consistent, reasoning stays off on a turn that has it.
+    expect(second.thinking).toEqual({ type: 'disabled' })
+  })
+})
+
 describe('POST /api/chat', () => {
   it('starts a conversation and returns an id', async () => {
     mockLlm({ reply: 'Hi, what are you building?', slots: {}, ready_to_advance: true, off_topic: false })

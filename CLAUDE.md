@@ -201,11 +201,36 @@ so don't re-fix them:
    delivery was decommissioned in favour of an HMAC-signed download link
    (`util/sign.ts` → `/q/`), so there is no `mail/` to look for.
 
-**LLM token ceilings must cover reasoning tokens.** `deepseek-v4-flash` is a reasoning
-model: a measured turn used 487 completion tokens of which 356 were *reasoning* and only
-~131 were visible output. The original 900-token cap in `llm/turn.ts` truncated nearly
-every real turn into `finish_reason: 'length'`, which the code discards as `'truncated'`
-with no retry — so the visitor saw the fallback apology every time. It is now 4000.
+**Assistant history must be replayed to the model as the JSON envelope, never as
+prose.** `llm/history.ts` exists solely for this, and it is the single most breakable
+invariant in the bot. `messages.content` stores the visitor-facing `reply` string
+(that is what the widget and the dashboard render), but the model is called with
+`response_format: json_object`. Replaying bare `reply` text put the model in a
+contradiction — the grammar requires the next token to open an object, while every one
+of its own prior turns in the context was prose — and with reasoning off it answered
+with whitespace and `finish_reason: 'stop'`, well under the token ceiling. Measured on
+PROJECT_IDENTITY, and dose-dependent in the number of prose assistant turns: 0 turns
+0/8 blank, one turn 3/8, two turns 13/16. Same history replayed as envelopes: 0/10.
+
+Consequences worth knowing before touching any of it:
+
+- **`ready_to_advance` is stored** (migration `0004`) because it is one of the envelope's
+  four keys and `transitions.step()` advances only when `exitGate(slots) && readyToAdvance`.
+  Replaying a hardcoded `false` would be in-context precedent for the model to
+  under-report it — the exact stall this fixed.
+- **Reasoning is off by default** in `llm/turn.ts`. It was never doing useful work here;
+  it was giving the model room to reconcile the format contradiction. With the history
+  consistent, a full 7-turn interview measured **9.2s / 600 completion tokens** against
+  **78.1s / 9012** with reasoning on — roughly 8x faster and 15x cheaper, same zero
+  apologies.
+- **The 8000-token ceiling in `llm/turn.ts` is now slack, not a constraint** — turns
+  finish in the low hundreds. Keep it: it costs nothing on turns that finish early and
+  it covers the case where someone turns reasoning back on. Do not read it as evidence
+  that budget was ever the problem; raising it 4000 → 32000 did not move the blank rate
+  at all, because the failures came back `finish_reason: 'stop'`.
+- The retry loop in `llm/turn.ts` is now defence in depth rather than the mitigation.
+  If blanks ever return, suspect something reintroducing prose into the replayed
+  history before suspecting the provider.
 
 ### Import Alias
 

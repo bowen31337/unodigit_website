@@ -3,10 +3,11 @@ import { z } from 'zod'
 import { ChatRequestSchema } from '@unodigit/ba-bot-contract'
 import type { Env } from '../env'
 import { createOpenAiCompatClient } from '../llm/openai-compat'
-import type { ChatMessage, LlmClient } from '../llm/types'
+import type { LlmClient } from '../llm/types'
+import { replayHistory } from '../llm/history'
 import { runTurn } from '../llm/turn'
 import { step } from '../graph/transitions'
-import { STATES, shouldReason, type Slots, type StateId } from '../graph/states'
+import { STATES, type Slots, type StateId } from '../graph/states'
 import {
   appendMessageAtNextSeq, createConversation, getConversation, listMessages,
   recordEvent,
@@ -160,10 +161,11 @@ export function registerChatRoutes(
       })
     }
 
-    const history: ChatMessage[] = rawHistory.map((m) => ({
-      role: m.role === 'user' ? 'user' : 'assistant',
-      content: m.content,
-    }))
+    // Assistant turns are replayed as the JSON envelope the model emitted, not
+    // as the bare reply text stored for the transcript. See llm/history — the
+    // prose form contradicted json_object mode and made the model answer with
+    // whitespace.
+    const history = replayHistory(rawHistory)
 
     // Persisted before the multi-second provider round trip, so a turn that
     // dies mid-flight still leaves the visitor's message in the transcript.
@@ -177,10 +179,6 @@ export function registerChatRoutes(
       state: session.state,
       history,
       userMessage: message,
-      // Off only on the opening turn, where there is no history for it to
-      // reason over. See shouldReason — with history, disabling it makes the
-      // model return whitespace deterministically.
-      reasoning: shouldReason(history.length),
     })
 
     if (!turn.ok) {
@@ -218,6 +216,9 @@ export function registerChatRoutes(
       // the transcript must agree with the session it produced.
       slotsJson: JSON.stringify(slots),
       offTopic: turn.value.off_topic,
+      // Stored so llm/history can replay this turn as the envelope the model
+      // actually emitted; a constant here would bias the next turn's answer.
+      readyToAdvance: turn.value.ready_to_advance,
       createdAt: now,
     })
 

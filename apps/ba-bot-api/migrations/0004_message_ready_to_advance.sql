@@ -1,0 +1,13 @@
+-- The prompt transcript is replayed to the model as the JSON envelope it was
+-- required to emit (see src/llm/history.ts), and `ready_to_advance` is one of
+-- that envelope's four keys. It was the only one not already stored.
+--
+-- It cannot be faked as a constant: transitions.step() advances only when
+-- `exitGate(slots) && readyToAdvance`, so replaying a hardcoded false would be
+-- in-context precedent for the model to under-report it, which is precisely
+-- the stall this whole change exists to remove.
+--
+-- Additive with a default, so rows written before this migration read as 0.
+-- src/llm/history.ts tests `=== 1`, which also makes the column's absence
+-- read as false if the code ships ahead of the migration.
+ALTER TABLE messages ADD COLUMN ready_to_advance INTEGER NOT NULL DEFAULT 0;

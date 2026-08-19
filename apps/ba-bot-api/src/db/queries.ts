@@ -19,6 +19,9 @@ export interface MessageRow {
   content: string
   slots_json: string | null
   off_topic: number
+  /** Optional because it arrives in migration 0004: a row written before that
+   *  has no such column, and `SELECT *` simply omits the key. */
+  ready_to_advance?: number
   created_at: number
 }
 
@@ -30,6 +33,10 @@ export interface MessageInsert {
   content: string
   slotsJson: string | null
   offTopic: boolean
+  /** Assistant rows only — it is one of the four keys the model must emit, and
+   *  llm/history replays it. A user row never advances anything, so it is
+   *  optional and defaults to false. */
+  readyToAdvance?: boolean
   createdAt: number
 }
 
@@ -79,12 +86,12 @@ export async function updateConversationState(
 export async function appendMessage(db: D1Database, row: MessageInsert): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO messages (id, conversation_id, seq, role, content, slots_json, off_topic, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO messages (id, conversation_id, seq, role, content, slots_json, off_topic, ready_to_advance, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       row.id, row.conversationId, row.seq, row.role, row.content,
-      row.slotsJson, row.offTopic ? 1 : 0, row.createdAt,
+      row.slotsJson, row.offTopic ? 1 : 0, row.readyToAdvance ? 1 : 0, row.createdAt,
     )
     .run()
 }
@@ -101,14 +108,15 @@ export async function appendMessageAtNextSeq(
 ): Promise<number> {
   const inserted = await db
     .prepare(
-      `INSERT INTO messages (id, conversation_id, seq, role, content, slots_json, off_topic, created_at)
-       SELECT ?, ?, COALESCE(MAX(seq), 0) + 1, ?, ?, ?, ?, ?
+      `INSERT INTO messages (id, conversation_id, seq, role, content, slots_json, off_topic, ready_to_advance, created_at)
+       SELECT ?, ?, COALESCE(MAX(seq), 0) + 1, ?, ?, ?, ?, ?, ?
        FROM messages WHERE conversation_id = ?
        RETURNING seq`,
     )
     .bind(
       row.id, row.conversationId, row.role, row.content,
-      row.slotsJson, row.offTopic ? 1 : 0, row.createdAt, row.conversationId,
+      row.slotsJson, row.offTopic ? 1 : 0, row.readyToAdvance ? 1 : 0,
+      row.createdAt, row.conversationId,
     )
     .first<{ seq: number }>()
   return inserted!.seq

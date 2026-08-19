@@ -145,6 +145,21 @@ describe('runTurn', () => {
     expect(client.calls).toBe(3)
   })
 
+  // Reasoning defaults OFF. It was only ever mandatory to work around blank
+  // completions, and that cause is fixed at source in llm/history — leaving it
+  // on would cost ~5x latency for nothing.
+  it('leaves reasoning off when the caller does not ask for it', async () => {
+    let seen: boolean | undefined = true
+    const client: LlmClient = {
+      async chat(req) {
+        seen = req.reasoning
+        return { content: good, finishReason: 'stop', promptTokens: 1, completionTokens: 1 }
+      },
+    }
+    await runTurn(client, args)
+    expect(seen).toBe(false)
+  })
+
   it('passes the caller\'s reasoning preference through to the client', async () => {
     let seen: boolean | undefined = undefined
     const client: LlmClient = {

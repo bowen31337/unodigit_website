@@ -148,38 +148,3 @@ export const STATES: Record<StateId, StateDef> = {
     maxTurns: 1,
   },
 }
-
-/**
- * Whether a turn should let the model reason before answering.
- *
- * deepseek-v4-flash reasons by default. Turning it off is dramatically cheaper
- * and faster — ~72 completion tokens and 1.4s against ~924 and 6.9s — so the
- * obvious move is to switch it off everywhere. That is wrong, and the way it
- * fails is worth stating plainly because it does not show up in a naive test.
- *
- * Measured against the real prompts, PROJECT_IDENTITY, 8 runs per arm:
- *
- *   thinking   history   ok     blank
- *   on         yes       7/8    1
- *   off        yes       2/8    6      <-- and 10/10 blank on one transcript
- *   on         no        8/8    0
- *   off        no        8/8    0
- *
- * With `thinking: disabled` AND prior turns in the prompt, the model returns
- * whitespace-only content with `finish_reason: "stop"`. It is deterministic
- * per transcript, not flaky, so retrying cannot rescue it — one transcript
- * came back blank 10 times out of 10. Reasoning-off is only safe with an empty
- * history, which in this graph means the opening turn and nothing else.
- *
- * The trap: benchmark reasoning-off on a first turn, or with a two-message
- * history, and it looks strictly better on every axis. The failure only
- * appears once a real conversation has accumulated.
- *
- * So the rule keys off history, not the state name — the state is incidental,
- * the accumulated context is what matters. GREETING happens to be the only
- * state ever reached with no history, and it is also the turn where latency is
- * most visible, so it gets the fast path for free.
- */
-export function shouldReason(historyLength: number): boolean {
-  return historyLength > 0
-}

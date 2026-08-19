@@ -35,12 +35,11 @@ function parse(content: string): TurnOutput | null {
 /**
  * Attempts per turn.
  *
- * Blank completions were measured at 4 of 9 (~44%). Independent retries take
- * that to ~19% at two attempts and ~8.5% at three. A fourth would buy ~5
- * points more and cost a fourth round trip on the turns that are already the
- * slowest, which is the wrong trade for a chat UI — the blank responses
- * themselves come back in ~1–3s, so the common retry is cheap, but a genuine
- * slow turn compounds.
+ * The blank-completion bug this was built for is fixed at source in
+ * llm/history — the model no longer sees a prose/JSON contradiction — so these
+ * retries are now defence in depth rather than the load-bearing mitigation.
+ * Kept because a remote provider still drops requests and still occasionally
+ * emits malformed JSON, and both are cheap to retry.
  */
 const MAX_ATTEMPTS = 3
 
@@ -51,8 +50,10 @@ export async function runTurn(
     state: StateId
     history: ChatMessage[]
     userMessage: string
-    /** Whether to let the model reason before answering. See REASONING_BY_STATE
-     *  in graph/states — elicitation turns do not need it, and it costs 10–20s. */
+    /** Whether to let the model reason before answering. Defaults to OFF:
+     *  these are elicitation turns, reasoning costs ~5x latency (~1.4s against
+     *  ~6.9s measured), and the blank-completion failure that once made it
+     *  mandatory was a prompt defect, now fixed in llm/history. */
     reasoning?: boolean
   },
 ): Promise<TurnResult> {
@@ -81,7 +82,7 @@ export async function runTurn(
         // ranged 1306–2438. Raising it costs nothing on turns that finish
         // early, and 8000 keeps the long tail clear of the cliff.
         maxTokens: 8000,
-        reasoning: args.reasoning ?? true,
+        reasoning: args.reasoning ?? false,
       })
     } catch {
       // A transport failure is worth one more go — the provider is remote and
@@ -100,15 +101,11 @@ export async function runTurn(
     }
 
     if (res.content.trim() === '') {
-      // THE dominant failure, and it used to end the turn immediately.
-      // deepseek-v4-flash intermittently returns whitespace-only content with
-      // `finish_reason: "stop"` — measured at 4 of 9 turns, with content like
-      // seven literal spaces. It is not truncation (there were ~7800 tokens of
-      // headroom left) and not something more budget fixes: 32000 produced the
-      // same 4-of-9 rate. It is transient, and the same request succeeds on a
-      // later attempt, which is exactly what makes retrying the right answer
-      // and returning here the bug. Retry with the messages UNCHANGED — there
-      // is nothing to repair.
+      // Whitespace-only content with `finish_reason: "stop"`, far under the
+      // token ceiling. This was the dominant failure until llm/history stopped
+      // replaying assistant turns as prose; it should now be rare. Retry with
+      // the messages UNCHANGED — a blank is not malformed, and appending a
+      // repair prompt only lengthens the next completion.
       lastReason = 'empty'
       continue
     }
