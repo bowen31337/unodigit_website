@@ -100,6 +100,27 @@
       "notes": "app/q/page.tsx + QuoteClient.tsx read id and sig from useSearchParams, fetch NEXT_PUBLIC_BA_BOT_URL/api/quote/:id?sig=, and render quotes.markdown verbatim via an in-file Markdown renderer (no dependency added \u2014 React elements only, never dangerouslySetInnerHTML). Missing params and any non-200 collapse to one identical 'this link is not valid' state. pnpm build --force emitted apps/web/out/q/index.html, exit 0. Worker suite unchanged at 184/18."
     },
     {
+      "id": "US-004s",
+      "title": "Admin surface as scripts (reads, funnel, costs, deletion)",
+      "description": "As the operator, I want to read leads, artifacts, funnel and costs, and delete a lead on request, without standing up an authenticated web API \u2014 using the Cloudflare API token I already hold.",
+      "planTask": "4s",
+      "acceptanceCriteria": [
+        "scripts/admin/ contains leads, read-artifact, funnel, costs, export-csv and delete-lead",
+        "All reads go through `wrangler d1 execute ba_bot --remote --json`; no new HTTP endpoint is added",
+        "delete-lead cascades to conversations, messages, events, briefs and quotes in FK-safe order",
+        "delete-lead requires explicit confirmation and supports --dry-run showing exactly what WOULD be deleted",
+        "delete-lead does NOT delete rate_limit rows (salted hashes, not personal information; clearing them hands an abuser a reset button)",
+        "The deletion is logged without retaining what was deleted",
+        "No script writes a lead email to a file on disk",
+        "CSV export quotes fields containing commas or quotes"
+      ],
+      "expectedTests": 184,
+      "priority": 4,
+      "blockedBy": null,
+      "passes": false,
+      "notes": "Replaces the Access-gated admin API for now. Spec section 12 deviation, user-approved 2026-08-19."
+    },
+    {
       "id": "US-004",
       "title": "Cloudflare Access JWT verification",
       "description": "As the admin API, I want requests authenticated by verifying the Access JWT, because protecting only the Pages route leaves the data open to anyone who knows the Worker URL.",
@@ -115,9 +136,9 @@
       ],
       "expectedTests": 190,
       "priority": 4,
-      "blockedBy": "P3",
+      "blockedBy": "P3 (deferred \u2014 superseded by US-004s for now)",
       "passes": false,
-      "notes": ""
+      "notes": "DEFERRED 2026-08-19: user chose a wrangler/scripts admin surface instead, which needs no Access application and therefore no DNS move. Revisit only if a browser dashboard is still wanted."
     },
     {
       "id": "US-005",
@@ -135,9 +156,9 @@
       ],
       "expectedTests": 202,
       "priority": 5,
-      "blockedBy": "P3",
+      "blockedBy": "P3 (deferred \u2014 superseded by US-004s for now)",
       "passes": false,
-      "notes": ""
+      "notes": "DEFERRED 2026-08-19: user chose a wrangler/scripts admin surface instead, which needs no Access application and therefore no DNS move. Revisit only if a browser dashboard is still wanted."
     },
     {
       "id": "US-006",
@@ -153,9 +174,9 @@
       ],
       "expectedTests": 210,
       "priority": 6,
-      "blockedBy": "P3",
+      "blockedBy": "P3 (deferred \u2014 superseded by US-004s for now)",
       "passes": false,
-      "notes": "Spec section 8 writes /api/lead/:id but section 12 requires /admin/* \u2014 the prefix rule wins, since Access matches on path."
+      "notes": "Spec section 8 writes /api/lead/:id but section 12 requires /admin/* \u2014 the prefix rule wins, since Access matches on path. DEFERRED 2026-08-19: user chose a wrangler/scripts admin surface instead, which needs no Access application and therefore no DNS move. Revisit only if a browser dashboard is still wanted."
     },
     {
       "id": "US-007",
@@ -171,9 +192,9 @@
       ],
       "expectedTests": 210,
       "priority": 7,
-      "blockedBy": "P3",
+      "blockedBy": "P3 (deferred \u2014 superseded by US-004s for now)",
       "passes": false,
-      "notes": ""
+      "notes": "DEFERRED 2026-08-19: user chose a wrangler/scripts admin surface instead, which needs no Access application and therefore no DNS move. Revisit only if a browser dashboard is still wanted."
     },
     {
       "id": "US-008",
@@ -189,9 +210,9 @@
       ],
       "expectedTests": 210,
       "priority": 8,
-      "blockedBy": "P3",
+      "blockedBy": "P3 (deferred \u2014 superseded by US-004s for now)",
       "passes": false,
-      "notes": ""
+      "notes": "DEFERRED 2026-08-19: user chose a wrangler/scripts admin surface instead, which needs no Access application and therefore no DNS move. Revisit only if a browser dashboard is still wanted."
     },
     {
       "id": "US-009",

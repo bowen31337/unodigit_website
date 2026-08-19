@@ -1285,3 +1285,44 @@ touched. Both `pnpm ws:typecheck` targets (`@unodigit/ba-bot-api`,
 `CLAUDE.md` and `docs/superpowers/specs/2026-08-18-ba-bot-design.md` were
 again left untouched — confirmed still modified-unstaged in
 `git status --short` after the commit.
+
+### 2026-08-19 — RULING: admin surface is scripts, not an Access-gated web API
+
+User asked why P3 was needed. Investigated rather than restating it, and the
+verified DNS position is:
+
+  NS unodigit.com.au  -> ns1/2/3.onlydomains.com    (zone NOT on Cloudflare)
+  www.unodigit.com.au -> CNAME uno-digit.pages.dev  (Pages custom domain)
+  server: cloudflare, cf-ray present                (traffic IS proxied)
+
+The site is SERVED by Cloudflare but the domain is not MANAGED by Cloudflare.
+Access applications are configured per-zone in Zero Trust and attach to a
+hostname in a zone on your account; a CNAME-only Pages custom domain gives
+proxying, not a zone. `unodigit-ba-bot.unodigit.workers.dev` belongs to
+Cloudflare's zone, not ours. So spec section 12's second Access application has
+nothing to attach to, and US-004 would have verified a JWT that never arrives.
+
+That constraint is real, but it only binds the spec's DESIGN. The underlying
+requirements are: see leads and funnel, read briefs and quotes, and delete a
+lead on request (Privacy Act, spec section 8). A browser dashboard is one way to
+meet them, not the only way.
+
+RULING (user-approved): meet them with scripts over
+`wrangler d1 execute ba_bot --remote`, authenticated by the Cloudflare API token
+already in 1Password. Zero new auth surface, no new HTTP endpoint to secure, no
+DNS move — and it unblocks the Privacy Act deletion path TODAY rather than after
+a nameserver migration.
+
+This is a deliberate deviation from spec section 12. US-004 through US-008 are
+marked deferred, not abandoned; revisit only if a browser dashboard is still
+wanted after the scripts are in use. If it is, P3 is still the prerequisite and
+the analysis above still holds.
+
+Cost if wrong: the scripts are ~200 lines of shell and are thrown away, having
+in the meantime provided lead visibility and a legally-required deletion path.
+
+Note for whoever does move the DNS: the risk is NOT the Cloudflare side. Moving
+nameservers hands Cloudflare ALL DNS for the domain, including MX. Copy every
+existing record — MX, SPF/DKIM TXT, any CNAME/A in use — into the Cloudflare
+zone BEFORE switching NS at OnlyDomains, or email stops. Moving also unblocks
+P2, since Resend's SPF/DKIM records would then be managed in the same place.
