@@ -4,8 +4,9 @@ import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { MessageSquareText, X, RotateCcw, Maximize2, Minimize2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { BOT_API, OPENING_LINE, useBaBot } from './useBaBot';
+import { BOT_API, OPENING_LINE, TURNSTILE_ERRORS, useBaBot } from './useBaBot';
 import ContactForm from './ContactForm';
+import Turnstile, { TURNSTILE_SITE_KEY } from './Turnstile';
 
 /** Apple's sheet spring (damping 0.8 / response 0.3). Panels are grabbed and
  * dismissed, so they get a touch of bounce; the launcher does not. */
@@ -24,6 +25,15 @@ export default function BaBot() {
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [draft, setDraft] = useState('');
+  /**
+   * Turnstile token for the opening message. The Worker challenges the first
+   * turn only (chat.ts gates on `session.totalTurns === 0`), and nothing was
+   * ever obtaining one — so every conversation died on its first message with
+   * a 403 the visitor saw as a generic apology.
+   */
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  /** Bumping this re-renders the challenge. See the reset effect below. */
+  const [challengeNonce, setChallengeNonce] = useState(0);
   const reduceMotion = useReducedMotion();
   const bot = useBaBot();
 
@@ -92,6 +102,17 @@ export default function BaBot() {
     if (open && !onContact && !done) inputRef.current?.focus();
   }, [open, onContact, done]);
 
+  // A Turnstile token is single-use, and the Worker spends it verifying. If
+  // that turn then fails for any reason, the token held here is already burnt
+  // and every retry answers turnstile_failed — a permanent wall reached by
+  // pressing Send twice. Earning a fresh challenge is what makes it a retry
+  // rather than a dead end.
+  useEffect(() => {
+    if (bot.errorCode && TURNSTILE_ERRORS.has(bot.errorCode)) {
+      setChallengeNonce((n) => n + 1);
+    }
+  }, [bot.errorCode]);
+
   // Pin to the newest turn. `behavior: smooth` is skipped under reduced motion.
   // Re-runs on `expanded` too: resizing the panel changes how much of the
   // transcript fits, which would otherwise leave the last turn off-screen.
@@ -101,13 +122,38 @@ export default function BaBot() {
     el.scrollTo({ top: el.scrollHeight, behavior: reduceMotion ? 'auto' : 'smooth' });
   }, [bot.messages, bot.pending, onContact, expanded, reduceMotion]);
 
+  // The composer grows with the message instead of scrolling a one-line box.
+  // `textarea.field-chat` sets min-height 44px and resize:none, so without this
+  // a wrapped sentence hides its own first line behind an internal scrollbar —
+  // you cannot see what you are about to send.
+  //
+  // Collapsing to `auto` FIRST is the whole trick: scrollHeight never reports
+  // less than the element's current height, so reading it without resetting
+  // makes the box grow and never shrink again when text is deleted.
+  //
+  // max-h-32 caps it, and overflow-y then does the scrolling — a pasted essay
+  // must not push the transcript out of the panel.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [draft, expanded]);
+
   if (!BOT_API) return null;
+
+  // Turn zero is the only turn the Worker challenges. `hydrated` matters
+  // because sessionStorage is read in an effect: before it lands, a visitor
+  // resuming a conversation looks like a brand-new one, and mounting the
+  // challenge for them would fetch Cloudflare's bundle for nothing.
+  const needsChallenge =
+    Boolean(TURNSTILE_SITE_KEY) && bot.hydrated && bot.messages.length === 0 && !done && !onContact;
 
   function submit() {
     const text = draft.trim();
     if (!text) return;
     setDraft('');
-    void bot.send(text);
+    void bot.send(text, turnstileToken);
   }
 
   return (
@@ -267,6 +313,20 @@ export default function BaBot() {
                     <ContactForm pending={bot.pending} onSubmit={bot.submitContact} />
                   ) : (
                     <div className="flex items-end gap-s3 p-s4">
+                      {/* Mounted only while a token is still owed — the Worker
+                          challenges turn zero and ignores the field after, so
+                          keeping it alive all interview would re-challenge for
+                          nothing. `interaction-only` means this is a zero-height
+                          node unless Cloudflare actually wants the visitor to
+                          do something, in which case it appears in the
+                          composer where the action is. */}
+                      {needsChallenge && (
+                        <Turnstile
+                          appearance="interaction-only"
+                          resetSignal={challengeNonce}
+                          onToken={setTurnstileToken}
+                        />
+                      )}
                       <textarea
                         ref={inputRef}
                         rows={1}

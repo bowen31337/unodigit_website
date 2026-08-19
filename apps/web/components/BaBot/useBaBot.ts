@@ -64,7 +64,18 @@ const ERRORS: Record<string, string> = {
   invalid_body: 'That message could not be sent — try rephrasing it.',
   wrong_state: 'We are out of step. Starting a fresh conversation is the quickest fix.',
   not_found: 'This conversation expired. Starting a new one.',
+  // The chat endpoint challenges the FIRST message only. Both of these were
+  // missing from this map, so the one failure a visitor could actually act on
+  // arrived as the generic apology — which is why the outage read as "the bot
+  // is flaky" rather than "the browser check has not finished".
+  turnstile_required: 'Still running a quick browser check — try that again in a moment.',
+  turnstile_failed: 'That browser check did not pass. Try sending it once more.',
+  rate_limited: 'That is a lot of questions for one day. Please email info@unodigit.com.au.',
 };
+
+/** Codes that mean the challenge must be re-earned before another attempt. A
+ *  Turnstile token is single-use, so a retry with the same one always fails. */
+export const TURNSTILE_ERRORS = new Set(['turnstile_required', 'turnstile_failed']);
 
 const GENERIC_ERROR = 'Something went wrong reaching the assistant. Please try again.';
 
@@ -84,6 +95,10 @@ export function useBaBot() {
     useState<Persisted>(EMPTY);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** The raw code behind `error`. The widget needs it to tell a spent
+   *  challenge (re-earn one, then the retry can work) from every other
+   *  failure, which the human-readable string cannot express. */
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
 
   /**
@@ -161,15 +176,23 @@ export function useBaBot() {
     abort.current?.abort();
     setData(EMPTY);
     setError(null);
+    setErrorCode(null);
     setPending(false);
   }, []);
 
   const send = useCallback(
-    async (text: string) => {
+    /**
+     * `turnstileToken` is required by the Worker on the FIRST message of a
+     * conversation and ignored afterwards (chat.ts gates on
+     * `session.totalTurns === 0`). It was never sent at all, so every visitor's
+     * opening message answered 403 and the interview could not start.
+     */
+    async (text: string, turnstileToken?: string | null) => {
       const message = text.trim();
       if (!message || pending || finished || !BOT_API) return;
 
       setError(null);
+      setErrorCode(null);
       setPending(true);
       // Optimistic: the visitor's own words appear instantly. The Worker
       // persists them before it calls the model, so this matches the server.
@@ -183,7 +206,14 @@ export function useBaBot() {
         const res = await fetch(`${BOT_API}/api/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ conversationId: conversationId ?? undefined, message }),
+          body: JSON.stringify({
+            conversationId: conversationId ?? undefined,
+            message,
+            // Omitted rather than sent as null once the challenge is spent:
+            // the contract types this optional, and a null would have to be
+            // allowed through the schema just to be ignored.
+            ...(turnstileToken ? { turnstileToken } : {}),
+          }),
           signal: controller.signal,
         });
 
@@ -195,6 +225,7 @@ export function useBaBot() {
           // next message opens a fresh one instead of 404ing forever.
           if (code === 'not_found') setData((d) => ({ ...d, conversationId: null }));
           setError(ERRORS[code] ?? GENERIC_ERROR);
+          setErrorCode(code);
           return;
         }
 
@@ -263,6 +294,7 @@ export function useBaBot() {
     finished,
     pending,
     error,
+    errorCode,
     hydrated,
     conversationId,
     headline,

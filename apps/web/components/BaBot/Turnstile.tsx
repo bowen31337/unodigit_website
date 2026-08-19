@@ -51,6 +51,26 @@ function loadScript(): Promise<void> {
 interface TurnstileProps {
   /** Fires with a fresh token, or null when one expires and must be re-earned. */
   onToken: (token: string | null) => void;
+  /**
+   * `always` shows the widget — right for the contact form, where a visible
+   * challenge explains why submission is gated.
+   *
+   * `interaction-only` renders nothing unless Cloudflare decides this visitor
+   * must actually do something. That is what the chat composer wants: the
+   * first message needs a token, but a 65px challenge box sitting under the
+   * text area before anyone has typed reads as an obstacle to starting a
+   * conversation, which is the one thing the widget exists to encourage.
+   */
+  appearance?: 'always' | 'interaction-only';
+  /**
+   * Bump to discard the current challenge and earn a fresh token.
+   *
+   * A Turnstile token is single-use and the Worker spends it verifying. If the
+   * turn then fails for any other reason, the token in React state is already
+   * burnt and every retry answers `turnstile_failed` forever. Resetting is
+   * what makes that recoverable rather than terminal.
+   */
+  resetSignal?: number;
 }
 
 /**
@@ -58,7 +78,11 @@ interface TurnstileProps {
  * class because the form mounts inside an AnimatePresence subtree — implicit
  * mode only scans the DOM once at script load and would never see it.
  */
-export default function Turnstile({ onToken }: TurnstileProps) {
+export default function Turnstile({
+  onToken,
+  appearance = 'always',
+  resetSignal = 0,
+}: TurnstileProps) {
   const holder = useRef<HTMLDivElement>(null);
 
   // onToken lives in a ref so a re-render with a new closure does not tear down
@@ -70,12 +94,22 @@ export default function Turnstile({ onToken }: TurnstileProps) {
     let widgetId: string | undefined;
     let cancelled = false;
 
+    // A reset must not leave the previous, now-spent token in the caller's
+    // state: between teardown and the next callback there is genuinely no
+    // valid token, and claiming otherwise sends a burnt one.
+    cb.current(null);
+
     loadScript()
       .then(() => {
         if (cancelled || !holder.current || !window.turnstile || !TURNSTILE_SITE_KEY) return;
         widgetId = window.turnstile.render(holder.current, {
           sitekey: TURNSTILE_SITE_KEY,
           theme: 'auto',
+          appearance,
+          // Managed challenges expire after ~5 minutes. A visitor can open the
+          // panel, read the page, and type well after that, so let Turnstile
+          // re-earn silently rather than handing us a stale token.
+          'refresh-expired': 'auto',
           callback: (token: string) => cb.current(token),
           'expired-callback': () => cb.current(null),
           'error-callback': () => cb.current(null),
@@ -87,8 +121,11 @@ export default function Turnstile({ onToken }: TurnstileProps) {
       cancelled = true;
       if (widgetId && window.turnstile) window.turnstile.remove(widgetId);
     };
-  }, []);
+  }, [appearance, resetSignal]);
 
   if (!TURNSTILE_SITE_KEY) return null;
-  return <div ref={holder} className="min-h-[65px]" />;
+  // The reserved 65px is for the visible variant only — interaction-only is
+  // usually a zero-height node, and holding space for it would leave a gap
+  // above the composer that never fills.
+  return <div ref={holder} className={appearance === 'always' ? 'min-h-[65px]' : undefined} />;
 }
