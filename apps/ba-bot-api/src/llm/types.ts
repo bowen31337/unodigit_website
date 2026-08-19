@@ -9,13 +9,17 @@ export interface ChatRequest {
   jsonMode?: boolean
   maxTokens?: number
   /**
-   * Let the model reason before answering. Defaults to true — the provider's
-   * own default, and what every existing caller expects.
+   * Let the model reason before answering. Undefined means "do not send the
+   * field", i.e. the provider's own default (on). This is the transport layer;
+   * the bot's own default lives in llm/turn, which passes false.
    *
-   * `false` sends `thinking: { type: 'disabled' }`, which on deepseek-v4-flash
-   * cuts a turn from ~1200 completion tokens and 12–20s to ~33 tokens and
-   * under a second. That is the right trade only where the turn is an
-   * acknowledge-and-ask, not an analysis — see REASONING_BY_STATE.
+   * `false` sends `thinking: { type: 'disabled' }`. These are elicitation
+   * turns, so reasoning buys nothing: a full 7-turn interview measured 9.2s
+   * and 600 completion tokens with it off, against 78.1s and 9012 with it on.
+   *
+   * It is only safe to disable because llm/history replays assistant turns as
+   * JSON envelopes. Against a PROSE history, `thinking: disabled` makes the
+   * model answer with whitespace — read that file before changing either.
    */
   reasoning?: boolean
 }
