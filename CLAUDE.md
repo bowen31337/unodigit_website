@@ -4,22 +4,42 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Uno Digit is a marketing/portfolio website for an AI consultancy based in Sydney. Built with Next.js 14 (App Router) using static site generation (SSG), deployed to Cloudflare Pages.
+Uno Digit is the marketing site for an AI consultancy in Sydney, plus the backend for
+its requirements-elicitation bot. It is a **pnpm workspace driven by Turborepo**, with
+two independently deployed units:
+
+| Package | What | Deploys to |
+|---|---|---|
+| `apps/web` (`@unodigit/web`) | Next.js 16 marketing site, static export | Cloudflare **Pages** |
+| `apps/ba-bot-api` (`@unodigit/ba-bot-api`) | Hono Worker — the BA bot API | Cloudflare **Workers** |
+| `packages/ba-bot-contract` | Zod wire contract shared by both | — |
+
+The repo root holds workspace metadata only — no sources, no app manifest.
 
 ## Commands
 
-- **Dev server:** `pnpm dev`
-- **Build:** `pnpm build` (outputs static files to `/out`)
-- **Lint:** `pnpm lint`
-- **No test framework is configured.**
+Root scripts delegate through Turbo; run them from the repo root.
 
-Package manager is **pnpm**.
+- **Dev server (site):** `pnpm dev` → `apps/web` on :3000
+- **Build (site):** `pnpm build` → static export in `apps/web/out` (21 pages)
+- **Typecheck everything:** `pnpm ws:typecheck`
+- **Test everything:** `pnpm ws:test`
+- **Bot:** `pnpm bot:dev` / `pnpm bot:test` / `pnpm bot:deploy`
+- **Lint:** none that works. See "Known gaps" below.
+
+Package manager is **pnpm**. The Worker has a real Vitest suite (68 tests, via
+`@cloudflare/vitest-pool-workers`); `apps/web` has **no tests**, so `pnpm build` is
+still its only gate.
 
 ## Architecture
 
 ### Static Export
 
 The site is configured for full static export (`output: 'export'` in `next.config.js`). All pages are pre-rendered at build time. There are no API routes, no server-side rendering, and no database. Image optimization is disabled (`unoptimized: true`) to support static export.
+
+`trailingSlash: true` is also set, so every route emits a directory (`out/about/index.html`)
+and canonical URLs carry the trailing slash (`/about/`). Keep internal `href`s consistent
+with that — Cloudflare Pages will redirect a slash-less URL, costing a round trip.
 
 ### Server/Client Component Split
 
@@ -33,15 +53,20 @@ Dynamic routes (`app/work/[slug]/`, `app/insights/[slug]/`) use `generateStaticP
 
 ### Directory Layout
 
+Everything below is inside **`apps/web/`** (the site was moved off the repo root):
+
 - `app/` — Next.js App Router pages (home, about, services, work, insights, contact)
 - `components/` — Shared components (see "Shared components" below)
 - `data/` — Static content as TypeScript objects with `React.ReactNode` content fields (`projects.tsx`, `articles.tsx`)
 - `lib/utils.ts` — `cn()` helper (clsx + tailwind-merge)
 - `public/` — Static assets (favicon.svg, logo.png)
 
+The Worker lives in `apps/ba-bot-api/src/`: `graph/` (pure FSM), `llm/` (provider
+adapter), `db/` (typed D1 queries), `guards/`, `api/` (Hono routes).
+
 ### Styling — Apple design token layer
 
-`app/globals.css` is the **single source of truth** for design values. Never hardcode a
+`apps/web/app/globals.css` is the **single source of truth** for design values. Never hardcode a
 hex, size, radius, or duration in a component — reference the tokens, so both themes
 and the `prefers-*` fallbacks keep working. `tailwind.config.ts` is only a bridge: every
 utility resolves to a CSS custom property.
@@ -64,9 +89,14 @@ Contrast was validated on **both** `--bg` and `--bg-secondary`; a token that pas
 white can still fail on `#f2f2f7`. `--accent-display` was chosen by sampling real
 rendered hero pixels over the gradient mesh, not by assuming a white page.
 
-`--label-secondary` is deliberately **0.73** alpha, not Apple's shipping 0.60 — Apple's
-value measures 3.44:1 and fails WCAG AA. `--label-tertiary` is decorative-only (list
-markers, scrollbar); never put readable copy on it.
+Error red follows the same two-track split: `--red` is graphics-only (Apple systemRed,
+3.29:1 on white — borders and fills), `--red-ink` is the text track
+(accessibleSystemRed, 5.92:1). Never set error *copy* in `--red`.
+
+In **light mode** `--label-secondary` is deliberately **0.73** alpha, not Apple's shipping
+0.60 — Apple's value measures 3.44:1 on white and fails WCAG AA. Dark mode keeps 0.60,
+which passes against `#000`. `--label-tertiary` is decorative-only (list markers,
+scrollbar); never put readable copy on it.
 
 Other conventions:
 - **Type roles** (`.type-display`, `.type-title-1`, `.type-body`, `.type-eyebrow`, …)
@@ -105,19 +135,83 @@ Other conventions:
 Long-form article and case-study bodies use `.prose-apple`. Note `@tailwindcss/typography`
 is **not** installed — `prose`/`prose-invert` classes do nothing here.
 
-### Known gap
+**Specificity trap:** form rules in `globals.css` are element-qualified
+(`textarea.field { min-height: 120px }`, specificity 0,1,1), so a Tailwind utility like
+`min-h-[44px]` or `resize-none` (0,1,0) silently loses to them. Override with another
+element-qualified class (`textarea.field-chat`), not a utility.
 
-`pnpm lint` prompts for interactive ESLint setup because the repo has no `.eslintrc`.
-Type checking and Next's built-in lint still run as part of `pnpm build`.
+### BA bot widget
+
+`components/BaBot/` is a floating requirements-elicitation assistant, mounted **once in
+`app/layout.tsx`** so the interview survives client-side navigation between routes.
+
+- Talks to the Worker over CORS; the origin is baked in at build time from
+  `NEXT_PUBLIC_BA_BOT_URL` (see `apps/web/.env.production`). With that variable absent
+  the component renders **nothing** rather than a launcher onto a dead endpoint.
+- `useBaBot.ts` owns conversation state and persists it to `sessionStorage`
+  (single-sitting semantics — a half-finished interview should not resurface days later).
+- The panel is the translucent layer; message bubbles are deliberately **opaque**, since
+  stacking two glass surfaces double-blurs both.
+- When the graph reaches `CONTACT` the composer is swapped for `ContactForm`, which
+  requires an explicit `consent: true` and a Turnstile token — the API rejects anything
+  less.
+
+### Known gaps
+
+**There is no working lint.** Next 16 removed the `next lint` subcommand, so the
+`"lint": "next lint"` script fails with `Invalid project directory provided, no such
+directory: .../lint` — `next` parses `lint` as a positional path. Next 16 also dropped
+ESLint-during-build, so `pnpm build` now runs **TypeScript only**. `eslint@9` and
+`eslint-config-next@16` are installed but unused; restoring lint means adding a flat
+`eslint.config.mjs` and repointing the script at `eslint .`. Until then, type errors are
+the only automated check.
+
+**React is pinned to 18.3.1** even though Next 16 supports React 19. Don't bump it
+casually — the Radix/vaul/cmdk stack here has not been validated against 19.
+
+**Root `package.json` has a `pnpm.overrides` block** pinning transitive deps (lodash,
+nanoid, postcss, picomatch, minimatch, brace-expansion, flatted) to close security
+advisories. Adding or upgrading dependencies can silently reintroduce a flagged version —
+re-check the overrides rather than deleting entries that look redundant.
+
+**The BA bot is deployed but incomplete.** Two gaps matter:
+
+1. **Rate limiting is not enforced.** `guards/ratelimit.ts` is written and unit-tested,
+   but nothing in `src/` imports it — the live endpoint has no per-IP throttle, and every
+   turn spends DeepSeek tokens. Wire it before promoting the widget.
+2. **`estimator/`, `pricing/`, and `mail/` do not exist.** The `GENERATE` state's prompt
+   says *"this topic is handled by another system"* — that system is unbuilt, so an
+   interview that completes produces no quote. The widget covers this by closing with a
+   "we'll follow up by email" message.
+
+**LLM token ceilings must cover reasoning tokens.** `deepseek-v4-flash` is a reasoning
+model: a measured turn used 487 completion tokens of which 356 were *reasoning* and only
+~131 were visible output. The original 900-token cap in `llm/turn.ts` truncated nearly
+every real turn into `finish_reason: 'length'`, which the code discards as `'truncated'`
+with no retry — so the visitor saw the fallback apology every time. It is now 4000.
 
 ### Import Alias
 
-`@/*` maps to the project root (e.g., `@/components/Navbar`, `@/data/projects`).
+`@/*` maps to `apps/web/` (e.g., `@/components/Navbar`, `@/data/projects`). The Worker
+does not use it.
 
 ## Deployment
 
-Pushes to `main` trigger a GitHub Actions workflow (`.github/workflows/deploy-cloudflare.yml`) that builds the site and deploys the `/out` directory to Cloudflare Pages using `cloudflare/wrangler-action@v3`. Secrets required: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_PROJECT_NAME`.
+Pushes to `main` trigger a GitHub Actions workflow (`.github/workflows/deploy-cloudflare.yml`) that runs `pnpm build` and deploys **`apps/web/out`** to Cloudflare Pages using `cloudflare/wrangler-action@v3`. Secrets required: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_PROJECT_NAME`.
+
+The Worker is **not** deployed by CI — it ships manually via `pnpm bot:deploy` (or
+`wrangler deploy`), with secrets pushed from 1Password by
+`apps/ba-bot-api/scripts/sync-secrets.sh`. See `apps/ba-bot-api/SETUP.md`, which also
+explains why `api.unodigit.com.au` is not usable as the API hostname.
+
+CI pins **Node 22** and **pnpm 10**, and installs with `--frozen-lockfile`. Any
+`package.json` edit must be committed together with a regenerated `pnpm-lock.yaml` or the
+deploy fails at install — this has already required a dedicated fix-up commit.
+
+`CLOUDFLARE_API_TOKEN` must hold an unrestricted Pages-deploy token. An IP-locked token
+fails on GitHub runners with a misleading generic `code 10000` authentication error
+rather than anything mentioning IP restrictions.
 
 ## Adding Content
 
-To add a new project or article, add an entry to `data/projects.tsx` or `data/articles.tsx`. The `slug` field must be unique — it becomes the URL path. Dynamic routes will automatically pick it up via `generateStaticParams()`.
+To add a new project or article, add an entry to `apps/web/data/projects.tsx` or `apps/web/data/articles.tsx`. The `slug` field must be unique — it becomes the URL path. Dynamic routes will automatically pick it up via `generateStaticParams()`.

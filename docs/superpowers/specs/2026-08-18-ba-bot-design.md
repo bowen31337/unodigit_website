@@ -674,4 +674,7 @@ Steps 2 and 5 are pure and deterministic and should be developed test-first.
 - Whether to include a "vs conventional team" comparison anchor in the quote.
   It is the strongest conversion lever available but is a marketing claim that
   must be defensible; deferred pending real delivery data.
-- Widget placement: floating on all pages, `/start` only, or both.
+- ~~Widget placement: floating on all pages, `/start` only, or both.~~ **Decided
+  2026-08-18: floating on all pages.** `<BaBot />` mounts once in
+  `apps/web/app/layout.tsx`, so the interview also survives client-side
+  navigation between routes. `app/start/` was not built.
