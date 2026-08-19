@@ -4,6 +4,7 @@ import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import ThemeProvider from '@/components/ThemeProvider';
 import GlassFilters from '@/components/GlassFilters';
+import BaBot from '@/components/BaBot';
 
 export const metadata: Metadata = {
   title: {
@@ -62,6 +63,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Navbar />
           <main id="main">{children}</main>
           <Footer />
+          {/* Mounted here, not per-page, so the interview survives client-side
+              navigation between routes. Renders nothing when the bot API URL
+              is not configured at build time. */}
+          <BaBot />
         </ThemeProvider>
       </body>
     </html>

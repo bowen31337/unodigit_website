@@ -1164,3 +1164,61 @@ Next implementer (Task 2, commit the widget): the widget must send
 must handle 403 `turnstile_required` (render a fresh challenge), 403
 `turnstile_failed` (the token was rejected), and 429 `rate_limited` (slow down,
 not rejected) as three distinct states.
+
+### 2026-08-19 — US-002: Commit the BA bot widget
+
+Nothing written — the widget (`apps/web/components/BaBot/{BaBot.tsx,
+ContactForm.tsx,Turnstile.tsx,useBaBot.ts,index.ts}`, ~673 lines) was already
+written and working but untracked, along with `apps/web/.env.development` and
+`apps/web/.env.production`. CI builds from a fresh checkout, so the deployed
+site was shipping with no widget at all, and the untracked tree was one
+`git clean -fdx` from gone. Verified safe and committed as-is.
+
+Gate 1 (env files public-only): `grep -E '^[A-Z]'` on both env files returned
+only `NEXT_PUBLIC_BA_BOT_URL` and `NEXT_PUBLIC_TURNSTILE_SITE_KEY`.
+`NEXT_PUBLIC_TURNSTILE_SITE_KEY` starts `0x4AAAAAAET8...` — the public site-key
+shape, not a secret. Pass.
+
+Gate 2 (.gitignore negations): `git check-ignore -v` reported exit 0 for both
+files, but the matched pattern in each case is the NEGATION itself
+(`.gitignore:35:!apps/web/.env.production`, `:36:!...env.development`) — a
+known git quirk where check-ignore's exit code reflects "a pattern matched,"
+not "the file is ignored." Confirmed the files are genuinely NOT ignored two
+other ways: `git status --porcelain` shows them `??` (untracked, visible), and
+`git ls-files --others --exclude-standard` lists both — that command only
+prints paths NOT excluded by gitignore. Pass.
+
+Gate 3 (build): `pnpm build --force` from repo root, cache bypass confirmed in
+the turbo log line ("cache bypass, force executing..."). Exit 0. `apps/web/out`
+contains 22 HTML files (21 route `index.html` + root `404.html`), matching the
+plan's "22+ pages."
+
+Gate 4 (read all five widget files before committing): `useBaBot.ts` posts only
+`{conversationId, message}` to `/api/chat` — no lead field on the chat path.
+`ContactForm.tsx` collects name/email/company/role/consent + a Turnstile token
+and posts them via `submitContact` to `/api/contact` only — the designed path,
+per spec. `Turnstile.tsx` references only `NEXT_PUBLIC_TURNSTILE_SITE_KEY`; no
+secret key, no private endpoint. `BaBot.tsx` and `index.ts` are UI/export glue
+with no network calls of their own. `BOT_API` (the Worker origin) comes only
+from `NEXT_PUBLIC_BA_BOT_URL`; the widget renders nothing when it is absent
+rather than pointing at a dead endpoint. No hardcoded secret, no debug
+backdoor, no lead field reaching the chat/LLM path.
+
+Also committed (build-time config for the same feature, all read via `git
+diff` before staging): `.gitignore` (the two negation lines only), `next.config.js`
+(`transpilePackages: ['@unodigit/ba-bot-contract']` — that package ships raw TS,
+`main: ./src/index.ts`, no build step), `package.json`
+(`@unodigit/ba-bot-contract: workspace:*`), `pnpm-lock.yaml` (regenerated to
+match), `layout.tsx` (mounts `<BaBot />` once, root layout), `globals.css`
+(`--red`/`--red-ink` two-track error tokens, plus `textarea.field-chat` — a
+deliberately element-qualified override, since `.field`'s 0,1,1 specificity
+beats a bare Tailwind utility).
+
+Worker suite unchanged: 184 tests / 18 files, zero warnings. Both
+apps/ba-bot-api and packages/ba-bot-contract typecheck clean — no Worker code
+touched by this story.
+
+`CLAUDE.md` and `docs/superpowers/specs/2026-08-18-ba-bot-design.md` were left
+untouched (not staged, not committed) per the task's explicit instruction —
+`CLAUDE.md` carries the user's own in-progress edit. Confirmed both still show
+modified-unstaged in `git status --short` after the commit.

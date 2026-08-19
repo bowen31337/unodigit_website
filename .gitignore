@@ -23,6 +23,18 @@ pnpm-debug.log*
 .env.test.local
 .env.production.local
 
+# ...but the two BA-bot widget env files MUST be committed. They hold only
+# NEXT_PUBLIC_* values, which Next inlines into the client bundle and serves to
+# every visitor — public by construction, not secrets. CI builds the static
+# export straight from a checkout, so if these are ignored the deployed site
+# silently ships with no widget at all.
+#
+# These negations are load-bearing: a global ignore file (~/.gitignore_global)
+# may carry a broad `.env*` pattern, and repository .gitignore rules are applied
+# after it, so this is what re-includes them.
+!apps/web/.env.production
+!apps/web/.env.development
+
 # Vercel
 .vercel
 

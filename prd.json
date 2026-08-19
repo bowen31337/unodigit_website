@@ -77,8 +77,8 @@
       "expectedTests": 182,
       "priority": 2,
       "blockedBy": null,
-      "passes": false,
-      "notes": "No Worker tests change; apps/web has no suite, so pnpm build is the gate."
+      "passes": true,
+      "notes": "Committed the pre-existing BaBot/ widget (5 files) and its build-time config. Both env files hold only NEXT_PUBLIC_* keys, Turnstile value is the site key; .gitignore negations verified with git ls-files --others --exclude-standard (files not excluded); pnpm build --force emitted 22 HTML pages, exit 0. Worker suite unchanged at 184/18."
     },
     {
       "id": "US-003",

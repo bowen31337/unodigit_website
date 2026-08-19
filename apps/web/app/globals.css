@@ -182,6 +182,13 @@
 
   --separator:        rgba(60, 60, 67, 0.20);
   --separator-opaque: #c6c6c8;
+
+  /* Error red follows the same two-track split as accent: `--red` is the
+     graphic (Apple systemRed, 3.29:1 on white — borders and fills only), and
+     `--red-ink` is the text track (Apple accessibleSystemRed, 5.92:1). */
+  --red:     #ff3b30;
+  --red-ink: #d70015;
+
   --fill-1: rgba(120, 120, 128, 0.20);
   --fill-2: rgba(120, 120, 128, 0.16);
   --fill-3: rgba(120, 120, 128, 0.12);
@@ -255,6 +262,10 @@
 
     --separator:        rgba(84, 84, 88, 0.60);
     --separator-opaque: #38383a;
+
+    --red:     #ff453a;   /* systemRed dark */
+    --red-ink: #ff6961;   /* accessibleSystemRed dark — 6.6:1 on #000 */
+
     --fill-1: rgba(120, 120, 128, 0.36);
     --fill-2: rgba(120, 120, 128, 0.32);
     --fill-3: rgba(120, 120, 128, 0.24);
@@ -311,6 +322,10 @@
 
   --separator: rgba(84, 84, 88, 0.60);
   --separator-opaque: #38383a;
+
+  --red: #ff453a;
+  --red-ink: #ff6961;
+
   --fill-1: rgba(120, 120, 128, 0.36);
   --fill-2: rgba(120, 120, 128, 0.32);
   --fill-3: rgba(120, 120, 128, 0.24);
@@ -606,8 +621,14 @@
     background: var(--bg-tertiary);
     box-shadow: inset 0 0 0 1.5px var(--accent-ink);
   }
-  .field[aria-invalid='true'] { box-shadow: inset 0 0 0 1.5px #ff3b30; }
+  .field[aria-invalid='true'] { box-shadow: inset 0 0 0 1.5px var(--red); }
   textarea.field { min-height: 120px; resize: vertical; }
+
+  /* Chat composer: starts at one line and grows, rather than the 120px block a
+     contact-form message box wants. Written as `textarea.field-chat` on purpose
+     — a plain utility class loses to `textarea.field` on specificity (0,1,1 vs
+     0,1,0), so `min-h-*` / `resize-none` silently do nothing here. */
+  textarea.field-chat { min-height: 44px; resize: none; }
 
   .field-label {
     display: block;
