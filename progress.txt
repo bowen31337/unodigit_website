@@ -1222,3 +1222,66 @@ touched by this story.
 untouched (not staged, not committed) per the task's explicit instruction —
 `CLAUDE.md` carries the user's own in-progress edit. Confirmed both still show
 modified-unstaged in `git status --short` after the commit.
+
+### 2026-08-19 — US-003: Public quote page /q/
+
+Created `apps/web/app/q/page.tsx` (server shell, `robots: noindex`, wraps the
+client component in `<Suspense fallback={null}>`) and
+`apps/web/app/q/QuoteClient.tsx`. No `[id]` directory anywhere under
+`apps/web/app/q/` — the URL shape is `/q/?id=<id>&sig=<hex>`, both read via
+`useSearchParams()`, matching spec §11's Preferred option and the correction
+already made to `src/api/generate.ts` in Plan 2.
+
+Read `apps/ba-bot-api/src/api/quote.ts` before writing anything: it verifies
+the HMAC before touching D1 and returns exactly one shape for every failure —
+403 `{ error: 'forbidden' }` — for a bad signature, a missing signature, and
+an unknown id alike, so the ids stay non-enumerable. `QuoteClient.tsx` mirrors
+that: a missing `id` or `sig` is refused locally (never sent to the Worker as
+an empty parameter) and any non-200 response collapses to the same
+`FailedState` component, "This link is not valid" — never "not found," never
+a different message for the two cases.
+
+Markdown rendering: read both `apps/ba-bot-api/src/render/quote.ts` and
+`brief.ts` first to see exactly what constructs the Worker's own renderers
+emit — h1/h2/h3 headings, `**bold**`, `_italic_`, unordered lists, GFM-style
+tables (with the `---:` right-align marker used for the Tasks/Weight
+columns), and nothing else (no links, code, blockquotes, or images in
+practice). `apps/web/package.json` has no markdown dependency, so rather than
+add one, wrote a small line-based block parser plus a regex inline splitter
+directly in `QuoteClient.tsx`, scoped to that exact subset. Every block
+becomes a React element built from parsed strings — `dangerouslySetInnerHTML`
+is not used anywhere in the file (confirmed by grep) — so React's own
+escaping is what keeps a visitor-supplied project name or problem statement
+(LLM-touched, therefore untrusted) from being interpreted as markup, even
+though the string originates from our own Worker. `h1`/tables get explicit
+inline styles built from `var(--...)` tokens (`.prose-apple` has no rules for
+either); `h2`/`h3`/`strong`/`em`/`ul`/`li`/`hr` render as plain semantic tags
+inside a `.prose-apple` wrapper and pick up its existing rules. No hardcoded
+hex, size, radius, or duration anywhere in the new files.
+
+The API origin follows `useBaBot.ts`'s discipline exactly: `BOT_API =
+process.env.NEXT_PUBLIC_BA_BOT_URL`, and its absence is treated as a reason
+to fail to the same "not valid" state rather than fetch a dead endpoint.
+
+Three states verified by reasoning through the code (apps/web has no test
+suite, so this was not exercised in a running browser):
+- **Valid `?id=&sig=`**: both search params present, `BOT_API` set (confirmed
+  in `.env.production`/`.env.development`) → fetch fires, a 200 with
+  `{ markdown, quote }` sets `status: 'ready'` and `Markdown` renders the
+  string verbatim, with no re-derivation.
+- **403**: `res.ok` is false → `status: 'failed'` immediately, body never
+  parsed. Same component as the next case.
+- **Missing `id` or `sig`**: the effect's guard (`!id || !sig || !BOT_API`)
+  fires before any `fetch` call → `status: 'failed'`, identical `FailedState`
+  markup and copy to the 403 case.
+
+Gates: `pnpm build --force` — cache bypass confirmed in the turbo log ("cache
+bypass, force executing") — exit 0, `apps/web/out/q/index.html` emitted.
+Route count went from 22 HTML files to 23 (the one new `/q` page). Worker
+suite unchanged: 184 tests / 18 files, zero warnings — no Worker code
+touched. Both `pnpm ws:typecheck` targets (`@unodigit/ba-bot-api`,
+`@unodigit/ba-bot-contract`, `@unodigit/web`) pass clean.
+
+`CLAUDE.md` and `docs/superpowers/specs/2026-08-18-ba-bot-design.md` were
+again left untouched — confirmed still modified-unstaged in
+`git status --short` after the commit.

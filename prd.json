@@ -96,8 +96,8 @@
       "expectedTests": 182,
       "priority": 3,
       "blockedBy": null,
-      "passes": false,
-      "notes": "Link shape is effectively permanent \u2014 links already emailed cannot be reissued."
+      "passes": true,
+      "notes": "app/q/page.tsx + QuoteClient.tsx read id and sig from useSearchParams, fetch NEXT_PUBLIC_BA_BOT_URL/api/quote/:id?sig=, and render quotes.markdown verbatim via an in-file Markdown renderer (no dependency added \u2014 React elements only, never dangerouslySetInnerHTML). Missing params and any non-200 collapse to one identical 'this link is not valid' state. pnpm build --force emitted apps/web/out/q/index.html, exit 0. Worker suite unchanged at 184/18."
     },
     {
       "id": "US-004",
