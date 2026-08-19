@@ -151,8 +151,8 @@
       ],
       "expectedTests": 122,
       "priority": 7,
-      "passes": false,
-      "notes": "Closes the R4 gap from Plan 1: nothing has ever written abandoned_at_state."
+      "passes": true,
+      "notes": "Done at 128 tests / 14 files. Idempotency is checked BEFORE the state gate, otherwise a refresh after a successful generate (session now DONE) would 409 instead of returning the brief. abandoned_at_state is written by endConversation(), unit-tested against the D1 column."
     },
     {
       "id": "US-008",

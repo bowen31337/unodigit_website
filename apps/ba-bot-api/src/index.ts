@@ -3,6 +3,7 @@ import { cors } from 'hono/cors'
 import type { Env } from './env'
 import { registerChatRoutes } from './api/chat'
 import { registerContactRoutes } from './api/contact'
+import { registerGenerateRoutes } from './api/generate'
 
 const app = new Hono<{ Bindings: Env }>()
 
@@ -42,5 +43,6 @@ app.get('/health', (c) => c.json({ status: 'ok' }))
 
 registerChatRoutes(app)
 registerContactRoutes(app)
+registerGenerateRoutes(app)
 
 export default app

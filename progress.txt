@@ -436,3 +436,109 @@ is conversation -> brief -> quote, and insertBrief must have resolved before
 insertQuote is attempted. getBriefByConversation is the idempotency check for
 step 3 of that task — it returns the newest brief, so a retry reads back the
 brief it just wrote rather than re-billing an estimate.
+
+### 2026-08-19 — US-007: POST /api/generate orchestration
+
+Created src/api/generate.ts (registerGenerateRoutes + an exported
+endConversation), registered it in src/index.ts, and added
+QUOTE_LINK_SIGNING_KEY / RESEND_API_KEY to Env — declared only, deliberately NOT
+added to index.ts's REQUIRED_SECRETS, since nothing reads them yet and a 503 on
+their absence would take the whole API down for a feature that does not exist.
+Task 7 of the plan carries no literal code, so this is the first story written
+rather than transcribed.
+
+Order of checks, and one deliberate deviation from the plan's stated order:
+404 unknown conversation -> IDEMPOTENCY -> 409 wrong_state -> brief ->
+rate limit -> estimate -> price/render/persist -> advance to DONE -> close the
+conversation row. The plan lists idempotency third, after the 409. That order is
+wrong in practice: a successful generate leaves the session at DONE, so a
+refresh or a double-click would be answered 409 rather than the brief the
+visitor already paid for — contradicting the plan's own acceptance criterion
+that "an existing brief for the conversation is returned". Checking the brief
+first satisfies both criteria: the 409 case (mid-interview, no brief) is
+unaffected, because only this route ever writes a brief.
+
+Second judgement call: a below-floor project still returns its Quote object and
+still persists the quote row. GenerateResponseSchema's doc comment in the
+contract says quote is "absent when the rate limit was hit or the project priced
+below the engagement floor", but the plan's step 7 prices/persists
+unconditionally and its step 10 lists below-floor as a HEADLINE variant
+alongside book-a-call and estimator-failed — i.e. a quote that exists but is
+presented differently. renderQuote already suppresses the band and the per-task
+rate for belowFloor, so the artifact is safe; returning null would leave a
+non-null quoteId pointing at a row the client cannot see. The contract comment
+is prose, not schema, and is now slightly stale.
+
+`belowFloor` is NOT a column on `quotes`, so the idempotent re-read cannot load
+it. quoteFromRow re-derives it with the same rule priceQuote used
+(weighted * rate < MINIMUM_ENGAGEMENT_AUD). Everything else comes straight off
+the row. This is the one place in the codebase that re-derives rather than
+reads; a below_floor column would remove it, at the cost of a migration.
+
+Beyond the plan's step list, deliberately: the estimate's promptTokens /
+completionTokens are added to conversations.tokens_in/tokens_out via the same
+UPDATE chat.ts uses. The heavy model is the most expensive call in the app and
+omitting it would leave that spend invisible in the very columns that track the
+cheap one. Asserted in the happy-path test (900/400), so it is not untested
+scope.
+
+TDD. Wrote test/api/generate.test.ts first: RED at module level ("Cannot find
+module '../../src/api/generate'", baseline 115 still green). Then added a no-op
+stub exporting both symbols so every test could fail for its OWN reason rather
+than one import error, and re-ran: 12 of 13 failed with distinct observed
+failures — route tests "expected 404 to be 200/409/400", the abandoned_at_state
+test "expected null to be 'CONTACT'", the session test "expected 'GENERATE' to
+be 'DONE'", the ended_at test "actual value must be number, received object".
+The 13th ("rejects an unknown conversation with 404") PASSED vacuously against
+the stub, because Hono's own not-found handler is also a 404 — fixed by
+asserting the body equals {error:'not_found'}, after which it failed too.
+Implemented; GREEN at 128 tests / 14 files, zero warnings (was 115/13). Both
+apps/ba-bot-api and packages/ba-bot-contract typecheck clean.
+
+Test-isolation trap worth carrying: D1 persists across tests within a file, and
+`rate_limit` is keyed on (ip_hash, day). The first happy-path test called
+recordQuote for the shared test IP, so every later test in the file silently
+took the rate-limited branch — 5 tests failed asserting on the wrong branch, and
+the ones that would still have "passed" would have been testing nothing. Fixed
+with one IP per test (`203.0.113.${counter}` assigned in beforeEach). Any future
+route that writes a per-IP ledger has the same hazard.
+
+Mutation check, one at a time, each reverted from a backup:
+- rate-limited branch runs runEstimate and discards the result => ONLY "returns
+  the brief with no quote and makes no LLM call when rate limited" failed. The
+  response shape was byte-identical, so an assertion on `quote: null` alone
+  would have passed this mutant. Only the fetch-spy count caught it.
+- idempotent branch runs runEstimate before returning the stored artifacts =>
+  ONLY the two call-count assertions failed ("expected Mock to be called 1
+  times, but got 2 times"), in the idempotency test and in the rate-limit test's
+  refresh assertion. Every returned field still matched.
+- headline appends "at A$77 per task" => ONLY "never puts the per-task rate in
+  the headline" failed.
+- endConversation binds null unconditionally => ONLY "writes abandoned_at_state
+  when a session ends before DONE" failed.
+
+The rate 77 in the tests is chosen, not arbitrary: with the fixture's 150.5
+weighted tasks it yields 137 tasks / A$8,691-14,486 / 7 weeks, none of which
+contain the digits "77", so `not.toContain('77')` is a real absence assertion
+rather than a coincidence. The stored quote markdown is asserted to CONTAIN
+"per task" and "A$77" as the positive control, so the headline's silence is a
+suppression rather than a value that never existed. Band assertions use
+/8,?691/-style regexes because en-AU digit grouping is not guaranteed under
+workerd (render.test.ts already hedges the same way).
+
+PII. `grep -rnE "\b(name|email)\b" src/llm/ src/graph/prompts.ts src/estimator/`
+returns the same 4 previously-adjudicated lines as US-003..US-006 — no new
+surface. The same grep over the new route returns exactly one line: the word
+"email" inside the estimator-failed headline prose ("we will follow up by
+email"), a delivery channel, not a lead field. generate.ts never touches the
+`leads` table; the estimator receives `briefMarkdown`, which renderBrief builds
+from the slot set only. Pinned by a test that inserts a real lead
+(Jane Doe / jane@acme.com), links it to the conversation, and asserts neither
+value appears in the outbound LLM request body (read off the fetch spy's call
+args), the brief markdown, the quote markdown, or the headline.
+
+Not done here, on purpose: signing (Task 8) and email (Task 9).
+
+Next implementer (Task 8) adds src/util/sign.ts and src/api/quote.ts and moves
+QUOTE_LINK_SIGNING_KEY into REQUIRED_SECRETS in the same commit that first reads
+it. `getQuoteById` (US-006) is already there and unused until then.

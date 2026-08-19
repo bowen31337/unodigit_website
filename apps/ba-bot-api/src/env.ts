@@ -6,6 +6,12 @@ export interface Env {
   LLM_API_KEY: string
   TURNSTILE_SECRET: string
   IP_HASH_SALT: string
+  // Declared here for Task 8/9. Deliberately NOT in index.ts's REQUIRED_SECRETS
+  // yet: nothing reads them, so failing every request on their absence would
+  // take the whole API down for a feature that does not exist. Add them to the
+  // 503 guard in the same commit that first uses them.
+  QUOTE_LINK_SIGNING_KEY: string
+  RESEND_API_KEY: string
 
   // vars — plaintext in wrangler.toml, safe to review and diff
   LLM_BASE_URL: string
