@@ -542,3 +542,39 @@ Not done here, on purpose: signing (Task 8) and email (Task 9).
 Next implementer (Task 8) adds src/util/sign.ts and src/api/quote.ts and moves
 QUOTE_LINK_SIGNING_KEY into REQUIRED_SECRETS in the same commit that first reads
 it. `getQuoteById` (US-006) is already there and unused until then.
+
+### 2026-08-19 — US-007 controller notes
+
+Accepted 0fd346d as delivered. Two follow-ups recorded rather than fixed.
+
+1. Contract doc comment corrected (this commit). GenerateResponseSchema said
+   `quote` is absent both when rate-limited AND when below the engagement floor.
+   The implementation returns the Quote below floor, which is correct: US-005's
+   renderer replaces the band with a starter-engagement message, and nulling the
+   quote would make "below floor" indistinguishable from "rate limited" at the
+   client. Those are different things to say to a visitor. Prose fixed, no code
+   change.
+
+2. NOT fixed — belowFloor is re-derived on the idempotent re-read.
+   `below_floor` is not a column, so a second GET recomputes it as
+   `weighted x rate < minimum` from the CURRENT env vars. This is the only
+   re-derivation in the codebase. It is latent today and becomes real the moment
+   MINIMUM_ENGAGEMENT_AUD changes — which it will, since 6000 is a documented
+   placeholder: a quote rendered and stored under the old floor would come back
+   with a re-derived belowFloor disagreeing with its own stored markdown. The
+   markdown is the artifact the client already read, so the stored value is the
+   authority. Fix is a `below_floor` column plus a migration; deferred because it
+   touches schema and US-008/009 are queued behind it. Settle it before
+   MINIMUM_ENGAGEMENT_AUD moves off its placeholder.
+
+Implementer's plan deviations, both ruled correct:
+- Idempotency is checked BEFORE the 409 state gate. The plan's ordering would
+  409 a visitor refreshing after their brief existed, contradicting the plan's
+  own idempotency criterion. Verified in source: 404 -> existing-brief -> 409.
+- Estimate tokens are added to conversations.tokens_in/out, so the heavy model's
+  spend is not invisible. Beyond the plan, and correct.
+
+Test-isolation trap worth carrying: D1 persists within a test file and
+rate_limit is keyed on (ip_hash, day), so tests MUST use one IP each. A shared
+IP silently rate-limited five later tests in this story — they failed for a
+reason unrelated to what they were testing.

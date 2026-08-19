@@ -232,8 +232,12 @@ export const QuoteSchema = z
   .strict()
 export type Quote = z.infer<typeof QuoteSchema>
 
-/** POST /api/generate. `quote` is absent when the rate limit was hit or the
- *  project priced below the engagement floor — the brief is still delivered. */
+/** POST /api/generate. `quote` is absent ONLY when the rate limit was hit — the
+ *  brief is still delivered. A project priced below the engagement floor DOES
+ *  carry a quote, with `belowFloor: true`; the renderer replaces the band with a
+ *  starter-engagement message. Nulling it there would make "below floor"
+ *  indistinguishable from "rate limited" at the client, which are different
+ *  things to say to a visitor. */
 export const GenerateResponseSchema = z
   .object({
     briefId: z.string(),
