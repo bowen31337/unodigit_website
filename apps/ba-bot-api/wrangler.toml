@@ -6,14 +6,12 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "ba_bot"
-# placeholder — replace with the id printed by `wrangler d1 create ba_bot` (see SETUP.md)
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "ce21fa57-71ce-4040-b866-b0662c70417b"
 migrations_dir = "migrations"
 
 [[kv_namespaces]]
 binding = "SESSIONS"
-# placeholder — replace with the id printed by `wrangler kv namespace create SESSIONS` (see SETUP.md)
-id = "00000000-0000-0000-0000-000000000000"
+id = "ff8819dac21943bdb02bf0c3efe79509"
 
 [vars]
 # Provider config. Not confidential, so kept here rather than as secrets:
@@ -33,4 +31,8 @@ TASKS_PER_WEEK = "25"
 PROGRAM_MODE_THRESHOLD = "300"
 QUOTE_VALID_DAYS = "30"
 MAX_TOTAL_TURNS = "40"
-ALLOWED_ORIGIN = "https://unodigit.com"
+# Comma-separated allowlist, split in src/index.ts. The site is unodigit.com.AU —
+# the old value (`https://unodigit.com`) was a different domain entirely and would
+# have failed every browser call with an opaque CORS error. The apex is listed for
+# when its DNS starts resolving; only `www` does today. localhost covers `pnpm dev`.
+ALLOWED_ORIGIN = "https://www.unodigit.com.au,https://unodigit.com.au,http://localhost:3000"

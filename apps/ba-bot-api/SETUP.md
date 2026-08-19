@@ -1,21 +1,41 @@
-# One-time setup before first deploy
+# Setup
 
-`wrangler.toml` currently contains placeholder ids (`00000000-0000-0000-0000-000000000000`)
-for the D1 database and KV namespace, because creating these resources requires an
-authenticated Cloudflare session that isn't available in this environment. Local tests
-don't need real ids — `@cloudflare/vitest-pool-workers` provisions its own local D1/KV
-through miniflare regardless of what's in `wrangler.toml`.
+**Done — the Worker is live at `https://unodigit-ba-bot.unodigit.workers.dev`.**
+D1 (`ba_bot`, region OC) and KV (`SESSIONS`) exist, their real ids are committed in
+`wrangler.toml`, `0001_initial.sql` is applied to the remote database, and all four
+secrets are pushed. Nothing below needs re-running unless you are rebuilding the
+environment from scratch.
 
-Before the first real (non-test) deploy, a human with Cloudflare access must run:
+Local tests never needed any of it — `@cloudflare/vitest-pool-workers` provisions its
+own D1/KV through miniflare regardless of what `wrangler.toml` says.
+
+To recreate the resources in a fresh account:
 
 ```bash
 pnpm wrangler d1 create ba_bot
 pnpm wrangler kv namespace create SESSIONS
+pnpm wrangler d1 migrations apply ba_bot --remote
 ```
 
-Then copy the printed `database_id` (from the `d1 create` output) and `id` (from the
-`kv namespace create` output) into `wrangler.toml`, replacing the two
-`00000000-0000-0000-0000-000000000000` placeholders.
+then copy the printed `database_id` and `id` into `wrangler.toml`.
+
+## Hostname
+
+The spec's `api.unodigit.com` is **not reachable** and no DNS record can fix it.
+Workers Custom Domains require an active Cloudflare zone, and `unodigit.com.au` is not
+one — its DNS is at OnlyDomains. A CNAME pointing at `*.workers.dev` does not route to
+a Worker either, because dispatch matches the Host header against a configured route.
+Using a custom hostname means moving the zone's nameservers to Cloudflare first; until
+then the widget talks to the `workers.dev` origin, which is set in
+`apps/web/.env.production`.
+
+## CORS
+
+`ALLOWED_ORIGIN` is a **comma-separated** allowlist (split in `src/index.ts`), currently
+www + apex + `http://localhost:3000`. It has to be a list because the widget floats on
+every page and is loaded from www in production and localhost in development. Note the
+site is `unodigit.com.**au**` — an origin mismatch here fails only in the browser, so
+the Worker's own logs still show clean 200s while every call is blocked.
 
 ## Vars vs secrets
 

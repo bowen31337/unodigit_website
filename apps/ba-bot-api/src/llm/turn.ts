@@ -48,7 +48,15 @@ export async function runTurn(
   for (let attempt = 0; attempt < 2; attempt++) {
     let res
     try {
-      res = await client.chat({ model: args.model, messages, jsonMode: true, maxTokens: 900 })
+      // The ceiling has to cover REASONING tokens, not just the visible JSON.
+      // deepseek-v4-flash is a reasoning model: a measured turn spent 487
+      // completion tokens of which 356 were reasoning and only ~131 were the
+      // reply. At 900 a normal interview turn exhausts the budget mid-thought,
+      // comes back `finish_reason: 'length'`, and is discarded as 'truncated'
+      // below — the visitor sees the fallback apology on nearly every turn.
+      // This is a ceiling, not a target, so raising it costs nothing on turns
+      // that finish early.
+      res = await client.chat({ model: args.model, messages, jsonMode: true, maxTokens: 4000 })
     } catch {
       return { ok: false, reason: 'provider' }
     }

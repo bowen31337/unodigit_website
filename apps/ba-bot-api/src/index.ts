@@ -13,8 +13,15 @@ const app = new Hono<{ Bindings: Env }>()
  * deploy must refuse traffic, not serve it with the guardrails off. */
 const REQUIRED_SECRETS = ['LLM_API_KEY', 'IP_HASH_SALT', 'TURNSTILE_SECRET'] as const
 
+// ALLOWED_ORIGIN is a comma-separated allowlist: the site is reachable on more
+// than one origin (www, apex, localhost during `pnpm dev`), and a single string
+// would silently lock out all but one of them. Entries are trimmed so the var
+// stays readable in wrangler.toml.
 app.use('/api/*', (c, next) =>
-  cors({ origin: c.env.ALLOWED_ORIGIN, allowMethods: ['GET', 'POST', 'OPTIONS'] })(c, next),
+  cors({
+    origin: c.env.ALLOWED_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean),
+    allowMethods: ['GET', 'POST', 'OPTIONS'],
+  })(c, next),
 )
 
 app.use('/api/*', async (c, next) => {
