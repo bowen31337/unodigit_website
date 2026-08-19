@@ -174,15 +174,16 @@ nanoid, postcss, picomatch, minimatch, brace-expansion, flatted) to close securi
 advisories. Adding or upgrading dependencies can silently reintroduce a flagged version —
 re-check the overrides rather than deleting entries that look redundant.
 
-**The BA bot is deployed but incomplete.** Two gaps matter:
+**Both of this section's former BA-bot gaps are now closed** — verified 2026-08-19,
+so don't re-fix them:
 
-1. **Rate limiting is not enforced.** `guards/ratelimit.ts` is written and unit-tested,
-   but nothing in `src/` imports it — the live endpoint has no per-IP throttle, and every
-   turn spends DeepSeek tokens. Wire it before promoting the widget.
-2. **`estimator/`, `pricing/`, and `mail/` do not exist.** The `GENERATE` state's prompt
-   says *"this topic is handled by another system"* — that system is unbuilt, so an
-   interview that completes produces no quote. The widget covers this by closing with a
-   "we'll follow up by email" message.
+1. **Rate limiting is enforced.** `api/chat.ts` and `api/generate.ts` both import
+   `guards/ratelimit`; chat checks `turnsToday` against `MAX_TURNS_PER_IP_PER_DAY`
+   and answers `429 rate_limited` before spending any DeepSeek tokens.
+2. **`estimator/`, `pricing/` and `mail/` all exist.** The `GENERATE` state's prompt
+   still says *"this topic is handled by another system"* — that is correct by design.
+   The state is deliberately not an LLM turn; `estimator/estimate.ts`,
+   `pricing/quote.ts` and `mail/resend.ts` are that other system.
 
 **LLM token ceilings must cover reasoning tokens.** `deepseek-v4-flash` is a reasoning
 model: a measured turn used 487 completion tokens of which 356 were *reasoning* and only
