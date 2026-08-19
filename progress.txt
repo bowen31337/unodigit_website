@@ -947,3 +947,39 @@ src/estimator/` returns the same 4 previously-adjudicated lines as US-003..US-00
 (prompts.ts do-not-ask line; calibration.ts's "email + SMS reminders" prose; two
 prompt.ts JSON-schema "name": string fields). This wave touched none of those
 directories.
+
+### 2026-08-19 — Pricing configuration made coherent (user decision)
+
+Final whole-branch review found the price band was UNREACHABLE in production.
+Single mode tops out at PROGRAM_MODE_THRESHOLD (300 tasks), so the largest
+reachable single-mode midpoint was 300 x maxWeight(1.5) x RATE(10) = A$4,500 —
+under the A$6,000 floor. belowFloor was therefore true for EVERY single-mode
+quote, and every ordinary visitor got "this looks smaller than our usual
+engagements" instead of a price. The band is the product; it never rendered.
+
+Not a code defect. Each knob was individually reasonable and no test compared
+them, so all 165 tests passed. test/api/generate.test.ts had even overridden the
+rate to 77 to escape it locally, which hid the problem rather than surfacing it.
+
+User decision: RATE_PER_TASK_AUD 10 -> 25, MINIMUM_ENGAGEMENT_AUD unchanged at
+6000. A typical 300-task project now prices ~A$7,875 (band A$5,119-10,631 at
+medium confidence) and clears the floor; a 150-task project is ~A$3,938 and
+still routes to the starter-engagement conversation, which is what the floor is
+for.
+
+Pinned so it cannot regress silently: three tests in test/pricing/quote.test.ts
+read the REAL values (vitest.config.ts points the pool at ./wrangler.toml via
+configPath, so they pin the shipped config, not a fixture):
+  - threshold x maxWeight x rate MUST exceed the floor
+  - a 40-task project at minimum weight MUST still fall below it (a floor
+    nothing can fall under is not a floor)
+  - a typical 300-task shape priced through priceQuote MUST come back
+    belowFloor:false, so a change to how the midpoint is computed cannot slip
+    past the arithmetic checks
+Mutation-verified: reverting the rate to 10 fails two of them with
+"expected 4500 to be greater than 6000".
+
+STILL UNCALIBRATED, unchanged by this: TASKS_PER_WEEK = 25 (a delivery
+commitment, it sets the "roughly N weeks" line the client reads) and
+src/estimator/calibration.ts (plausible placeholders, NOT real claw-forge plan
+output). The estimate is only ever as good as that constant.

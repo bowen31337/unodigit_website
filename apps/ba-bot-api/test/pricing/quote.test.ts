@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { env } from 'cloudflare:workers'
 import { CATEGORY_WEIGHTS } from '../../src/estimator/categories'
 import { weightedTasks, priceQuote, type PricingConfig } from '../../src/pricing/quote'
 import type { EstimateShape } from '@unodigit/ba-bot-contract'
@@ -97,5 +98,67 @@ describe('priceQuote', () => {
     expect(q.totalTasks).toBe(100)
     expect(q.confidence).toBe('medium')
     expect(q.rateAud).toBe(10)
+  })
+})
+
+/**
+ * Configuration coherence, not arithmetic.
+ *
+ * RATE_PER_TASK_AUD, MINIMUM_ENGAGEMENT_AUD and PROGRAM_MODE_THRESHOLD are
+ * three independent knobs whose product decides whether the price band — the
+ * primary output of this whole system — can ever render. Single mode tops out
+ * at the program threshold, so the largest reachable single-mode midpoint is
+ * threshold x maxWeight x rate. If that ceiling sits under the floor, belowFloor
+ * is true for EVERY single-mode quote and every ordinary visitor is told their
+ * project "looks smaller than our usual engagements" instead of being given a
+ * number.
+ *
+ * That is exactly what shipped: rate 10 x 300 x 1.5 = A$4,500 against a A$6,000
+ * floor. Every unit test passed, because each knob is individually reasonable
+ * and no test compared them. It was caught by a whole-branch review, not by the
+ * suite.
+ *
+ * These read the REAL values: vitest.config.ts points the pool at
+ * ./wrangler.toml via configPath, so editing wrangler.toml is what this pins.
+ */
+describe('pricing configuration is internally coherent', () => {
+  const rate = Number(env.RATE_PER_TASK_AUD)
+  const minimum = Number(env.MINIMUM_ENGAGEMENT_AUD)
+  const threshold = Number(env.PROGRAM_MODE_THRESHOLD)
+  const maxWeight = Math.max(...Object.values(CATEGORY_WEIGHTS))
+
+  it('leaves the band reachable in single mode', () => {
+    const ceiling = threshold * maxWeight * rate
+    expect(ceiling).toBeGreaterThan(minimum)
+  })
+
+  it('still lets genuinely small projects fall below the floor', () => {
+    // A floor that nothing can fall under is not a floor. A 40-task project at
+    // the LOWEST weight is small work by any reading and must route to the
+    // starter-engagement conversation.
+    const minWeight = Math.min(...Object.values(CATEGORY_WEIGHTS))
+    expect(40 * minWeight * rate).toBeLessThan(minimum)
+  })
+
+  it('prices a typical 300-task project above the floor end to end', () => {
+    // Guards the invariant through priceQuote itself, not just the arithmetic —
+    // a change to how the midpoint is computed would slip past the two checks
+    // above.
+    const shape: EstimateShape = {
+      mode: 'single',
+      categories: [
+        { name: 'Core functionality', bullets: 180, sample: 'User can do a thing (returns 200)' },
+        { name: 'Integrations', bullets: 60, sample: 'System syncs with a third-party API' },
+        { name: 'UI/UX', bullets: 60, sample: 'User sees a responsive layout' },
+      ],
+      total_tasks: 300,
+      confidence: 'medium',
+      drivers: [],
+    }
+    const q = priceQuote(shape, {
+      rateAud: rate, minimumAud: minimum, tasksPerWeek: Number(env.TASKS_PER_WEEK),
+    })
+    expect(q.belowFloor).toBe(false)
+    expect(q.lowAud).toBeGreaterThan(0)
   })
 })

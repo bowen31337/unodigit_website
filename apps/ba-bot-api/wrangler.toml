@@ -25,8 +25,22 @@ LLM_BASE_URL = "https://api.deepseek.com"
 LLM_MODEL = "deepseek-v4-flash"
 LLM_MODEL_HEAVY = "deepseek-v4-pro"
 
-RATE_PER_TASK_AUD = "10"
+# RATE and MINIMUM are coupled through PROGRAM_MODE_THRESHOLD and must be
+# changed together. Single mode tops out at the threshold (300 tasks), so the
+# largest reachable single-mode midpoint is 300 x maxWeight(1.5) x RATE. At the
+# original RATE=10 that ceiling was A$4,500 — under the A$6,000 floor — so
+# belowFloor was true for EVERY single-mode quote and the price band, which is
+# the product, could never render. At 25 a typical 300-task project prices
+# around A$7,875 and clears the floor, while genuinely small work still falls
+# under it and routes to the starter-engagement conversation, which is what the
+# floor is for.
+#
+# Before changing either: compute 300 x 1.5 x RATE and confirm it exceeds
+# MINIMUM_ENGAGEMENT_AUD, or the band silently disappears again.
+RATE_PER_TASK_AUD = "25"
 MINIMUM_ENGAGEMENT_AUD = "6000"
+# UNCALIBRATED — this is a delivery commitment, not an estimate. It sets the
+# "roughly N weeks" line the client reads.
 TASKS_PER_WEEK = "25"
 PROGRAM_MODE_THRESHOLD = "300"
 QUOTE_VALID_DAYS = "30"
