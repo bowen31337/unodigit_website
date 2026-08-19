@@ -17,9 +17,9 @@ const SHEET_SPRING = { type: 'spring', bounce: 0.2, visualDuration: 0.3 } as con
  * so it persists across client-side navigation — a visitor can browse from
  * /services to /work mid-interview without losing the conversation.
  *
- * Renders nothing when NEXT_PUBLIC_BA_BOT_URL is absent. The site is a static
- * export, so that variable is baked at build time: a build without it should
- * ship no launcher at all rather than one that opens onto a dead endpoint.
+ * Every call goes to `/api/*` on this origin, proxied to the bot Worker by
+ * `public/_worker.js` at the edge — the browser never learns the Worker's
+ * hostname and there is no cross-origin request to configure.
  */
 export default function BaBot() {
   const [open, setOpen] = useState(false);
@@ -34,6 +34,8 @@ export default function BaBot() {
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   /** Bumping this re-renders the challenge. See the reset effect below. */
   const [challengeNonce, setChallengeNonce] = useState(0);
+  /** A message typed before the challenge finished, waiting on its token. */
+  const [queued, setQueued] = useState<string | null>(null);
   const reduceMotion = useReducedMotion();
   const bot = useBaBot();
 
@@ -113,6 +115,27 @@ export default function BaBot() {
     }
   }, [bot.errorCode]);
 
+  // Release a message that was typed before the challenge resolved. Cleared
+  // before sending so a re-render mid-flight cannot send it twice.
+  useEffect(() => {
+    if (!queued || !turnstileToken) return;
+    setQueued(null);
+    void bot.send(queued, turnstileToken);
+  }, [queued, turnstileToken, bot]);
+
+  // A challenge that never resolves — script blocked, Cloudflare unreachable,
+  // an extension eating the iframe — must not leave the message queued behind
+  // animated dots forever. Send it anyway: the endpoint answers 403 and the
+  // visitor gets a real explanation instead of a spinner that never stops.
+  useEffect(() => {
+    if (!queued) return;
+    const t = setTimeout(() => {
+      setQueued(null);
+      void bot.send(queued, null);
+    }, 15000);
+    return () => clearTimeout(t);
+  }, [queued, bot]);
+
   // Pin to the newest turn. `behavior: smooth` is skipped under reduced motion.
   // Re-runs on `expanded` too: resizing the panel changes how much of the
   // transcript fits, which would otherwise leave the last turn off-screen.
@@ -120,7 +143,7 @@ export default function BaBot() {
     const el = scrollRef.current;
     if (!el) return;
     el.scrollTo({ top: el.scrollHeight, behavior: reduceMotion ? 'auto' : 'smooth' });
-  }, [bot.messages, bot.pending, onContact, expanded, reduceMotion]);
+  }, [bot.messages, bot.pending, queued, onContact, expanded, reduceMotion]);
 
   // The composer grows with the message instead of scrolling a one-line box.
   // `textarea.field-chat` sets min-height 44px and resize:none, so without this
@@ -158,6 +181,18 @@ export default function BaBot() {
     const text = draft.trim();
     if (!text) return;
     setDraft('');
+
+    // The challenge takes ~5s to resolve — measured on the live site, where a
+    // real token is 773 characters and arrives between the 4s and 6s marks.
+    // Anyone who opens the panel and types immediately would otherwise send
+    // before it lands and be told to try again, on the single interaction the
+    // whole widget exists for. Hold the message and let the effect below send
+    // it the moment the token arrives; the bubble is rendered meanwhile, so
+    // nothing appears to vanish.
+    if (needsChallenge && !turnstileToken) {
+      setQueued(text);
+      return;
+    }
     void bot.send(text, turnstileToken);
   }
 
@@ -212,7 +247,12 @@ export default function BaBot() {
                 {bot.messages.length > 0 && (
                   <button
                     type="button"
-                    onClick={bot.reset}
+                    onClick={() => {
+                      // Clear the queued message too, or "Start over" leaves a
+                      // bubble from the old conversation waiting on a token.
+                      setQueued(null);
+                      bot.reset();
+                    }}
                     aria-label="Start over"
                     className="btn btn-plain min-h-[36px] px-s3"
                   >
@@ -261,7 +301,13 @@ export default function BaBot() {
                   </Bubble>
                 ))}
 
-                {bot.pending && (
+                {/* Waiting on the browser check. The bubble goes up
+                    immediately so the composer clearing never looks like a
+                    lost message; the effect above sends it once the token
+                    lands, after which bot.messages carries it instead. */}
+                {queued && <Bubble role="user">{queued}</Bubble>}
+
+                {(bot.pending || queued) && (
                   <Bubble role="assistant">
                     <span className="inline-flex gap-1" aria-label="Thinking">
                       {[0, 1, 2].map((d) => (
@@ -352,7 +398,7 @@ export default function BaBot() {
                       <button
                         type="button"
                         onClick={submit}
-                        disabled={!draft.trim() || bot.pending}
+                        disabled={!draft.trim() || bot.pending || Boolean(queued)}
                         className="btn btn-filled min-h-[44px] shrink-0 px-s5"
                       >
                         Send
