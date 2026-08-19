@@ -31,8 +31,21 @@ You must reply with a single json object and nothing else. The object has exactl
 Do not add any other key. Do not wrap the json in markdown fences.`
 
 export const ADDENDA: Record<StateId, string> = {
+  // The old wording — "introduce yourself and ask what they are looking to
+  // build" — made the first exchange a dead loop. The widget already greets
+  // client-side with OPENING_LINE ("tell me what you're looking to build"),
+  // and that line is deliberately never sent to the model, so the visitor's
+  // first message IS the answer to it while the model cannot see the question.
+  // It therefore re-asked what it had just been told: 4 of 4 sampled replies
+  // came back "Hi, I'm Mary from Uno Digit. What are you looking to build?"
+  // after the visitor had described their project. Naming the situation fixes
+  // it — 4 of 4 with the wording below open by repeating the project back.
   GREETING: `Current topic: greeting.
-Introduce yourself in one sentence and ask what they are looking to build.
+The visitor has ALREADY been greeted by the interface, and their message is
+their answer to "tell me what you're looking to build" — never ask that again.
+Open by naming back what they just told you, introduce yourself in the same
+breath, and ask one follow-up that moves toward what the product is, who it is
+for, or what problem it solves.
 Slot fields: none. Set ready_to_advance to true after your first reply.`,
 
   PROJECT_IDENTITY: `Current topic: project identity.

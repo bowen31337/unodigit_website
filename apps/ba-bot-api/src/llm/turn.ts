@@ -32,9 +32,29 @@ function parse(content: string): TurnOutput | null {
   }
 }
 
+/**
+ * Attempts per turn.
+ *
+ * Blank completions were measured at 4 of 9 (~44%). Independent retries take
+ * that to ~19% at two attempts and ~8.5% at three. A fourth would buy ~5
+ * points more and cost a fourth round trip on the turns that are already the
+ * slowest, which is the wrong trade for a chat UI — the blank responses
+ * themselves come back in ~1–3s, so the common retry is cheap, but a genuine
+ * slow turn compounds.
+ */
+const MAX_ATTEMPTS = 3
+
 export async function runTurn(
   client: LlmClient,
-  args: { model: string; state: StateId; history: ChatMessage[]; userMessage: string },
+  args: {
+    model: string
+    state: StateId
+    history: ChatMessage[]
+    userMessage: string
+    /** Whether to let the model reason before answering. See REASONING_BY_STATE
+     *  in graph/states — elicitation turns do not need it, and it costs 10–20s. */
+    reasoning?: boolean
+  },
 ): Promise<TurnResult> {
   // Frozen prefix first, volatile content last — this ordering is what makes
   // the provider's prefix cache hit.
@@ -45,26 +65,53 @@ export async function runTurn(
     { role: 'user', content: args.userMessage },
   ]
 
-  for (let attempt = 0; attempt < 2; attempt++) {
+  let lastReason: Exclude<TurnResult, { ok: true }>['reason'] = 'parse'
+  let repaired = false
+
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     let res
     try {
-      // The ceiling has to cover REASONING tokens, not just the visible JSON.
-      // deepseek-v4-flash is a reasoning model: a measured turn spent 487
-      // completion tokens of which 356 were reasoning and only ~131 were the
-      // reply. At 900 a normal interview turn exhausts the budget mid-thought,
-      // comes back `finish_reason: 'length'`, and is discarded as 'truncated'
-      // below — the visitor sees the fallback apology on nearly every turn.
-      // This is a ceiling, not a target, so raising it costs nothing on turns
-      // that finish early.
-      res = await client.chat({ model: args.model, messages, jsonMode: true, maxTokens: 4000 })
+      res = await client.chat({
+        model: args.model,
+        messages,
+        jsonMode: true,
+        // A ceiling, not a target: it must cover REASONING tokens, which are
+        // the bulk of a completion here. Nine measured turns averaged 1233
+        // completion tokens of which ~95% were reasoning, and GREETING alone
+        // ranged 1306–2438. Raising it costs nothing on turns that finish
+        // early, and 8000 keeps the long tail clear of the cliff.
+        maxTokens: 8000,
+        reasoning: args.reasoning ?? true,
+      })
     } catch {
-      return { ok: false, reason: 'provider' }
+      // A transport failure is worth one more go — the provider is remote and
+      // this is a single fetch — but not a repair prompt.
+      lastReason = 'provider'
+      continue
     }
 
-    // Documented DeepSeek behaviours — neither is worth a repair attempt,
-    // because a repair prompt cannot fix an empty or truncated generation.
-    if (res.finishReason === 'length') return { ok: false, reason: 'truncated' }
-    if (res.content.trim() === '') return { ok: false, reason: 'empty' }
+    if (res.finishReason === 'length') {
+      // Reasoning length varies enormously run to run for identical input, so
+      // the same request that overran can fit on the next attempt. Do NOT
+      // append a repair prompt: the output was cut off, not malformed, and
+      // adding instructions only makes the next completion longer.
+      lastReason = 'truncated'
+      continue
+    }
+
+    if (res.content.trim() === '') {
+      // THE dominant failure, and it used to end the turn immediately.
+      // deepseek-v4-flash intermittently returns whitespace-only content with
+      // `finish_reason: "stop"` — measured at 4 of 9 turns, with content like
+      // seven literal spaces. It is not truncation (there were ~7800 tokens of
+      // headroom left) and not something more budget fixes: 32000 produced the
+      // same 4-of-9 rate. It is transient, and the same request succeeds on a
+      // later attempt, which is exactly what makes retrying the right answer
+      // and returning here the bug. Retry with the messages UNCHANGED — there
+      // is nothing to repair.
+      lastReason = 'empty'
+      continue
+    }
 
     const parsed = parse(res.content)
     if (parsed) {
@@ -76,11 +123,16 @@ export async function runTurn(
       }
     }
 
-    if (attempt === 0) {
+    // Malformed but non-empty: this is the one case a repair prompt can fix,
+    // so show the model its own output and ask again. Appended at most once —
+    // a second copy just crowds the context that produced the mistake.
+    lastReason = 'parse'
+    if (!repaired) {
+      repaired = true
       messages.push({ role: 'assistant', content: res.content })
       messages.push({ role: 'user', content: REPAIR_INSTRUCTION })
     }
   }
 
-  return { ok: false, reason: 'parse' }
+  return { ok: false, reason: lastReason }
 }

@@ -120,6 +120,53 @@ describe('POST /api/chat', () => {
     expect(json.state).toBe('PROJECT_IDENTITY')
   })
 
+  it('keeps the valid slots when one value is malformed', async () => {
+    // The graph-stalling bug: validateSlots parsed the whole object at once,
+    // so `audience` arriving as an object (the model does this) discarded
+    // project_name and problem alongside it. PROJECT_IDENTITY's exitGate needs
+    // all three, so it could never open — the state ran to maxTurns and
+    // force-advanced with nothing learned. Production recorded exactly this as
+    // slots_rejected {"keys":["project_name","audience","problem"]}.
+    mockLlm({ reply: 'one', slots: {}, ready_to_advance: true, off_topic: false })
+    const first = await post({ message: 'hello', turnstileToken: 'tok' })
+    const { conversationId } = await first.json<{ conversationId: string }>()
+
+    mockLlm({
+      reply: 'noted',
+      slots: { project_name: 'Acme', audience: { bad: 'shape' }, problem: 'manual counting' },
+      ready_to_advance: false,
+      off_topic: false,
+    })
+    await post({ conversationId, message: 'building Acme' })
+
+    const session = await env.SESSIONS.get(sessionKey(conversationId), 'json') as
+      { slots: Record<string, unknown> }
+    expect(session.slots.project_name).toBe('Acme')
+    expect(session.slots.problem).toBe('manual counting')
+    // The malformed one is still dropped — salvaging siblings must not mean
+    // accepting a bad value.
+    expect(session.slots.audience).toBeUndefined()
+  })
+
+  it('still drops a key no state declares, so lead_id stays unforgeable', async () => {
+    mockLlm({ reply: 'one', slots: {}, ready_to_advance: true, off_topic: false })
+    const first = await post({ message: 'hello', turnstileToken: 'tok' })
+    const { conversationId } = await first.json<{ conversationId: string }>()
+
+    mockLlm({
+      reply: 'noted',
+      slots: { project_name: 'Acme', lead_id: 'lead_forged' },
+      ready_to_advance: false,
+      off_topic: false,
+    })
+    await post({ conversationId, message: 'building Acme' })
+
+    const session = await env.SESSIONS.get(sessionKey(conversationId), 'json') as
+      { slots: Record<string, unknown> }
+    expect(session.slots.project_name).toBe('Acme')
+    expect(session.slots.lead_id).toBeUndefined()
+  })
+
   it('does not advance on an off-topic message', async () => {
     mockLlm({ reply: 'Let us stay on your project.', slots: {}, ready_to_advance: true, off_topic: true })
     const res = await post({ message: 'write me a poem', turnstileToken: 'tok' })

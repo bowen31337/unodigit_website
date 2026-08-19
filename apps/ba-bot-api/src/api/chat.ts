@@ -1,11 +1,12 @@
 import type { Hono } from 'hono'
+import { z } from 'zod'
 import { ChatRequestSchema } from '@unodigit/ba-bot-contract'
 import type { Env } from '../env'
 import { createOpenAiCompatClient } from '../llm/openai-compat'
 import type { ChatMessage, LlmClient } from '../llm/types'
 import { runTurn } from '../llm/turn'
 import { step } from '../graph/transitions'
-import { STATES, type Slots, type StateId } from '../graph/states'
+import { STATES, shouldReason, type Slots, type StateId } from '../graph/states'
 import {
   appendMessageAtNextSeq, createConversation, getConversation, listMessages,
   recordEvent,
@@ -23,17 +24,52 @@ const FALLBACK_REPLY =
 
 /** Slots come out of an LLM reading untrusted visitor text, so they are input,
  * not output. Each state declares a `.strict()` schema naming exactly the slots
- * that state may write; anything else — a hallucinated key, or one injected by
- * a visitor telling the model what to emit — is dropped wholesale rather than
- * merged into session state.
+ * that state may write; any key not on that list — hallucinated, or injected by
+ * a visitor telling the model what to emit — is dropped rather than merged into
+ * session state.
  *
  * This is what keeps `lead_id` unforgeable: no state's schema declares it, so
  * only `POST /api/contact` can ever put it in the session, and only a real lead
- * row can open the `CONTACT` exit gate. */
+ * row can open the `CONTACT` exit gate.
+ *
+ * Rejection is per KEY, not per object — see the fallback below for why the
+ * all-or-nothing version stalled the graph. */
 function validateSlots(state: StateId, raw: Slots): { slots: Slots; rejected: string[] } {
-  const parsed = STATES[state].slotSchema.safeParse(raw)
+  const schema = STATES[state].slotSchema
+  const parsed = schema.safeParse(raw)
   if (parsed.success) return { slots: parsed.data as Slots, rejected: [] }
-  return { slots: {}, rejected: Object.keys(raw) }
+
+  // The whole-object parse failed. It used to end here, returning NO slots and
+  // naming every key as rejected — which is how a single bad *value* threw
+  // away its valid siblings. Observed in production as
+  // `slots_rejected {"keys":["project_name","audience","problem"]}`: all three
+  // of PROJECT_IDENTITY's own declared slots discarded together, so its
+  // exitGate (which needs all three) could never open and the state ran to
+  // maxTurns and force-advanced with an empty brief.
+  //
+  // Fall back to per-key validation. The security property is unchanged — it
+  // comes from the shape being a closed list, and a key absent from it is
+  // still dropped, so `lead_id` remains unforgeable. What changes is that one
+  // malformed value no longer costs the turn everything else it learned.
+  const shape = schema instanceof z.ZodObject ? (schema.shape as Record<string, z.ZodTypeAny>) : null
+  if (!shape) return { slots: {}, rejected: Object.keys(raw) }
+
+  const slots: Slots = {}
+  const rejected: string[] = []
+  for (const [key, value] of Object.entries(raw)) {
+    const field = shape[key]
+    if (!field) {
+      rejected.push(key)
+      continue
+    }
+    const one = field.safeParse(value)
+    // `undefined` passes an `.optional()` field but carries nothing; writing it
+    // would put an explicit undefined into session state where "absent" is what
+    // the exit gates test for.
+    if (one.success && one.data !== undefined) slots[key] = one.data
+    else rejected.push(key)
+  }
+  return { slots, rejected }
 }
 
 export function registerChatRoutes(
@@ -141,6 +177,10 @@ export function registerChatRoutes(
       state: session.state,
       history,
       userMessage: message,
+      // Off only on the opening turn, where there is no history for it to
+      // reason over. See shouldReason — with history, disabling it makes the
+      // model return whitespace deterministically.
+      reasoning: shouldReason(history.length),
     })
 
     if (!turn.ok) {

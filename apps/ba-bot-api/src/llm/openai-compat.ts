@@ -25,6 +25,10 @@ export function createOpenAiCompatClient(opts: { baseUrl: string; apiKey: string
           messages: req.messages,
           max_tokens: req.maxTokens ?? 1024,
           ...(req.jsonMode ? { response_format: { type: 'json_object' } } : {}),
+          // Only sent when explicitly switched off. Omitting the field leaves
+          // the provider's default (reasoning on) rather than pinning it, so a
+          // caller that says nothing keeps the behaviour it has today.
+          ...(req.reasoning === false ? { thinking: { type: 'disabled' } } : {}),
         }),
       })
 
