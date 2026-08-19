@@ -1707,3 +1707,53 @@ KNOWN STALE, deliberately not fixed here (not this story's files):
   - The /q/ page and the widget were NOT touched. The page is a separate story;
     until it ships, the returned link still 404s on Pages even though the API
     behind it works.
+
+### 2026-08-19 — US-011: quote is downloadable; email path fully retired
+
+User decommissioned P2 (Resend SPF/DKIM) and replaced email delivery with a
+download. Two commits: fa76cbf removed the mail path and made POST
+/api/generate return the signed link; this one adds the client side.
+
+/q/ gains a "Download PDF" button that calls window.print(). No PDF library, no
+server round trip — the browser's own dialogue produces the file. The button is
+gated on status === 'ready', so it never appears on the loading or failed
+states; offering to print an error page is worse than offering nothing.
+
+The print stylesheet overrides TOKENS, not components. globals.css is the single
+source of design values, so a @media print block that redefines --bg, --label
+and the shadow tokens reaches every component that already reads them, in
+whichever theme was active, without any component knowing print exists. The
+override targets BOTH :root and [data-theme='dark'] and sits later in the file
+than the dark-mode blocks, so source order (not specificity) is what makes it
+win when dark mode and print are both active — the same pattern the
+prefers-contrast block already relies on.
+
+Verified in the BUILT output, not by reading source (the agent that wrote this
+stalled mid-verification; the controller finished it):
+  apps/web/out/_next/static/chunks/3s6cgp6xpbbg8.css contains
+    @media print{:root,[data-theme=dark]{--bg:#fff;...--label:#000;
+      --shadow-1:none...}
+    .glass,.card{background:var(--bg)!important;backdrop-filter:none!important;
+      box-shadow:none!important}
+    .prose-apple h1,h2,h3{break-after:avoid}
+    .prose-apple tr{break-inside:avoid}
+  4 print:hidden utilities in out/q/index.html (nav, footer, widget, chrome).
+NOT verifiable headlessly: the actual rendered PDF. A print dialogue cannot be
+opened without a browser session — the CSS is proven present and correct, the
+visual result is not proven.
+
+"Download PDF" is deliberately absent from the static HTML: /q/ is
+client-rendered and the button only mounts once the quote fetch resolves.
+
+The widget renders the link only when quoteUrl is non-null ({bot.quoteUrl && …}),
+so a rate-limited or estimator-failed generate shows the headline alone rather
+than a dead href. useBaBot also re-fetches once on hydrate when a persisted
+session predates the quoteUrl field, so a visitor who had a session open across
+the deploy still gets their link.
+
+No dangerouslySetInnerHTML anywhere under app/q or components/BaBot — the
+markdown renderer still builds React elements from parsed strings, which is what
+keeps visitor-supplied project names from executing.
+
+Gates: build --force 23 pages exit 0, out/q/index.html emitted; Worker suite
+181/19 unchanged; ws:typecheck --force 3/3 clean, 0 cached.

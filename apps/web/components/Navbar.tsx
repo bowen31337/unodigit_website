@@ -55,7 +55,7 @@ export default function Navbar() {
     <>
       <header
         className={cn(
-          'fixed inset-x-0 top-0 z-50 transition-[padding] duration-base ease-out',
+          'fixed inset-x-0 top-0 z-50 transition-[padding] duration-base ease-out print:hidden',
           isScrolled ? 'py-s3' : 'py-s5'
         )}
       >
@@ -139,7 +139,7 @@ export default function Navbar() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.25 }}
               onClick={() => setIsMenuOpen(false)}
-              className="fixed inset-0 z-40 lg:hidden"
+              className="fixed inset-0 z-40 lg:hidden print:hidden"
               style={{ background: 'rgba(0,0,0,0.4)' }}
             />
 
@@ -156,7 +156,7 @@ export default function Navbar() {
               animate={reduced ? { opacity: 1 } : { y: 0 }}
               exit={reduced ? { opacity: 0 } : { y: '-100%' }}
               transition={reduced ? { duration: 0.2 } : sheetSpring}
-              className="glass-thick fixed inset-x-0 top-0 z-40 px-s7 pb-s9 pt-24 lg:hidden"
+              className="glass-thick fixed inset-x-0 top-0 z-40 px-s7 pb-s9 pt-24 lg:hidden print:hidden"
               style={{ borderRadius: '0 0 var(--radius-2xl) var(--radius-2xl)' }}
             >
               <nav aria-label="Mobile" className="flex flex-col">

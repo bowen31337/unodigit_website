@@ -1,7 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ChatResponse, ContactRequest, ContactResponse, StateId } from '@unodigit/ba-bot-contract';
+import type {
+  ChatResponse,
+  ContactRequest,
+  ContactResponse,
+  GenerateResponse,
+  StateId,
+} from '@unodigit/ba-bot-contract';
 
 /** Baked in at build time — the site is a static export, so there is no runtime
  * config. When it is absent the widget renders nothing at all rather than
@@ -28,6 +34,16 @@ interface Persisted {
   messages: Turn[];
   state: StateId;
   finished: boolean;
+  /** POST /api/generate's chat-visible line — set once the interview's brief
+   *  (and, usually, its quote) exist. Distinct from `error`: this is never a
+   *  failure state, just the sentence the visitor sees once contact details
+   *  are captured. */
+  headline: string | null;
+  /** The signed, downloadable link to the hosted quote (US-011). Null
+   *  whenever there is no quote to link to — rate-limited, the estimator
+   *  failed, or the link itself could not be built — and the widget must
+   *  never render a link in any of those cases. */
+  quoteUrl: string | null;
 }
 
 const EMPTY: Persisted = {
@@ -35,6 +51,8 @@ const EMPTY: Persisted = {
   messages: [],
   state: 'GREETING',
   finished: false,
+  headline: null,
+  quoteUrl: null,
 };
 
 /** The Worker answers every failure with `{ error: <code> }`. Anything a visitor
@@ -62,29 +80,77 @@ function load(): Persisted {
 }
 
 export function useBaBot() {
-  const [{ conversationId, messages, state, finished }, setData] = useState<Persisted>(EMPTY);
+  const [{ conversationId, messages, state, finished, headline, quoteUrl }, setData] =
+    useState<Persisted>(EMPTY);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
 
+  /**
+   * POST /api/generate. Called once contact details are captured (US-011),
+   * either right after `submitContact` succeeds or, on reload, as a retry for
+   * a session that reached GENERATE but never got an answer (see the hydrate
+   * effect below). The call is idempotent server-side — a second request for
+   * the same conversation returns the same brief/quote rather than minting a
+   * new one — so re-running it here on a retry is always safe.
+   *
+   * A failure here is deliberately silent: `submitContact` has already told
+   * the visitor "thanks", so surfacing this as an error banner would
+   * contradict a message already on screen. The headline/link simply stay
+   * unset — the widget falls back to its static copy.
+   */
+  const generate = useCallback(async (convId: string) => {
+    if (!BOT_API) return;
+    try {
+      const res = await fetch(`${BOT_API}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId: convId }),
+      });
+
+      const body = (await res.json().catch(() => null)) as GenerateResponse | { error: string } | null;
+      if (!res.ok || !body || 'error' in body) return;
+
+      setData((d) => ({ ...d, state: body.state, headline: body.headline, quoteUrl: body.quoteUrl }));
+    } catch {
+      /* network failure — silent, see comment above */
+    }
+  }, []);
+
   // Read storage in an effect, never during render: the server renders the
   // empty state, so touching sessionStorage inline would be a hydration mismatch.
   useEffect(() => {
-    setData(load());
+    const loaded = load();
+    setData(loaded);
     setHydrated(true);
-  }, []);
+
+    // A reload that lands mid-GENERATE — contact succeeded, but the tab
+    // closed or the network dropped before the generate call resolved — must
+    // not strand the visitor without their quote link. It is their only copy
+    // of it, so retry once on hydrate rather than leaving headline/quoteUrl
+    // null forever.
+    if (
+      loaded.finished &&
+      loaded.state === 'GENERATE' &&
+      loaded.conversationId &&
+      !loaded.headline &&
+      !loaded.quoteUrl
+    ) {
+      void generate(loaded.conversationId);
+    }
+  }, [generate]);
 
   useEffect(() => {
     if (!hydrated) return;
     try {
       window.sessionStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ conversationId, messages, state, finished }),
+        JSON.stringify({ conversationId, messages, state, finished, headline, quoteUrl }),
       );
     } catch {
       /* private mode / quota — the conversation still works, it just won't survive a reload */
     }
-  }, [hydrated, conversationId, messages, state, finished]);
+  }, [hydrated, conversationId, messages, state, finished, headline, quoteUrl]);
 
   // A turn takes seconds. If the visitor closes the tab mid-flight we abort
   // rather than calling setState on an unmounted tree.
@@ -133,6 +199,7 @@ export function useBaBot() {
         }
 
         setData((d) => ({
+          ...d,
           conversationId: body.conversationId,
           messages: [...d.messages, { role: 'assistant', content: body.reply }],
           state: body.state,
@@ -174,6 +241,11 @@ export function useBaBot() {
         // The API is the only thing that can move the graph past CONTACT, so
         // the state it returns is authoritative — never advance optimistically.
         setData((d) => ({ ...d, state: body.state, finished: true }));
+        // Fire the generate call now that a lead exists — this is the ONLY
+        // trigger for it on a fresh interview. It runs in the background: the
+        // visitor's "thanks" is already on screen from `finished`, and the
+        // headline/link render themselves in once this resolves.
+        void generate(conversationId);
         return true;
       } catch {
         setError(GENERIC_ERROR);
@@ -182,7 +254,7 @@ export function useBaBot() {
         setPending(false);
       }
     },
-    [conversationId],
+    [conversationId, generate],
   );
 
   return {
@@ -193,6 +265,8 @@ export function useBaBot() {
     error,
     hydrated,
     conversationId,
+    headline,
+    quoteUrl,
     send,
     submitContact,
     reset,

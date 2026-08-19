@@ -12,7 +12,7 @@ const socials = [
 
 export default function Footer() {
   return (
-    <footer style={{ background: 'var(--bg-secondary)' }}>
+    <footer className="print:hidden" style={{ background: 'var(--bg-secondary)' }}>
       <div className="container py-s12">
         <div className="grid grid-cols-1 gap-s10 md:grid-cols-12">
           <div className="md:col-span-5">

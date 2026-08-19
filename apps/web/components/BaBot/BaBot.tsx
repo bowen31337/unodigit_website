@@ -120,7 +120,7 @@ export default function BaBot() {
             type="button"
             onClick={() => setOpen(true)}
             aria-label="Scope your project with our assistant"
-            className="btn btn-filled fixed bottom-s7 right-s7 z-[60] shadow-lg"
+            className="btn btn-filled fixed bottom-s7 right-s7 z-[60] shadow-lg print:hidden"
             initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.8 }}
             animate={reduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1 }}
             exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.8 }}
@@ -141,7 +141,7 @@ export default function BaBot() {
             // of each — is `.babot-panel` in globals.css, because all of it is
             // viewport arithmetic against --babot-vh.
             data-expanded={expanded}
-            className="babot-panel glass-thick"
+            className="babot-panel glass-thick print:hidden"
             initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 24, scale: 0.98 }}
             animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
             exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 24, scale: 0.98 }}
@@ -227,10 +227,23 @@ export default function BaBot() {
                 )}
 
                 {done && (
-                  <p className="type-footnote px-s2" style={{ color: 'var(--label-secondary)' }}>
-                    Thanks — that is everything we need. We will follow up by email with your
-                    scope and estimate.
-                  </p>
+                  <div className="space-y-s3 px-s2">
+                    <p className="type-footnote" style={{ color: 'var(--label-secondary)' }}>
+                      {/* The Worker's headline (US-011) replaces this once POST
+                          /api/generate resolves — it names the real outcome
+                          (a price, a rate-limit, or an estimator hiccup)
+                          rather than this generic placeholder. Email delivery
+                          was decommissioned, so this copy never promises one. */}
+                      {bot.headline ?? 'Thanks — that is everything we need.'}
+                    </p>
+                    {/* Only ever rendered once the Worker hands back a real
+                        signed link — never a broken or empty href. */}
+                    {bot.quoteUrl && (
+                      <a href={bot.quoteUrl} target="_blank" rel="noopener noreferrer" className="btn btn-filled w-full">
+                        View and download your quote
+                      </a>
+                    )}
+                  </div>
                 )}
 
                 {bot.error && (

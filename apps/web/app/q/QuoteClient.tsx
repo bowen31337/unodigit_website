@@ -4,6 +4,8 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { QuoteDetailResponse } from '@unodigit/ba-bot-contract';
 import GradientMesh from '@/components/GradientMesh';
+import Button from '@/components/Button';
+import Logo from '@/components/Logo';
 
 /** Baked in at build time — the site is a static export, so there is no
  * runtime config. Matches the discipline in useBaBot.ts: when the origin is
@@ -312,14 +314,38 @@ export default function QuoteClient() {
 
   return (
     <section className="relative overflow-hidden pb-s12 pt-32 sm:pt-40">
-      <GradientMesh soft={status !== 'ready'} fadeOut={status === 'ready'} />
+      {/* Decorative only — a blurred gradient wash prints as grey mush and has
+          nothing to do with the document itself. */}
+      <GradientMesh
+        soft={status !== 'ready'}
+        fadeOut={status === 'ready'}
+        className="print:hidden"
+      />
       <div className="container relative z-[1]">
         {status === 'loading' && <LoadingState />}
         {status === 'failed' && <FailedState />}
         {status === 'ready' && (
-          <div className="prose-apple mx-auto">
-            <Markdown source={markdown} />
-          </div>
+          <>
+            {/* Print-only letterhead. The site nav (and the logo inside it)
+                is hidden for print, so without this the printed page would
+                carry no mark of who issued it — a quote with no letterhead
+                is not obviously ours once it is on someone's desk. */}
+            <div className="mx-auto mb-s6 hidden max-w-[68ch] print:block">
+              <Logo size={26} />
+            </div>
+
+            {/* window.print() — no PDF library, no server round trip. The
+                print stylesheet below (@media print in globals.css) is what
+                turns the result into a clean document; this control never
+                appears in the print output itself. */}
+            <div className="mx-auto mb-s6 flex max-w-[68ch] justify-end print:hidden">
+              <Button onClick={() => window.print()}>Download PDF</Button>
+            </div>
+
+            <div className="prose-apple mx-auto">
+              <Markdown source={markdown} />
+            </div>
+          </>
         )}
       </div>
     </section>

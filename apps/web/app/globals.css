@@ -926,3 +926,75 @@
   .btn { transition: background-color 0.01ms !important; }
   .btn:active { transform: none; }
 }
+
+/* ============================================================================
+   PRINT (US-011) — the /q/ quote page's "Download" is window.print(); this
+   block is what makes the browser's print dialogue produce a clean document
+   rather than a screenshot of the whole site.
+   --------------------------------------------------------------------------
+   Site chrome (nav, footer, theme toggle, the BA bot widget) hides itself via
+   a `print:hidden` utility at each component — see Navbar.tsx, Footer.tsx and
+   BaBot/BaBot.tsx. What lives here is everything that has to be a TOKEN
+   override rather than a component className, because it has to reach every
+   component that already reads var(--bg) / var(--label) / etc., in whichever
+   theme was active on screen, without those components knowing print exists.
+   ========================================================================== */
+@media print {
+  /* Black-on-white regardless of the active theme. Both selectors carry the
+     same specificity as the dark-mode blocks above (0,1,0) and this rule
+     comes later in the file, so source order — not specificity — is what
+     makes it win when dark mode and print are both active; the same pattern
+     the `prefers-contrast` block above already relies on. */
+  :root,
+  [data-theme='dark'] {
+    --bg:           #ffffff;
+    --bg-secondary: #ffffff;
+    --bg-tertiary:  #ffffff;
+    --bg-grouped:   #ffffff;
+    --c-bg:         255 255 255;
+
+    --label:            rgba(0, 0, 0, 1);
+    --label-secondary:  rgba(0, 0, 0, 0.65);
+    --label-tertiary:   rgba(0, 0, 0, 0.45);
+    --label-quaternary: rgba(0, 0, 0, 0.15);
+    --c-label:          0 0 0;
+
+    --separator:        rgba(0, 0, 0, 0.2);
+    --separator-opaque: #c6c6c8;
+
+    /* Box-shadow blur prints as a grey smear around every card/button edge —
+       drop it rather than let it survive as toner-wasting mush. */
+    --shadow-1: none;
+    --shadow-2: none;
+    --shadow-3: none;
+    --shadow-4: none;
+    --shadow-glass: none;
+  }
+
+  body { background: var(--bg); color: var(--label); }
+
+  /* Materials are a backdrop-blur over whatever sits behind them — on paper
+     there is nothing behind them, so the blur/tint just reads as grey mush.
+     Flatten to a plain surface instead of trying to print one. */
+  .glass, .glass-thin, .glass-thick, .glass-liquid, .glass-tinted, .card {
+    background: var(--bg) !important;
+    -webkit-backdrop-filter: none !important;
+            backdrop-filter: none !important;
+    box-shadow: none !important;
+  }
+  .glass-tinted::before { display: none !important; }
+
+  /* Page-break hygiene: never split a table row across a page boundary, and
+     never leave a heading orphaned at the bottom of a page with its content
+     pushed to the next one. */
+  .prose-apple h1,
+  .prose-apple h2,
+  .prose-apple h3 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+  .prose-apple tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
