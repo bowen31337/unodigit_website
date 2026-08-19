@@ -44,6 +44,7 @@ async function seedQuote(): Promise<string> {
     subsystemsJson: null,
     validUntil: Date.now() + 14 * 86_400_000,
     createdAt: Date.now(),
+    belowFloor: false, // 150.5 * 77 = 11,588.5, above the 6,000 floor
   })
   return quoteId
 }

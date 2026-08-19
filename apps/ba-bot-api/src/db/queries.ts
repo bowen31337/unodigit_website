@@ -175,6 +175,11 @@ export interface QuoteRow {
   subsystems_json: string | null
   valid_until: number
   created_at: number
+  // Appended by migration 0003 — ALTER TABLE puts new columns after every
+  // existing one, so this is physically last in the row too, not adjacent to
+  // its logical siblings above. INTEGER 0/1, matching this schema's boolean
+  // convention (see leads.consent_marketing, messages.off_topic).
+  below_floor: number
 }
 
 export interface BriefInsert {
@@ -201,6 +206,9 @@ export interface QuoteInsert {
   subsystemsJson: string | null
   validUntil: number
   createdAt: number
+  // The pricing verdict at write time. Stored, not re-derived on read — see
+  // migrations/0003_quotes_below_floor.sql.
+  belowFloor: boolean
 }
 
 export async function insertBrief(db: D1Database, row: BriefInsert): Promise<void> {
@@ -213,7 +221,7 @@ export async function insertBrief(db: D1Database, row: BriefInsert): Promise<voi
     .run()
 }
 
-// 15 columns / 15 placeholders / 15 binds. Count all three before changing this:
+// 16 columns / 16 placeholders / 16 binds. Count all three before changing this:
 // every value is string|number, so a transposition type-checks, passes any test
 // that does not assert the swapped fields, and silently corrupts every quote.
 export async function insertQuote(db: D1Database, row: QuoteInsert): Promise<void> {
@@ -222,14 +230,14 @@ export async function insertQuote(db: D1Database, row: QuoteInsert): Promise<voi
       `INSERT INTO quotes (
          id, brief_id, markdown, mode, total_tasks, weighted_tasks, rate_aud,
          low_aud, high_aud, weeks, confidence, categories_json, subsystems_json,
-         valid_until, created_at
-       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         valid_until, created_at, below_floor
+       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     )
     .bind(
       row.id, row.briefId, row.markdown, row.mode, row.totalTasks,
       row.weightedTasks, row.rateAud, row.lowAud, row.highAud, row.weeks,
       row.confidence, row.categoriesJson, row.subsystemsJson, row.validUntil,
-      row.createdAt,
+      row.createdAt, row.belowFloor ? 1 : 0,
     )
     .run()
 }

@@ -120,16 +120,22 @@ async function quoteRowForBrief(db: D1Database, briefId: string): Promise<QuoteR
     .first<QuoteRow>()
 }
 
-/** `belowFloor` is a pricing verdict, not a stored column, so a re-read
- *  re-applies the same rule priceQuote used: midpoint against the configured
- *  minimum. Every other field comes straight off the row.
+/** `belowFloor` is read straight off `quotes.below_floor` (migration 0003),
+ *  never re-derived. It used to be recomputed here as
+ *  `weighted_tasks * rate_aud < minimumAud` against the CURRENT
+ *  MINIMUM_ENGAGEMENT_AUD — but that env var is a documented placeholder that
+ *  has already changed once for its sibling RATE_PER_TASK_AUD (see
+ *  progress.txt, 2026-08-19 pricing-configuration entry), so a re-read of an
+ *  OLD quote could return a verdict that disagrees with the markdown already
+ *  rendered, stored, and emailed to the client. The stored markdown is the
+ *  artifact the client actually read; it is the authority, so the verdict
+ *  that produced it is stored alongside it and simply read back, not
+ *  recomputed against whatever the env var holds today.
  *
  *  Exported so GET /api/quote/:id reads a stored quote through exactly this
- *  mapping. A second copy would be a second place for the re-derivation to
- *  drift — and the drift is already a known latent defect (see progress.txt,
- *  US-007 controller notes: the rule reads the CURRENT
- *  MINIMUM_ENGAGEMENT_AUD, which is still a placeholder). One copy, one fix. */
-export function quoteFromRow(row: QuoteRow, minimumAud: number): Quote {
+ *  mapping. A second copy would be a second place for a future re-derivation
+ *  to creep back in. One copy, one source of truth. */
+export function quoteFromRow(row: QuoteRow): Quote {
   return {
     mode: row.mode === 'program' ? 'program' : 'single',
     totalTasks: row.total_tasks,
@@ -139,7 +145,7 @@ export function quoteFromRow(row: QuoteRow, minimumAud: number): Quote {
     highAud: row.high_aud,
     weeks: row.weeks,
     confidence: row.confidence as Quote['confidence'],
-    belowFloor: row.weighted_tasks * row.rate_aud < minimumAud,
+    belowFloor: row.below_floor === 1,
   }
 }
 
@@ -242,7 +248,7 @@ export function registerGenerateRoutes(
     const existing = await getBriefByConversation(c.env.DB, conversationId)
     if (existing) {
       const row = await quoteRowForBrief(c.env.DB, existing.id)
-      const quote = row ? quoteFromRow(row, minimumAud) : null
+      const quote = row ? quoteFromRow(row) : null
       const headline = quote
         ? headlineFor(quote)
         : (await quotesToday(c.env.DB, ipHash, utcDay(now))) >= 1
@@ -353,6 +359,7 @@ export function registerGenerateRoutes(
       subsystemsJson: shape.mode === 'program' ? JSON.stringify(shape.subsystems) : null,
       validUntil,
       createdAt: now,
+      belowFloor: quote.belowFloor,
     })
 
     await recordQuote(c.env.DB, ipHash, utcDay(now))

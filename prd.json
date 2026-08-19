@@ -229,7 +229,7 @@
       "priority": 9,
       "blockedBy": null,
       "passes": false,
-      "notes": "Decision task, not purely code. RATE_PER_TASK_AUD settled at 25 on 2026-08-19."
+      "notes": "Decision task, not purely code. RATE_PER_TASK_AUD settled at 25 on 2026-08-19. below_floor item DONE 2026-08-19: migrations/0003_quotes_below_floor.sql adds quotes.below_floor (INTEGER NOT NULL DEFAULT 0, backfilled from the current MINIMUM_ENGAGEMENT_AUD with the historical-floor caveat documented in the migration); insertQuote writes it (16/16/16); quoteFromRow now reads row.below_floor instead of re-deriving from the live env var, and its signature dropped the now-dead minimumAud parameter (both call sites in generate.ts and quote.ts updated). Suite 184->187/19, both packages typecheck. TASKS_PER_WEEK and src/estimator/calibration.ts remain outstanding business decisions — story still fails overall."
     }
   ]
 }

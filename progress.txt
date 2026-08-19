@@ -1401,3 +1401,95 @@ The deletion is logged as an `events` row of type 'lead_deleted' with a NULL
 conversation_id and a payload naming the source and reason only — no lead id,
 email, name or conversation id. The fact and the timestamp are what a
 compliance question asks; the identifiers are what the request destroyed.
+
+### 2026-08-19 — US-009 (partial): below_floor column, closing the re-derivation defect
+
+Not a full story — US-009's other two items (TASKS_PER_WEEK calibration,
+src/estimator/calibration.ts) are business decisions and remain outstanding.
+This closes only the mechanical item: the `below_floor` re-derivation defect
+recorded in the US-007 controller notes (this file, above) and restated in the
+pricing-configuration entry.
+
+Added migrations/0003_quotes_below_floor.sql: `ALTER TABLE quotes ADD COLUMN
+below_floor INTEGER NOT NULL DEFAULT 0` (this schema's existing boolean
+convention — see leads.consent_marketing, messages.off_topic in
+0001_initial.sql — no precedent needed inventing). Backfills existing rows
+with `weighted_tasks * rate_aud < 6000` (the CURRENT MINIMUM_ENGAGEMENT_AUD).
+The migration says explicitly, in comments, that this is a best-effort
+backfill: the floor actually in effect when a historical row was WRITTEN
+cannot be recovered (MINIMUM_ENGAGEMENT_AUD is a live env var, never stored),
+so any row written under a different historical floor gets a re-derived
+verdict here, not its original one — production almost certainly has zero
+rows today, so this is a documented limitation, not a live data-quality risk.
+
+insertQuote (src/db/queries.ts) now writes below_floor: 15 -> 16 columns / 16
+placeholders / 16 binds, verified mechanically (parsed the INSERT column list,
+counted `?` in VALUES, counted the .bind() args, compared all three against
+each other and against physical column order — ALTER TABLE appends new
+columns at the end of the table, so below_floor is bind #16, matching).
+
+quoteFromRow (src/api/generate.ts, exported and used by both
+POST /api/generate's idempotent re-read and GET /api/quote/:id) now reads
+`row.below_floor === 1` instead of recomputing
+`weighted_tasks * rate_aud < minimumAud`. The `minimumAud` parameter was
+dropped from its signature entirely — it is not merely unused now, it is
+structurally impossible to accidentally reintroduce a stale-env read once the
+parameter does not exist to pass. Both call sites (generate.ts's idempotent
+branch, quote.ts's GET handler) updated to the one-argument form. Doc comment
+rewritten: it no longer explains a re-derivation rule, it explains why the
+stored value is authoritative — the client already read the emailed markdown,
+so the verdict that produced it must never drift out from under it.
+quoteFromRow remains the ONLY place a QuoteRow is mapped to a Quote (checked:
+render/quote.ts and pricing/quote.ts only consume/produce belowFloor on an
+already-built Quote, neither maps a raw row).
+
+TDD. Wrote test/api/quote-from-row.test.ts first, against the unmodified
+source (no migration, old two-arg quoteFromRow, QuoteInsert/QuoteRow with no
+belowFloor/below_floor field). RED as expected but for a specific, checked
+reason: with the new call site `quoteFromRow(row!)` (one argument) executing
+against the OLD signature `quoteFromRow(row, minimumAud)`, the missing second
+argument is `undefined` at runtime (no type-checking gate in vitest's esbuild
+transform), so `weighted_tasks * rate_aud < undefined` evaluates false for
+every input — 2 of 3 new tests failed with "expected false to be true"; the
+third (the belowFloor:false round-trip) passed vacuously since the buggy
+formula also always returns false. Implemented the migration + queries.ts +
+generate.ts + quote.ts changes; reran — GREEN, all 3 pass, suite 184 -> 187
+tests / 19 files.
+
+Self-review, the deliverable check: reverted ONLY the fixed return line in
+quoteFromRow back to a re-derivation mutant —
+`belowFloor: row.weighted_tasks * row.rate_aud < 6000` (hardcoding this test
+env's live MINIMUM_ENGAGEMENT_AUD, i.e. exactly the pre-fix defect class) —
+leaving the migration, the column, the write path and the 1-arg signature
+untouched. Reran the full suite: EXACTLY ONE test failed, "returns the STORED
+belowFloor verdict even though re-deriving under the CURRENT minimum would
+disagree" — "expected false to be true". The other two new tests and all 184
+pre-existing tests stayed green (the belowFloor:true round-trip test happens
+to use inputs where the mutant's re-derivation coincidentally agrees with the
+stored value, which is why the regression test was deliberately built with
+weighted_tasks * rate_aud = 100,000 — nowhere near 6,000 — to force a genuine
+disagreement rather than relying on coincidence). Restored the correct line;
+reran; GREEN at 187/19 again. The regression test is not vacuous.
+
+Existing insertQuote call sites in test/db/artifacts.test.ts (3) and
+test/api/quote.test.ts (1) updated to pass belowFloor explicitly — arithmetic
+noted in comments where the test doesn't itself assert on the field, real
+where it does (test/db/artifacts.test.ts's first quote test now also asserts
+row!.below_floor === 1).
+
+Verification: suite 184 -> 187 tests / 19 files, zero warnings. Both
+apps/ba-bot-api and packages/ba-bot-contract typecheck clean (tsc --noEmit,
+exit 0). PII grep `grep -rnE "\b(name|email)\b" src/llm/ src/graph/prompts.ts
+src/estimator/` returns the same 4 previously-adjudicated lines as
+US-003..US-009 — this change touched none of those directories.
+
+Migration applies cleanly on top of 0002: exercised implicitly by every test
+in the suite (vitest.config.ts's applyD1Migrations runs 0001 -> 0003 before
+each file), and explicitly by the FK-violation test in artifacts.test.ts,
+which depends on the post-migration schema and still throws
+`FOREIGN KEY constraint failed` as before.
+
+Out of scope, deliberately untouched: TASKS_PER_WEEK and
+src/estimator/calibration.ts — both remain business decisions, not this
+story's concern. US-009 in prd.json stays `passes: false` until both land; a
+note was added recording the below_floor item done.

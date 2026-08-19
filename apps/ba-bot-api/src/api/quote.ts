@@ -34,9 +34,12 @@ export function registerQuoteRoutes(app: Hono<{ Bindings: Env }>): void {
 
     // The markdown is the canonical stored artifact — the client reads exactly
     // what was rendered and emailed, never something re-derived at read time.
+    // `belowFloor` on the returned quote is likewise read straight off the
+    // row (see quoteFromRow's doc comment), so this response can never
+    // contradict the markdown above it.
     return c.json({
       markdown: row.markdown,
-      quote: quoteFromRow(row, Number(c.env.MINIMUM_ENGAGEMENT_AUD)),
+      quote: quoteFromRow(row),
     })
   })
 }

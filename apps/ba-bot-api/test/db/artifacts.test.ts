@@ -76,6 +76,7 @@ describe('quote persistence', () => {
       subsystemsJson: JSON.stringify([{ name: 'Identity', total_tasks: 200 }]),
       validUntil: 9000,
       createdAt: 1002,
+      belowFloor: true, // 512.5 * 10 = 5,125, under the 6,000 floor
     })
 
     const row = await getQuoteById(env.DB, quoteId)
@@ -95,6 +96,7 @@ describe('quote persistence', () => {
     expect(JSON.parse(row!.subsystems_json!)).toEqual([{ name: 'Identity', total_tasks: 200 }])
     expect(row!.valid_until).toBe(9000)
     expect(row!.created_at).toBe(1002)
+    expect(row!.below_floor).toBe(1)
   })
 
   it('round-trips subsystems_json as null in single mode', async () => {
@@ -119,6 +121,7 @@ describe('quote persistence', () => {
       subsystemsJson: null,
       validUntil: 9000,
       createdAt: 1002,
+      belowFloor: false, // arbitrary — this test doesn't assert on belowFloor
     })
 
     const row = await getQuoteById(env.DB, quoteId)
@@ -151,6 +154,7 @@ describe('quote persistence', () => {
         subsystemsJson: null,
         validUntil: 9000,
         createdAt: 1002,
+        belowFloor: false, // arbitrary — this insert is expected to throw before persisting
       })
     } catch (e) {
       caught = e
