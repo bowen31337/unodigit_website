@@ -3,6 +3,23 @@ main = "src/index.ts"
 compatibility_date = "2026-08-18"
 compatibility_flags = ["nodejs_compat"]
 
+# Custom domains on claw-forge.net, which is a real Cloudflare zone on this
+# account. unodigit.com.au is not: its nameservers are at OnlyDomains, so
+# Cloudflare *serves* it but does not *manage* it, and a Workers custom domain
+# — like a Cloudflare Access application — needs a zone it can attach to.
+# That is the whole reason the admin surface lived in shell scripts.
+#
+# `custom_domain = true` makes wrangler create and own the DNS record, so these
+# two lines are the only place the hostnames are configured.
+#
+# The Worker still answers on unodigit-ba-bot.unodigit.workers.dev regardless.
+# That is why src/api/admin.ts gates on ADMIN_HOSTNAME rather than trusting
+# that only the routes below can reach it.
+routes = [
+  { pattern = "api.claw-forge.net", custom_domain = true },
+  { pattern = "admin.claw-forge.net", custom_domain = true },
+]
+
 [[d1_databases]]
 binding = "DB"
 database_name = "ba_bot"
@@ -75,3 +92,26 @@ ALLOWED_ORIGIN = "https://www.unodigit.com.au,https://unodigit.com.au,http://loc
 # that is a CORS allowlist that contains localhost, and reordering it must never
 # change the URL a client receives in their inbox. The /q/ route is Plan 3.
 PUBLIC_SITE_URL = "https://www.unodigit.com.au"
+
+# --- Admin surface (src/api/admin.ts) -------------------------------------
+#
+# All three must be set for /admin/* to answer at all; any one left empty and
+# every admin request 404s or 401s. That is the intended failure: a deploy that
+# is half-configured must publish nothing, not a dashboard with a broken lock.
+#
+# None of these is a secret. ACCESS_AUD and the team domain appear in every
+# token Access issues, so they belong here in plaintext where they can be
+# reviewed and diffed — unlike the entries in sync-secrets.sh.
+#
+# ADMIN_HOSTNAME is the primary gate. The Worker is reachable on
+# unodigit-ba-bot.unodigit.workers.dev no matter what `routes` says above, and
+# that hostname has no Access in front of it, so the hostname check is what
+# keeps the dashboard off the open internet.
+ADMIN_HOSTNAME = "admin.claw-forge.net"
+# <team>.cloudflareaccess.com — the JWKS host and the expected `iss`.
+# TODO: fill from the Cloudflare Zero Trust team domain before deploying.
+ACCESS_TEAM_DOMAIN = ""
+# The Access application's Audience (AUD) tag. Created with the application;
+# copy it from Zero Trust → Access → Applications → (the admin app) → Overview.
+# TODO: fill before deploying. Empty means every admin request 401s.
+ACCESS_AUD = ""

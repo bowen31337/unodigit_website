@@ -180,10 +180,12 @@ so don't re-fix them:
 1. **Rate limiting is enforced.** `api/chat.ts` and `api/generate.ts` both import
    `guards/ratelimit`; chat checks `turnsToday` against `MAX_TURNS_PER_IP_PER_DAY`
    and answers `429 rate_limited` before spending any DeepSeek tokens.
-2. **`estimator/`, `pricing/` and `mail/` all exist.** The `GENERATE` state's prompt
-   still says *"this topic is handled by another system"* — that is correct by design.
-   The state is deliberately not an LLM turn; `estimator/estimate.ts`,
-   `pricing/quote.ts` and `mail/resend.ts` are that other system.
+2. **`estimator/` and `pricing/` exist; `mail/` was removed on purpose.** The
+   `GENERATE` state's prompt still says *"this topic is handled by another system"* —
+   that is correct by design. The state is deliberately not an LLM turn;
+   `estimator/estimate.ts` and `pricing/quote.ts` are that other system. Email
+   delivery was decommissioned in favour of an HMAC-signed download link
+   (`util/sign.ts` → `/q/`), so there is no `mail/` to look for.
 
 **LLM token ceilings must cover reasoning tokens.** `deepseek-v4-flash` is a reasoning
 model: a measured turn used 487 completion tokens of which 356 were *reasoning* and only

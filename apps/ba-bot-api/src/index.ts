@@ -5,6 +5,7 @@ import { registerChatRoutes } from './api/chat'
 import { registerContactRoutes } from './api/contact'
 import { registerGenerateRoutes } from './api/generate'
 import { registerQuoteRoutes } from './api/quote'
+import { registerAdminRoutes } from './api/admin'
 
 const app = new Hono<{ Bindings: Env }>()
 
@@ -55,5 +56,11 @@ registerChatRoutes(app)
 registerContactRoutes(app)
 registerGenerateRoutes(app)
 registerQuoteRoutes(app)
+// Deliberately outside the /api/* middleware above: the admin surface must not
+// carry CORS headers (it is same-origin only, and an allowlist entry there
+// would be a way to reach it from the marketing site), and it must keep
+// answering when a bot secret is missing — a 503 on the one page that would
+// tell you a secret is missing is exactly backwards.
+registerAdminRoutes(app)
 
 export default app

@@ -32,6 +32,24 @@ export interface Env {
   // ALLOWED_ORIGIN: that is a CORS allowlist containing localhost, and
   // reordering it must not silently change the link a client is handed.
   PUBLIC_SITE_URL: string
+
+  /**
+   * Admin surface — all three must be set together or /admin/* 404s.
+   *
+   * ADMIN_HOSTNAME is the gate that matters: a Worker is reachable on
+   * *.workers.dev whatever `routes` says, and that hostname has no Access in
+   * front of it, so without a hostname check the dashboard ships to the open
+   * internet. Leaving it unset is the supported way to run a deployment with
+   * no admin surface at all.
+   *
+   * ACCESS_AUD is the application's audience tag; ACCESS_TEAM_DOMAIN is
+   * <team>.cloudflareaccess.com, which is both the JWKS host and the expected
+   * `iss`. Neither is a secret — both appear in every token Access issues —
+   * so they live in wrangler.toml where they can be reviewed and diffed.
+   */
+  ADMIN_HOSTNAME: string
+  ACCESS_TEAM_DOMAIN: string
+  ACCESS_AUD: string
 }
 
 // Alias to avoid `interface Env extends Env {}` resolving to itself inside the

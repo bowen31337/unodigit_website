@@ -1,29 +1,39 @@
 # Admin scripts
 
-The admin surface for the BA bot. There is **no dashboard and no admin HTTP
-endpoint** — these scripts query the D1 database directly through
-`wrangler d1 execute`.
+Terminal access to the BA bot's D1 database, through `wrangler d1 execute`.
 
-## Why scripts and not the dashboard in the spec
+**There is now also a dashboard** at `https://admin.claw-forge.net/`, served by
+the Worker itself and gated by Cloudflare Access — see
+`src/api/admin.ts`. These scripts are not superseded by it and are not going
+away; they own the two things a browser should not:
 
-Spec §12 describes an `app/admin/` dashboard calling an `/admin/*` API on the
-Worker, protected by two Cloudflare Access applications. That design is not
-buildable today: `unodigit.com.au`'s nameservers are at OnlyDomains, so the
-domain is *served* by Cloudflare but not *managed* by it. An Access application
-attaches to a hostname in a zone on your account, a CNAME-only Pages custom
-domain is not a zone, and `unodigit-ba-bot.unodigit.workers.dev` belongs to
-Cloudflare's zone rather than ours. There is nothing for the Access application
-to attach to, and the Worker would verify a JWT that never arrives.
+- **`delete-lead.sh`** — irreversible, and its safety comes from `--dry-run`
+  plus typing the lead id back. That protection means nothing once a click can
+  issue it, so the deletion path is deliberately absent from the HTTP surface.
+- **`export-leads-csv.sh`** — writes to stdout so no second copy of personal
+  information lands in a file (see below). A browser download is exactly the
+  file this avoids creating.
 
-The alternative — hand-rolling auth for an internal admin API — is the thing
-the spec itself calls out as the most likely source of a security incident in
-this project.
+The dashboard covers the read side: overview, funnel, per-day spend, leads, and
+the `events` table — which, until it existed, nothing read at all.
 
-So the requirements (see leads and funnel, read briefs and quotes, delete a
-lead on request) are met with scripts authenticated by the Cloudflare API token
-already in 1Password. Zero new auth surface, no new endpoint to secure, no DNS
-migration, and the Privacy Act deletion path works today. See the 2026-08-19
-ruling in `progress.txt`.
+## Why these were scripts first
+
+Spec §12 described an `app/admin/` dashboard behind Cloudflare Access, and that
+was not buildable on `unodigit.com.au`: its nameservers are at OnlyDomains, so
+the domain is *served* by Cloudflare but not *managed* by it. An Access
+application attaches to a hostname in a zone on your account; a CNAME-only
+Pages custom domain is not a zone, and `unodigit-ba-bot.unodigit.workers.dev`
+belongs to Cloudflare's zone rather than ours. Nothing to attach to, and the
+Worker would verify a JWT that never arrives. Hand-rolling auth instead is the
+thing the spec itself calls out as this project's most likely security
+incident.
+
+**`claw-forge.net` resolved that**: it is a full Cloudflare zone on the same
+account, so an Access application and a Workers custom domain both have
+somewhere to attach. The dashboard moved onto that hostname rather than onto
+unodigit.com.au, and no DNS migration was needed. See the 2026-08-19 ruling in
+`progress.txt` for the original scripts-only decision.
 
 ## Auth
 

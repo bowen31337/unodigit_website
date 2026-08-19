@@ -1,0 +1,308 @@
+/**
+ * Read-only aggregates for the admin dashboard.
+ *
+ * These mirror the SQL already proven out in `scripts/admin/*.sh` rather than
+ * inventing a second definition of "the funnel" — two answers to the same
+ * question that disagree is worse than one answer in one place. The scripts
+ * stay; this is the same data over HTTP for the hostname behind Access.
+ *
+ * Every function here issues SELECTs only. The destructive path
+ * (`delete-lead.sh`) is deliberately NOT exposed over HTTP: it is irreversible,
+ * it is rare, and its safety comes from a confirmation step that means nothing
+ * once a browser can issue it.
+ *
+ * `days` is always bound as a parameter, never interpolated. A caller-supplied
+ * value reaching SQL as text is the one mistake that turns a read-only surface
+ * into a writable one.
+ */
+
+/** Window start as a unix-seconds bound. `days <= 0` means all time, expressed
+ *  as 0 rather than a conditional WHERE — building the clause itself
+ *  conditionally is how a subquery ends up with a dangling AND. */
+export function since(days: number, nowMs = Date.now()): number {
+  if (!Number.isFinite(days) || days <= 0) return 0
+  return Math.floor(nowMs / 1000) - Math.floor(days) * 86400
+}
+
+export interface Overview {
+  conversations: number
+  leads: number
+  quotes: number
+  briefs: number
+  completed: number
+  abandoned: number
+  totalCostUsd: number
+  tokensIn: number
+  tokensOut: number
+  avgTurns: number
+  quotedValueLowAud: number
+  quotedValueHighAud: number
+}
+
+export async function overview(db: D1Database, from: number): Promise<Overview> {
+  const conv = await db
+    .prepare(
+      `SELECT
+         COUNT(*)                                              AS conversations,
+         COALESCE(SUM(cost_usd), 0)                            AS total_cost_usd,
+         COALESCE(SUM(tokens_in), 0)                           AS tokens_in,
+         COALESCE(SUM(tokens_out), 0)                          AS tokens_out,
+         COALESCE(ROUND(AVG(turn_count), 1), 0)                AS avg_turns,
+         COALESCE(SUM(abandoned_at_state IS NOT NULL), 0)      AS abandoned,
+         COALESCE(SUM(ended_at IS NOT NULL
+                      AND abandoned_at_state IS NULL), 0)      AS completed
+       FROM conversations WHERE started_at >= ?`,
+    )
+    .bind(from)
+    .first<Record<string, number>>()
+
+  // Leads and artifacts are counted against their own timestamps, not the
+  // conversation's: a conversation started before the window can produce a
+  // lead inside it, and attributing that lead to the earlier window would
+  // make "leads this week" quietly wrong.
+  const leads = await db
+    .prepare('SELECT COUNT(*) AS n FROM leads WHERE created_at >= ?')
+    .bind(from)
+    .first<{ n: number }>()
+
+  const briefs = await db
+    .prepare('SELECT COUNT(*) AS n FROM briefs WHERE created_at >= ?')
+    .bind(from)
+    .first<{ n: number }>()
+
+  const quotes = await db
+    .prepare(
+      `SELECT COUNT(*)                    AS n,
+              COALESCE(SUM(low_aud), 0)   AS low,
+              COALESCE(SUM(high_aud), 0)  AS high
+       FROM quotes WHERE created_at >= ?`,
+    )
+    .bind(from)
+    .first<{ n: number; low: number; high: number }>()
+
+  return {
+    conversations: conv?.conversations ?? 0,
+    leads: leads?.n ?? 0,
+    quotes: quotes?.n ?? 0,
+    briefs: briefs?.n ?? 0,
+    completed: conv?.completed ?? 0,
+    abandoned: conv?.abandoned ?? 0,
+    totalCostUsd: conv?.total_cost_usd ?? 0,
+    tokensIn: conv?.tokens_in ?? 0,
+    tokensOut: conv?.tokens_out ?? 0,
+    avgTurns: conv?.avg_turns ?? 0,
+    quotedValueLowAud: quotes?.low ?? 0,
+    quotedValueHighAud: quotes?.high ?? 0,
+  }
+}
+
+export interface FunnelRow {
+  state: string
+  conversations: number
+  pctOfTotal: number
+  avgTurns: number
+}
+
+/** Drop-off by `abandoned_at_state` — a large bucket names the question people
+ *  will not answer. Same grouping as `scripts/admin/funnel.sh`. */
+export async function funnel(db: D1Database, from: number): Promise<FunnelRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT
+         COALESCE(abandoned_at_state, '(not abandoned)') AS state,
+         COUNT(*)                                        AS conversations,
+         COALESCE(ROUND(
+           100.0 * COUNT(*) / NULLIF(
+             (SELECT COUNT(*) FROM conversations WHERE started_at >= ?1), 0), 1), 0) AS pct_of_total,
+         COALESCE(ROUND(AVG(turn_count), 1), 0)          AS avg_turns
+       FROM conversations
+       WHERE started_at >= ?1
+       GROUP BY COALESCE(abandoned_at_state, '(not abandoned)')
+       ORDER BY conversations DESC`,
+    )
+    .bind(from)
+    .all<{ state: string; conversations: number; pct_of_total: number; avg_turns: number }>()
+
+  return results.map((r) => ({
+    state: r.state,
+    conversations: r.conversations,
+    pctOfTotal: r.pct_of_total,
+    avgTurns: r.avg_turns,
+  }))
+}
+
+export interface DailyRow {
+  day: string
+  conversations: number
+  costUsd: number
+  tokensIn: number
+  tokensOut: number
+}
+
+/** Daily spend series. `unixepoch` is SQLite's; D1 supports it, and doing the
+ *  bucketing in SQL avoids shipping every conversation row to the Worker just
+ *  to group it. */
+export async function daily(db: D1Database, from: number): Promise<DailyRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT
+         date(started_at, 'unixepoch')     AS day,
+         COUNT(*)                          AS conversations,
+         COALESCE(SUM(cost_usd), 0)        AS cost_usd,
+         COALESCE(SUM(tokens_in), 0)       AS tokens_in,
+         COALESCE(SUM(tokens_out), 0)      AS tokens_out
+       FROM conversations
+       WHERE started_at >= ?
+       GROUP BY day
+       ORDER BY day ASC`,
+    )
+    .bind(from)
+    .all<{ day: string; conversations: number; cost_usd: number; tokens_in: number; tokens_out: number }>()
+
+  return results.map((r) => ({
+    day: r.day,
+    conversations: r.conversations,
+    costUsd: r.cost_usd,
+    tokensIn: r.tokens_in,
+    tokensOut: r.tokens_out,
+  }))
+}
+
+export interface EventRow {
+  type: string
+  count: number
+  lastAt: number
+}
+
+/**
+ * Event types by frequency.
+ *
+ * This is the surface nothing else had. `recordEvent` writes `llm_failed`,
+ * `turn_cap_reached`, `turnstile_failed`, `slots_rejected`, `forced_advance`,
+ * `quote_rate_limited`, `estimate_failed` and more — every failure signal the
+ * bot emits — and before this the only code touching the table was the
+ * deletion path. They were being written and never read.
+ */
+export async function eventTypes(db: D1Database, from: number): Promise<EventRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT type, COUNT(*) AS count, MAX(created_at) AS last_at
+       FROM events WHERE created_at >= ?
+       GROUP BY type ORDER BY count DESC`,
+    )
+    .bind(from)
+    .all<{ type: string; count: number; last_at: number }>()
+
+  return results.map((r) => ({ type: r.type, count: r.count, lastAt: r.last_at }))
+}
+
+export interface EventDetail {
+  id: string
+  conversationId: string | null
+  type: string
+  payload: string | null
+  createdAt: number
+}
+
+export async function recentEvents(
+  db: D1Database,
+  from: number,
+  limit: number,
+  type?: string,
+): Promise<EventDetail[]> {
+  // `type` is bound, and the IS NULL branch makes one statement serve both the
+  // filtered and unfiltered case — a second concatenated SQL string is where a
+  // filter parameter turns into an injection.
+  const { results } = await db
+    .prepare(
+      `SELECT id, conversation_id, type, payload_json, created_at
+       FROM events
+       WHERE created_at >= ?1 AND (?2 IS NULL OR type = ?2)
+       ORDER BY created_at DESC LIMIT ?3`,
+    )
+    .bind(from, type && type.length > 0 ? type : null, limit)
+    .all<{
+      id: string
+      conversation_id: string | null
+      type: string
+      payload_json: string | null
+      created_at: number
+    }>()
+
+  return results.map((r) => ({
+    id: r.id,
+    conversationId: r.conversation_id,
+    type: r.type,
+    payload: r.payload_json,
+    createdAt: r.created_at,
+  }))
+}
+
+export interface LeadRow {
+  id: string
+  createdAt: number
+  name: string | null
+  email: string
+  company: string | null
+  role: string | null
+  country: string | null
+  utmSource: string | null
+  consent: boolean
+  quotes: number
+  lowAud: number
+  highAud: number
+}
+
+/** Recent leads with their quote totals. Carries personal information — see
+ *  the note in api/admin.ts about why this endpoint sets no-store. */
+export async function leads(db: D1Database, limit: number, q?: string): Promise<LeadRow[]> {
+  const like = q && q.length > 0 ? `%${q}%` : null
+  const { results } = await db
+    .prepare(
+      `SELECT
+         l.id, l.created_at, l.name, l.email, l.company, l.role, l.country,
+         l.utm_source, l.consent_marketing,
+         COUNT(qt.id)                  AS quotes,
+         COALESCE(SUM(qt.low_aud), 0)  AS low_aud,
+         COALESCE(SUM(qt.high_aud), 0) AS high_aud
+       FROM leads l
+       LEFT JOIN conversations c ON c.lead_id = l.id
+       LEFT JOIN briefs b        ON b.conversation_id = c.id
+       LEFT JOIN quotes qt       ON qt.brief_id = b.id
+       WHERE ?1 IS NULL
+          OR l.email LIKE ?1 OR l.name LIKE ?1 OR l.company LIKE ?1
+       GROUP BY l.id
+       ORDER BY l.created_at DESC
+       LIMIT ?2`,
+    )
+    .bind(like, limit)
+    .all<{
+      id: string
+      created_at: number
+      name: string | null
+      email: string
+      company: string | null
+      role: string | null
+      country: string | null
+      utm_source: string | null
+      consent_marketing: number
+      quotes: number
+      low_aud: number
+      high_aud: number
+    }>()
+
+  return results.map((r) => ({
+    id: r.id,
+    createdAt: r.created_at,
+    name: r.name,
+    email: r.email,
+    company: r.company,
+    role: r.role,
+    country: r.country,
+    utmSource: r.utm_source,
+    consent: r.consent_marketing === 1,
+    quotes: r.quotes,
+    lowAud: r.low_aud,
+    highAud: r.high_aud,
+  }))
+}
