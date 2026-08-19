@@ -1493,3 +1493,45 @@ Out of scope, deliberately untouched: TASKS_PER_WEEK and
 src/estimator/calibration.ts — both remain business decisions, not this
 story's concern. US-009 in prd.json stays `passes: false` until both land; a
 note was added recording the below_floor item done.
+
+### 2026-08-19 — Pricing reset for early clients (user decision)
+
+RATE_PER_TASK_AUD 25 -> 10, MINIMUM_ENGAGEMENT_AUD 6000 -> 2000.
+
+The rate was the user's call ("reduce 25 to 10 to attract the early clients").
+The floor move is NOT a separate decision — it is forced. At rate 10 the
+single-mode ceiling is 300 x 1.5 x 10 = A$4,500, so a 6000 floor reproduces
+exactly the defect fixed earlier today: belowFloor true for every single-mode
+quote, band never renders. 2000 was chosen so a typical 300-task project
+(~A$3,150) and a 200-task one (~A$2,100) both clear it, while genuinely small
+work still falls under and routes to the starter-engagement conversation.
+
+The three coherence tests in test/pricing/quote.test.ts pass at the new values.
+They read wrangler.toml through the pool's configPath, so they are what makes
+this coupling enforceable rather than a comment someone has to remember.
+
+### 2026-08-19 — claw-forge plan is deterministic — calibration is measurable
+
+User pointed out `claw-forge plan` consumes no LLM tokens. Confirmed from its
+own docstring (claw_forge/spec/cli.py, `plan`):
+
+  "Planning is deterministic and fully offline — no model is called and no API
+   key is required. --model is accepted for forward compatibility and to
+   resolve aliases for display, but does not affect the resulting DAG."
+
+This changes src/estimator/calibration.ts from a guess into something
+measurable: real specs can be planned offline, for free, repeatably.
+
+One real decomposition already exists on disk:
+  /Users/bowenli/development/fengshui/claw-forge-export-c16a3bd6-*.json
+  224 tasks across 32 categories.
+
+IMPORTANT finding from that export: claw-forge's own categories are
+PROJECT-SPECIFIC ("Xuan Kong Flying Stars Engine", "Bazi Engine", "Form Analyst
+Engine", ...), not the 7 fixed buckets in src/estimator/categories.ts. Only
+three overlap by name (Authentication & User Management 14, API Layer 9, UI/UX
+Design System 7). So CATEGORY_WEIGHTS is OUR weighting taxonomy, not
+claw-forge's — the ground truth claw-forge provides is the TOTAL TASK COUNT for
+a given spec, and the per-category split into our 7 buckets remains our own
+model. Calibration should treat total_tasks as measured and the bucket split as
+illustrative.

@@ -25,20 +25,25 @@ LLM_BASE_URL = "https://api.deepseek.com"
 LLM_MODEL = "deepseek-v4-flash"
 LLM_MODEL_HEAVY = "deepseek-v4-pro"
 
-# RATE and MINIMUM are coupled through PROGRAM_MODE_THRESHOLD and must be
-# changed together. Single mode tops out at the threshold (300 tasks), so the
-# largest reachable single-mode midpoint is 300 x maxWeight(1.5) x RATE. At the
-# original RATE=10 that ceiling was A$4,500 — under the A$6,000 floor — so
-# belowFloor was true for EVERY single-mode quote and the price band, which is
-# the product, could never render. At 25 a typical 300-task project prices
-# around A$7,875 and clears the floor, while genuinely small work still falls
-# under it and routes to the starter-engagement conversation, which is what the
-# floor is for.
+# RATE and MINIMUM are COUPLED through PROGRAM_MODE_THRESHOLD and must always
+# be changed together. Single mode tops out at the threshold (300 tasks), so the
+# largest reachable single-mode midpoint is 300 x maxWeight(1.5) x RATE. If that
+# ceiling sits under the floor, belowFloor is true for EVERY single-mode quote
+# and the price band — the product — never renders. That is not hypothetical:
+# it shipped once, with RATE=10 against a 6000 floor giving a A$4,500 ceiling,
+# and every unit test passed because nothing compared the two numbers.
+#
+# Set deliberately low to attract early clients. At RATE=10 a typical 300-task
+# project prices ~A$3,150 and a 200-task one ~A$2,100, both clearing the A$2,000
+# floor; work small enough to be a starter engagement still falls under it,
+# which is what the floor is for.
 #
 # Before changing either: compute 300 x 1.5 x RATE and confirm it exceeds
-# MINIMUM_ENGAGEMENT_AUD, or the band silently disappears again.
-RATE_PER_TASK_AUD = "25"
-MINIMUM_ENGAGEMENT_AUD = "6000"
+# MINIMUM_ENGAGEMENT_AUD. Three tests in test/pricing/quote.test.ts read these
+# values from THIS file through the pool's configPath and will fail if you
+# don't — that guard is the only reason the incoherence cannot return silently.
+RATE_PER_TASK_AUD = "10"
+MINIMUM_ENGAGEMENT_AUD = "2000"
 # UNCALIBRATED — this is a delivery commitment, not an estimate. It sets the
 # "roughly N weeks" line the client reads.
 TASKS_PER_WEEK = "25"
