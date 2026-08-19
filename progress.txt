@@ -370,3 +370,69 @@ Pattern worth carrying: this plan's fixtures have now been wrong three times
 unconditionally on a shared fixture used by band-showing tests). Treat plan
 fixtures as unverified. Prefer asserting absence over presence wherever a
 requirement is phrased as "replaces", "omits", or "instead of".
+
+### 2026-08-19 — US-006: Brief and quote persistence
+
+Appended BriefRow, QuoteRow, BriefInsert, QuoteInsert, insertBrief, insertQuote,
+getQuoteById and getBriefByConversation to src/db/queries.ts, verbatim from the
+plan's Task 6. Additive only — `git diff --stat` on the file is 97 insertions, 0
+deletions, so no existing query was touched. Markdown is the canonical stored
+form; nothing is re-derived on read.
+
+insertQuote counts, verified mechanically (a script parsed the INSERT column
+list, counted '?' in the VALUES clause, parsed the .bind() argument list, and
+compared all three against the CREATE TABLE column order in
+migrations/0001_initial.sql): 15 columns / 15 placeholders / 15 binds, and the
+bind order matches the column order pairwise. Every value is string|number, so
+a transposition would type-check silently — hence the mechanical check rather
+than a read-through.
+
+TDD: wrote test/db/artifacts.test.ts first (7 tests), ran it — RED, all 7
+failing with "TypeError: insertBrief / insertQuote / getQuoteById /
+getBriefByConversation is not a function". That is only RED for "the helpers do
+not exist", NOT for the three behavioural constraints, so after implementing I
+re-established a targeted RED by mutation, one mutation per constraint, all
+three applied at once and reverted from a backup afterwards:
+- ORDER BY created_at DESC -> ASC   => only "returns the most recent brief, not
+  the earlier one" failed (got the older brief id).
+- swapped the row.lowAud / row.highAud binds => only "inserts a program-mode
+  quote and reads it back by id" failed ("expected 6406 to be 3844") — which is
+  the transposition class the plan's comment warns about, and it is now pinned.
+- String(row.subsystemsJson) on the subsystems bind => only "round-trips
+  subsystems_json as null in single mode" failed ("expected 'null' to be null").
+Each mutation was caught by exactly one test and no other, so none of the three
+assertions is vacuous.
+
+Foreign key: the throw is genuinely the FK, not an incidental NOT NULL — every
+other column is supplied in that fixture, and the error text is verbatim
+`D1_ERROR: FOREIGN KEY constraint failed: SQLITE_CONSTRAINT (extended:
+SQLITE_CONSTRAINT_FOREIGNKEY)`. Captured with a throwaway probe test (deleted
+before commit) that also confirmed `PRAGMA foreign_keys` reads `{"foreign_keys":1}`
+under the vitest pool, so FK enforcement in tests matches production. The test
+asserts the message matches /FOREIGN KEY constraint failed/ AND that no orphan
+row landed in `quotes` — presence of a throw alone would not prove the write did
+not happen.
+
+Two tests beyond the plan's five, both negative assertions of the kind the
+US-005 hardening note asks for: getBriefByConversation returns null when a
+conversation has no brief, and it returns the NEWEST brief and not the earlier
+one (the plan's ORDER BY created_at DESC LIMIT 1 was otherwise unpinned — a
+single-insert test passes just as well on ASC). subsystems_json is asserted
+`toBeNull()` plus `not.toBe('null')`, `not.toBe('[]')` and `typeof === 'object'`,
+since the dashboard distinguishes single from program mode on that column.
+
+Verification: suite 115 tests / 13 files, zero warnings (was 108/12; +7 for this
+story). Both apps/ba-bot-api and packages/ba-bot-contract typecheck clean
+(tsc --noEmit, exit 0, no output). PII grep over src/llm/, src/graph/prompts.ts
+and src/estimator/ returns the same 4 previously-adjudicated lines — this story
+touched none of those directories, and no lead field appears in a brief or quote
+row (the helpers take markdown and JSON strings the renderers produced, and the
+renderers never read name/email).
+
+Next implementer (Task 7, POST /api/generate) imports these four directly from
+'../db/queries'. Note the FK ordering trap: briefs.conversation_id references
+conversations(id) and quotes.brief_id references briefs(id), so the write order
+is conversation -> brief -> quote, and insertBrief must have resolved before
+insertQuote is attempted. getBriefByConversation is the idempotency check for
+step 3 of that task — it returns the newest brief, so a retry reads back the
+brief it just wrote rather than re-billing an estimate.

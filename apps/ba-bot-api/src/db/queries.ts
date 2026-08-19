@@ -150,3 +150,100 @@ export async function insertLead(db: D1Database, row: LeadInsert): Promise<strin
     .run()
   return row.id
 }
+
+export interface BriefRow {
+  id: string
+  conversation_id: string
+  markdown: string
+  sections_json: string
+  created_at: number
+}
+
+export interface QuoteRow {
+  id: string
+  brief_id: string
+  markdown: string
+  mode: string
+  total_tasks: number
+  weighted_tasks: number
+  rate_aud: number
+  low_aud: number
+  high_aud: number
+  weeks: number
+  confidence: string
+  categories_json: string
+  subsystems_json: string | null
+  valid_until: number
+  created_at: number
+}
+
+export interface BriefInsert {
+  id: string
+  conversationId: string
+  markdown: string
+  sectionsJson: string
+  createdAt: number
+}
+
+export interface QuoteInsert {
+  id: string
+  briefId: string
+  markdown: string
+  mode: string
+  totalTasks: number
+  weightedTasks: number
+  rateAud: number
+  lowAud: number
+  highAud: number
+  weeks: number
+  confidence: string
+  categoriesJson: string
+  subsystemsJson: string | null
+  validUntil: number
+  createdAt: number
+}
+
+export async function insertBrief(db: D1Database, row: BriefInsert): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO briefs (id, conversation_id, markdown, sections_json, created_at)
+       VALUES (?, ?, ?, ?, ?)`,
+    )
+    .bind(row.id, row.conversationId, row.markdown, row.sectionsJson, row.createdAt)
+    .run()
+}
+
+// 15 columns / 15 placeholders / 15 binds. Count all three before changing this:
+// every value is string|number, so a transposition type-checks, passes any test
+// that does not assert the swapped fields, and silently corrupts every quote.
+export async function insertQuote(db: D1Database, row: QuoteInsert): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO quotes (
+         id, brief_id, markdown, mode, total_tasks, weighted_tasks, rate_aud,
+         low_aud, high_aud, weeks, confidence, categories_json, subsystems_json,
+         valid_until, created_at
+       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    )
+    .bind(
+      row.id, row.briefId, row.markdown, row.mode, row.totalTasks,
+      row.weightedTasks, row.rateAud, row.lowAud, row.highAud, row.weeks,
+      row.confidence, row.categoriesJson, row.subsystemsJson, row.validUntil,
+      row.createdAt,
+    )
+    .run()
+}
+
+export async function getQuoteById(db: D1Database, id: string): Promise<QuoteRow | null> {
+  return await db.prepare('SELECT * FROM quotes WHERE id = ?').bind(id).first<QuoteRow>()
+}
+
+export async function getBriefByConversation(
+  db: D1Database,
+  conversationId: string,
+): Promise<BriefRow | null> {
+  return await db
+    .prepare('SELECT * FROM briefs WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 1')
+    .bind(conversationId)
+    .first<BriefRow>()
+}

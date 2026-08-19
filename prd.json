@@ -133,8 +133,8 @@
       ],
       "expectedTests": 110,
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Appended the four helpers verbatim from plan Task 6; 115 tests / 13 files, both packages typecheck. insertQuote is 15 columns / 15 placeholders / 15 binds, bind order verified pairwise against the migration's column order. FK error is verbatim 'D1_ERROR: FOREIGN KEY constraint failed: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_FOREIGNKEY)'."
     },
     {
       "id": "US-007",
