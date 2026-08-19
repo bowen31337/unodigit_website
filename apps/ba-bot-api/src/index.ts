@@ -4,6 +4,7 @@ import type { Env } from './env'
 import { registerChatRoutes } from './api/chat'
 import { registerContactRoutes } from './api/contact'
 import { registerGenerateRoutes } from './api/generate'
+import { registerQuoteRoutes } from './api/quote'
 
 const app = new Hono<{ Bindings: Env }>()
 
@@ -11,8 +12,17 @@ const app = new Hono<{ Bindings: Env }>()
  * an unset IP_HASH_SALT hashes every IP under a constant, publicly-known
  * prefix (a rainbow-table lookup away from the raw address), and an unset
  * TURNSTILE_SECRET or LLM_API_KEY turns a guard into a no-op. A misconfigured
- * deploy must refuse traffic, not serve it with the guardrails off. */
-const REQUIRED_SECRETS = ['LLM_API_KEY', 'IP_HASH_SALT', 'TURNSTILE_SECRET'] as const
+ * deploy must refuse traffic, not serve it with the guardrails off.
+ *
+ * QUOTE_LINK_SIGNING_KEY joins the list here, in the first commit that reads
+ * it: an unset key HMACs every quote id under the empty string, which anyone
+ * can reproduce, so every quote in the database becomes world-readable to
+ * anyone who can guess an id. Refusing traffic is the correct failure.
+ * NOTE: the key must exist in 1Password and be pushed by
+ * scripts/sync-secrets.sh BEFORE the next deploy, or /api/* returns 503. */
+const REQUIRED_SECRETS = [
+  'LLM_API_KEY', 'IP_HASH_SALT', 'TURNSTILE_SECRET', 'QUOTE_LINK_SIGNING_KEY',
+] as const
 
 // ALLOWED_ORIGIN is a comma-separated allowlist: the site is reachable on more
 // than one origin (www, apex, localhost during `pnpm dev`), and a single string
@@ -44,5 +54,6 @@ app.get('/health', (c) => c.json({ status: 'ok' }))
 registerChatRoutes(app)
 registerContactRoutes(app)
 registerGenerateRoutes(app)
+registerQuoteRoutes(app)
 
 export default app

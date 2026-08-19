@@ -85,8 +85,14 @@ async function quoteRowForBrief(db: D1Database, briefId: string): Promise<QuoteR
 
 /** `belowFloor` is a pricing verdict, not a stored column, so a re-read
  *  re-applies the same rule priceQuote used: midpoint against the configured
- *  minimum. Every other field comes straight off the row. */
-function quoteFromRow(row: QuoteRow, minimumAud: number): Quote {
+ *  minimum. Every other field comes straight off the row.
+ *
+ *  Exported so GET /api/quote/:id reads a stored quote through exactly this
+ *  mapping. A second copy would be a second place for the re-derivation to
+ *  drift — and the drift is already a known latent defect (see progress.txt,
+ *  US-007 controller notes: the rule reads the CURRENT
+ *  MINIMUM_ENGAGEMENT_AUD, which is still a placeholder). One copy, one fix. */
+export function quoteFromRow(row: QuoteRow, minimumAud: number): Quote {
   return {
     mode: row.mode === 'program' ? 'program' : 'single',
     totalTasks: row.total_tasks,

@@ -578,3 +578,125 @@ Test-isolation trap worth carrying: D1 persists within a test file and
 rate_limit is keyed on (ip_hash, day), so tests MUST use one IP each. A shared
 IP silently rate-limited five later tests in this story — they failed for a
 reason unrelated to what they were testing.
+
+### 2026-08-19 — US-008: HMAC-signed quote retrieval
+
+Created src/util/sign.ts (signId/verifyId, HMAC-SHA256 hex over the quote id
+via WebCrypto — no dependency added) and src/api/quote.ts
+(GET /api/quote/:id?sig=...), registered in src/index.ts. Task 8 of the plan
+carries no literal code, only an interface list, so this is written rather than
+transcribed.
+
+Constant time. verifyId delegates the MAC comparison to `crypto.subtle.verify`.
+The only equality in the function is `bytes === null` on the hex-decode result,
+which tests a public structural property of attacker-supplied input, never
+secret material. `grep -nE "===|!==|localeCompare" src/util/sign.ts
+src/api/quote.ts` returns four lines: two inside doc comments, `hex.length === 0
+|| hex.length % 2 !== 0` (public length), and that null-check.
+
+This property has NO observable behaviour — `sig === expected` and
+crypto.subtle.verify return identical booleans for every input and differ only
+in how long they take. Proven, not assumed: replacing verifyId's body with
+`toHex(bytes) === (await signId(id, key))` left ALL 147 behavioural tests green.
+So it is pinned structurally, against `verifyId.toString()` with comments
+stripped — must contain 'crypto.subtle.verify', must not mention signId, must
+contain no `[=!]==?` beyond the decode null-check. Re-running the same mutation
+then failed all three. A `?raw` import of the source also works but matches the
+word "===" in the file's own doc comments; toString sees only the shipped
+function body. If a future refactor moves fromHex's guard, update the one
+allowlisted `bytes === null` string in the test rather than deleting the check.
+
+Length safety. fromHex returns null (never throws) for empty, odd-length or
+non-hex input. Wrong-but-decodable lengths are deliberately NOT rejected there —
+they go to crypto.subtle.verify, which returns false on a length mismatch
+without throwing, keeping the comparison on the constant-time path. verifyId
+also wraps the verify in try/catch: an unhandled throw becomes a 500, and a 500
+is its own oracle telling an attacker their input was structurally interesting.
+That catch is load-bearing, not decorative — WebCrypto rejects a zero-length
+HMAC key ("Imported HMAC key length (0) must be a non-zero value..."), so an
+unconfigured Worker throws inside importKey; the catch turns that into a
+fail-CLOSED false. Deleting the try/catch fails exactly one test.
+
+Enumerability. Bad signature and unknown id return the SAME status and the SAME
+body: `{"error":"forbidden"}`, 403. A 404-for-unknown split would let an
+attacker learn which ids exist from the status alone, and the ids are the entire
+access-control mechanism. The test asserts byte identity
+(`expect(await unknown.text()).toBe(await badSig.text())`), not "both are 403" —
+a mutant returning 403 with `{"error":"not_found"}` fails it. The unknown-id
+case is signed with the REAL key so verification passes and the miss can only
+come from the D1 lookup; signing it with a wrong key would have exercised the
+signature branch and tested nothing.
+
+Verification happens BEFORE the D1 read, on purpose. Doing the lookup first
+would let an unauthenticated caller drive D1 with arbitrary ids and buys no
+timing symmetry that matters: producing a valid signature for an id you do not
+already hold a link to requires the key, so the only branch an attacker can
+reach ends at the same 403 with no query. The timing difference distinguishes
+"your signature was wrong" from "your signature was right but the id is
+unknown", which is not an existence oracle for anyone who cannot sign.
+
+quoteFromRow is now EXPORTED from src/api/generate.ts and imported by quote.ts
+rather than copied. belowFloor is re-derived (it is not a column) and that
+re-derivation is already a recorded latent defect — US-007 controller notes. One
+copy, one fix, when the below_floor column lands.
+
+DEPLOY BLOCKER, deliberate: QUOTE_LINK_SIGNING_KEY is now in index.ts's
+REQUIRED_SECRETS, per the US-007 hand-off note ("move it in the same commit that
+first reads it"). An unset key HMACs every quote id under the empty string, so
+the guard is exactly the "a guard becomes a no-op" class the 503 exists for.
+The key does not exist in 1Password yet. It must be created
+(`openssl rand -hex 32`) and pushed by scripts/sync-secrets.sh BEFORE the next
+`pnpm bot:deploy`, or /api/* returns 503 for every route. SETUP.md and
+sync-secrets.sh are Task 9's step 5/6 and were left untouched. Test bindings got
+the key in vitest.config.ts, otherwise every existing generate/chat/contact test
+would 503.
+
+TDD. Wrote both test files first: RED at module level ("Cannot find module
+'../../src/util/sign'"), baseline 128 still green. Then added no-op stubs
+(signId -> '', verifyId -> false, registerQuoteRoutes -> no-op) so each test
+could fail for its OWN reason, and re-ran: 15 of 19 failed with distinct
+observed failures — every route test "expected 404 to be 403/200", "expected ''
+to match /^[0-9a-f]{64}$/", "expected false to be true". The 4 that passed
+against the stub are the negative cases, which cannot fail against a deny-all
+stub; they are covered by mutation instead. GREEN at 151 tests / 16 files, zero
+warnings. Both packages typecheck (tsc --noEmit, exit 0).
+
+Mutation check, one at a time, each reverted from a backup. Every negative
+assertion is pinned by at least one mutant, so none is vacuous:
+- verifyId compares with `===` (re-sign and compare) => ONLY the 3 constant-time
+  guard tests failed; all 147 behavioural tests stayed green. This is why the
+  structural test exists.
+- unknown id returns 404 => ONLY "403s on an unknown id, indistinguishably from
+  a bad signature" failed ("expected 404 to be 403").
+- unknown id returns 403 with `{error:'not_found'}` => same single test failed on
+  the BODY ("expected '{\"error\":\"not_found\"}' to be
+  '{\"error\":\"forbidden\"}'"). A status-only assertion would have survived it.
+- id not bound (BOTH sign and verify use a constant message) => "rejects a
+  tampered id", "rejects an empty id signed as empty", "does not accept another
+  quote's signature" and "produces different signatures for different ids".
+- key not load-bearing (BOTH use a constant key) => "rejects a signature made
+  with a different key", the route's equivalent, and the byte-identity test.
+- verifyId accepts any decodable signature => 10 tests.
+- malformed signature throws instead of returning false => the length-safety
+  test plus the two route tests asserting 403-not-500.
+- try/catch removed => ONLY "fails closed when the signing key is unset".
+
+The wrong-key test signs with a DIFFERENT well-formed key rather than mutating a
+signature — those are distinct failure modes and only the former tests that the
+key matters at all. Both are asserted separately, as is a tampered id.
+
+Suite 128 -> 151 tests / 14 -> 16 files (+23, prd expected 132; the extra 19 are
+the malformed-signature table, the three constant-time guards, and the
+fail-closed test). PII grep `grep -rnE "\b(name|email)\b" src/llm/
+src/graph/prompts.ts src/estimator/` returns the same 4 previously-adjudicated
+lines as US-003..US-007 — this story touched none of those directories. The same
+grep over the two new files matches one line, `{ name: 'HMAC', hash: 'SHA-256' }`
+— a WebCrypto algorithm identifier, not a lead field. Neither new file reads the
+leads table or any slot.
+
+Next implementer (Task 9, Resend) builds the link as
+`${site}/q/${quoteId}?sig=${await signId(quoteId, env.QUOTE_LINK_SIGNING_KEY)}`
+and must URL-encode nothing else — the signature is lowercase hex. verifyId
+accepts uppercase hex too, so a mail client that upper-cases the query string
+does not lock a client out of their own quote (asserted). Task 9 still owes
+SETUP.md and sync-secrets.sh for BOTH secrets.

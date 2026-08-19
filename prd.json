@@ -167,8 +167,8 @@
       ],
       "expectedTests": 132,
       "priority": 8,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "151 tests / 16 files. Constant-time via crypto.subtle.verify (no === on MAC bytes); bad signature and unknown id return byte-identical 403 {error:forbidden}. QUOTE_LINK_SIGNING_KEY is now in REQUIRED_SECRETS \u2014 create it (openssl rand -hex 32) and push it before the next deploy or /api/* 503s."
     },
     {
       "id": "US-009",
