@@ -197,7 +197,16 @@ does not use it.
 
 ## Deployment
 
-Pushes to `main` trigger a GitHub Actions workflow (`.github/workflows/deploy-cloudflare.yml`) that runs `pnpm build` and deploys **`apps/web/out`** to Cloudflare Pages using `cloudflare/wrangler-action@v3`. Secrets required: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_PROJECT_NAME`.
+Pushes to `main` trigger a GitHub Actions workflow (`.github/workflows/deploy-cloudflare.yml`) that runs `pnpm build` and deploys **`apps/web/out`** to Cloudflare Pages. Secrets required: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_PROJECT_NAME`.
+
+It calls `wrangler` directly rather than through `cloudflare/wrangler-action@v3`.
+The action is not workspace-aware: it probes `pnpm exec wrangler` at the repo
+root, where pnpm does not link a workspace package's binary, then tries to
+recover with `pnpm add wrangler@3.90.0` — which pnpm refuses in a workspace root
+without `-w`. Both failures arrived the moment the monorepo layout reached
+`main`. The workflow now runs the wrangler pinned in `apps/ba-bot-api`, so CI
+and `pnpm bot:deploy` ship the same version; because `pnpm --filter … exec` runs
+in that package's directory, the output path must be absolute.
 
 The Worker is **not** deployed by CI — it ships manually via `pnpm bot:deploy` (or
 `wrangler deploy`), with secrets pushed from 1Password by

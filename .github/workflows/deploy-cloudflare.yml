@@ -27,9 +27,19 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # cloudflare/wrangler-action@v3 is not workspace-aware and fails twice
+      # over in this repo: it probes `pnpm exec wrangler` at the root, where
+      # pnpm does not link a workspace package's binary, then tries to recover
+      # with `pnpm add wrangler@3.90.0` — which pnpm refuses in a workspace root
+      # without -w (ERR_PNPM_ADDING_TO_ROOT). Invoke the wrangler already pinned
+      # in apps/ba-bot-api instead, so CI and `pnpm bot:deploy` ship the same
+      # version. `--filter ... exec` runs in that package's directory, hence the
+      # absolute output path.
       - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy apps/web/out --project-name=${{ secrets.CLOUDFLARE_PROJECT_NAME }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: >
+          pnpm --filter @unodigit/ba-bot-api exec
+          wrangler pages deploy "$GITHUB_WORKSPACE/apps/web/out"
+          --project-name=${{ secrets.CLOUDFLARE_PROJECT_NAME }}
