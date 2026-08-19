@@ -1326,3 +1326,19 @@ nameservers hands Cloudflare ALL DNS for the domain, including MX. Copy every
 existing record — MX, SPF/DKIM TXT, any CNAME/A in use — into the Cloudflare
 zone BEFORE switching NS at OnlyDomains, or email stops. Moving also unblocks
 P2, since Resend's SPF/DKIM records would then be managed in the same place.
+
+### 2026-08-19 — P1: signing key generated and stored (half done)
+
+quote_link_signing_key generated with `openssl rand -hex 32` and written to
+op://application/ba_bot/ (the item already held ip_hash_salt; field name is
+lowercase to match sync-secrets.sh's reference and the existing convention).
+Verified by shape only — 64 chars, /^[0-9a-f]{64}$/ — the value was never
+printed, written to a file, or committed.
+
+REMAINING: `apps/ba-bot-api/scripts/sync-secrets.sh` to push it to the Worker.
+
+Correction to an earlier claim in this log and in conversation: the 503 hazard
+was described as live. It is not. REQUIRED_SECRETS gained QUOTE_LINK_SIGNING_KEY
+in a commit that has never been deployed, so the RUNNING Worker does not check
+for it and is serving normally. The hazard is ordering, not a present outage:
+the secret must reach Cloudflare before that code does.

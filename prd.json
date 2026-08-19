@@ -23,7 +23,8 @@
       "action": "openssl rand -hex 32 -> op://application/ba_bot/quote_link_signing_key, then scripts/sync-secrets.sh",
       "blocks": "every /api/* route at runtime (503 until set)",
       "userAction": true,
-      "done": false
+      "done": false,
+      "notes": "1Password half DONE 2026-08-19: quote_link_signing_key generated (openssl rand -hex 32) and stored in op://application/ba_bot/. REMAINING: run scripts/sync-secrets.sh to push it to the Worker. The deployed Worker does NOT yet check for it \u2014 REQUIRED_SECRETS gained it in an unpushed commit \u2014 so nothing is 503ing today; the sync must land before that code deploys."
     },
     {
       "id": "P2",
@@ -37,7 +38,7 @@
       "id": "P3",
       "title": "Move unodigit.com.au nameservers to Cloudflare",
       "action": "move DNS from OnlyDomains to Cloudflare, then add the Worker Custom Domain and two Access applications",
-      "blocks": "US-004 through US-008. Cloudflare Access cannot front a workers.dev hostname, so the admin API cannot be protected as spec section 12 requires until the zone moves. Do NOT substitute a bearer secret or allowlisted header.",
+      "blocks": "US-004..US-008, which are DEFERRED \u2014 superseded by US-004s (scripts). P3 is only needed if a browser dashboard is still wanted later.",
       "userAction": true,
       "done": false
     }
