@@ -44,9 +44,20 @@ LLM_MODEL_HEAVY = "deepseek-v4-pro"
 # don't — that guard is the only reason the incoherence cannot return silently.
 RATE_PER_TASK_AUD = "10"
 MINIMUM_ENGAGEMENT_AUD = "2000"
-# UNCALIBRATED — this is a delivery commitment, not an estimate. It sets the
-# "roughly N weeks" line the client reads.
-TASKS_PER_WEEK = "25"
+# A DELIVERY COMMITMENT, not an estimate — it sets the "roughly N weeks" line
+# the client reads, via weeks = max(1, ceil(weightedTasks / TASKS_PER_WEEK)).
+#
+# 500 reflects a parallel agent harness rather than a human team: claw-forge
+# runs concurrent agents, so throughput is a function of concurrency, not
+# headcount. At 500 essentially every single-mode project lands on the floor of
+# "roughly 1 week" (a 300-task project is 315 weighted, so ceil(315/500) = 1),
+# and only multi-subsystem programs report more.
+#
+# Know what that means for the artifact: the timeline stops discriminating
+# between a 42-task tool and a 300-task platform — both read "roughly 1 week"
+# while their prices differ 7x. If a client is meant to read scale off the
+# timeline, this is the var that stops carrying that signal.
+TASKS_PER_WEEK = "500"
 PROGRAM_MODE_THRESHOLD = "300"
 QUOTE_VALID_DAYS = "30"
 MAX_TOTAL_TURNS = "40"

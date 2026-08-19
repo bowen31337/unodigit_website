@@ -18,14 +18,25 @@ import { newId } from '../../src/util/ids'
 let ip = ''
 let ipCounter = 0
 
-// RATE_PER_TASK_AUD is "10" in wrangler.toml, which puts every plausible
-// single-mode project below MINIMUM_ENGAGEMENT_AUD ("6000") — both are recorded
-// placeholders. Overriding the binding per-request keeps the happy path on the
-// band-showing branch without editing production config, and 77 is chosen so it
-// cannot appear incidentally in any other number this fixture produces
-// (137 tasks, A$8,691-14,486, 7 weeks) — which is what makes the
-// "no rate in the headline" assertion an absence test rather than a guess.
+// This fixture pins BOTH pricing knobs it depends on, so the assertions below
+// describe the headline's structure rather than whatever the business happens
+// to be charging this week. Production values are deliberately not used here:
+// they have already moved twice (rate 10 -> 25 -> 10, floor 6000 -> 2000,
+// tasksPerWeek 25 -> 500), and a fixture that drifts with them asserts nothing
+// stable. Coherence of the SHIPPED values is pinned separately, in
+// test/pricing/quote.test.ts, which reads wrangler.toml on purpose.
+//
+// 77 is chosen so the rate cannot appear incidentally in any other number this
+// fixture produces (137 tasks, A$8,691-14,486, 7 weeks) — which is what makes
+// the "no rate in the headline" assertion an absence test rather than a guess.
 const RATE = '77'
+
+// 150.5 weighted / 25 = 6.02 -> ceil 7. Pinned because production is now 500,
+// under which every single-mode project floors to "roughly 1 week" and the
+// weeks assertion would stop distinguishing anything.
+const TASKS_PER_WEEK = '25'
+
+const PRICING_ENV = { RATE_PER_TASK_AUD: RATE, TASKS_PER_WEEK }
 
 // Sums to 137 bullets, matching the spec's worked example. Weighted:
 // 60*1.2 + 30*0.8 + 20*1.0 + 15*1.5 + 12*1.0 = 150.5.
@@ -184,7 +195,7 @@ describe('POST /api/generate', () => {
     const spy = mockEstimator(shape)
     const conversationId = await seed()
 
-    const res = await postGenerate({ conversationId }, { RATE_PER_TASK_AUD: RATE })
+    const res = await postGenerate({ conversationId }, PRICING_ENV)
     expect(res.status).toBe(200)
 
     const json = await res.json<Body>()
@@ -235,7 +246,7 @@ describe('POST /api/generate', () => {
     const conversationId = await seed()
     await attachLead(conversationId, 'client@example.invalid')
 
-    const res = await postGenerate({ conversationId }, { RATE_PER_TASK_AUD: RATE })
+    const res = await postGenerate({ conversationId }, PRICING_ENV)
     const json = await res.json<Body>()
     expect(m.resend()).toHaveLength(1)
 
@@ -265,7 +276,7 @@ describe('POST /api/generate', () => {
     mockEstimator(shape)
     const conversationId = await seed()
 
-    const res = await postGenerate({ conversationId }, { RATE_PER_TASK_AUD: RATE })
+    const res = await postGenerate({ conversationId }, PRICING_ENV)
     const json = await res.json<Body>()
 
     // Absence, not "some other field is present". The rate is internal pricing
@@ -299,7 +310,7 @@ describe('POST /api/generate', () => {
     await env.DB.prepare('UPDATE conversations SET lead_id = ? WHERE id = ?')
       .bind(leadId, conversationId).run()
 
-    const res = await postGenerate({ conversationId }, { RATE_PER_TASK_AUD: RATE })
+    const res = await postGenerate({ conversationId }, PRICING_ENV)
     const json = await res.json<Body>()
 
     const sent = String((spy.mock.calls[0]![1] as RequestInit).body)
@@ -343,10 +354,10 @@ describe('POST /api/generate', () => {
     const spy = mockEstimator(shape)
     const conversationId = await seed()
 
-    const first = await (await postGenerate({ conversationId }, { RATE_PER_TASK_AUD: RATE })).json<Body>()
+    const first = await (await postGenerate({ conversationId }, PRICING_ENV)).json<Body>()
     expect(spy).toHaveBeenCalledTimes(1)
 
-    const second = await postGenerate({ conversationId }, { RATE_PER_TASK_AUD: RATE })
+    const second = await postGenerate({ conversationId }, PRICING_ENV)
     expect(second.status).toBe(200)
     const body = await second.json<Body>()
 
@@ -422,7 +433,7 @@ describe('POST /api/generate', () => {
   it('writes ended_at and leaves abandoned_at_state null once the session reaches DONE', async () => {
     mockEstimator(shape)
     const conversationId = await seed()
-    await postGenerate({ conversationId }, { RATE_PER_TASK_AUD: RATE })
+    await postGenerate({ conversationId }, PRICING_ENV)
 
     const conv = await convRow(conversationId)
     expect(conv!.ended_at).toBeGreaterThan(0)
@@ -444,7 +455,7 @@ describe('POST /api/generate', () => {
   it('advances the session to DONE in KV and D1 together', async () => {
     mockEstimator(shape)
     const conversationId = await seed()
-    await postGenerate({ conversationId }, { RATE_PER_TASK_AUD: RATE })
+    await postGenerate({ conversationId }, PRICING_ENV)
 
     const conv = await convRow(conversationId)
     const session = JSON.parse((await env.SESSIONS.get(sessionKey(conversationId)))!) as
@@ -486,7 +497,7 @@ describe('POST /api/generate', () => {
     const spy = forbidLlm()
     const conversationId = await seedWithoutKv()
 
-    const res = await postGenerate({ conversationId }, { RATE_PER_TASK_AUD: RATE })
+    const res = await postGenerate({ conversationId }, PRICING_ENV)
 
     // 409, not 404 and not 500: the conversation exists and the request is
     // well-formed — the visitor's interview state is gone, which is a
@@ -510,7 +521,7 @@ describe('POST /api/generate', () => {
       .first<{ n: number }>()
 
     // A retry must not creep past the guard either.
-    const retry = await postGenerate({ conversationId }, { RATE_PER_TASK_AUD: RATE })
+    const retry = await postGenerate({ conversationId }, PRICING_ENV)
     expect(retry.status).toBe(409)
     expect(await briefRow(conversationId)).toBeNull()
     expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM quotes').first<{ n: number }>())!.n)
@@ -524,7 +535,7 @@ describe('POST /api/generate', () => {
     // placeholder is not something to quote a number against.
     const conversationId = await seed('GENERATE', { project_name: 'PawBook' })
 
-    const res = await postGenerate({ conversationId }, { RATE_PER_TASK_AUD: RATE })
+    const res = await postGenerate({ conversationId }, PRICING_ENV)
     expect(res.status).toBe(409)
     expect(await res.json()).toEqual({ error: 'session_expired' })
     expect(spy).not.toHaveBeenCalled()
@@ -540,7 +551,7 @@ describe('POST /api/generate', () => {
       problem: 'Booking a groomer takes six phone calls.',
     })
 
-    const res = await postGenerate({ conversationId }, { RATE_PER_TASK_AUD: RATE })
+    const res = await postGenerate({ conversationId }, PRICING_ENV)
     expect(res.status).toBe(200)
 
     const json = await res.json<Body>()

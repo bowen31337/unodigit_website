@@ -1579,3 +1579,42 @@ categories are project-specific (32 distinct in that export, only 3 overlapping
 ours by name) and cannot be measured into our 7-bucket weighting taxonomy.
 
 Suite 187/19 green, frozen prompt still composed only from the frozen constant.
+
+### 2026-08-19 — TASKS_PER_WEEK 25 -> 500 (user decision)
+
+Reflects a parallel agent harness rather than a human team — claw-forge runs
+concurrent agents, so throughput scales with concurrency, not headcount.
+
+Client-facing consequence, recorded because it is not obvious from the number:
+weeks = max(1, ceil(weightedTasks / TASKS_PER_WEEK)), so at 500 essentially
+every single-mode project floors to "roughly 1 week".
+
+  small tool        44 weighted    A$441     1 week  (was 2)
+  booking platform 134 weighted  A$1,344     1 week  (was 6)
+  fengshui (real)  235 weighted  A$2,352     1 week  (was 10)
+  at threshold     315 weighted  A$3,150     1 week  (was 13)
+  3-subsystem program            A$9,450    2 weeks  (was 38)
+
+The timeline therefore stops discriminating between a 42-task tool and a
+300-task platform — both read "roughly 1 week" while their prices differ 7x.
+That is a positioning choice, not a defect: if a client is meant to read scale
+off the timeline, this is the var that stopped carrying that signal.
+
+One test broke, correctly: test/api/generate.test.ts asserted "7 weeks", which
+was 150.5 weighted / 25. It had already isolated the RATE from production
+config (77, chosen so it cannot collide with any other number in the fixture)
+but never isolated tasksPerWeek, so it silently inherited business config.
+Both are now pinned in one PRICING_ENV constant.
+
+The general rule this makes explicit, now stated in that file's header: a
+fixture asserting on business config drifts every time the business changes its
+mind — and these values have already moved three times today (rate 10->25->10,
+floor 6000->2000, tasksPerWeek 25->500). Fixtures pin their own values;
+coherence of the SHIPPED values is pinned separately in
+test/pricing/quote.test.ts, which reads wrangler.toml on purpose. Those are two
+different jobs and must not be done by the same test.
+
+Also confirmed: RESEND_API_KEY was already wired at
+op://application/resend/api_key in scripts/sync-secrets.sh since Plan 2, and the
+reference resolves (re_ prefix, 36 chars). No change needed; it ships with the
+same sync run as the signing key.
