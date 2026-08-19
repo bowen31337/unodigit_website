@@ -700,3 +700,123 @@ and must URL-encode nothing else — the signature is lowercase hex. verifyId
 accepts uppercase hex too, so a mail client that upper-cases the query string
 does not lock a client out of their own quote (asserted). Task 9 still owes
 SETUP.md and sync-secrets.sh for BOTH secrets.
+
+### 2026-08-19 — US-009: Resend email delivery (Plan 2 complete)
+
+Created src/mail/resend.ts (sendQuoteEmail — one `fetch` POST to
+https://api.resend.com/emails, no SDK, no dependency added) and
+src/mail/template.ts (renderEmailHtml + a ~60-line markdownToHtml). Wired into
+src/api/generate.ts via a private `deliver()`, called after the quote is
+persisted and the token columns are updated, before `finish()`. Task 9 carries
+an interface list, not literal code, so this is written rather than transcribed.
+
+HTML only, no attachment — the product decision. `attachments` is asserted
+ABSENT from the Resend body (Object.keys + the parsed value + a JSON scan for
+'application/pdf'), not merely "html is present": a body shipping a PDF
+alongside the HTML passes the latter. Mutation-confirmed — adding an
+attachments key fails exactly that one test.
+
+No markdown dependency. markdownToHtml handles precisely what brief.ts and
+quote.ts emit — h1-h3, `- ` lists, pipe tables (including the header rows that
+have no trailing pipe), `**bold**`, `_italic_`, paragraphs. Everything is
+escaped BEFORE any tag is introduced, then bold runs before italic so
+`_… **x** …_` nests rather than colliding. The project name is visitor free
+text that has already round-tripped through an LLM, so unescaped it is script
+in the recipient's inbox; pinned by an XSS test.
+
+PII, the reason this story exists at all. The recipient is read by a new
+getLeadEmailByConversation() in src/db/queries.ts — deliberately ONE COLUMN, no
+row object, so a caller cannot accidentally thread a whole lead record
+somewhere it must not go. It is read INSIDE deliver(), which runs after the
+estimate and after both artifacts are persisted, so the address is structurally
+incapable of reaching the estimator, the renderers or any prompt: it goes from
+D1 straight into the Resend envelope. Neither the address nor the lead's name
+is written to the event payload — `leads` already holds it and `events` is a
+support surface.
+
+The canary test is "sends the lead address to Resend and nowhere else (PII
+canary)". It seeds a lead with `canary-pii@example.invalid` /
+`Canary McPiiface`, asserts the address IS in the Resend request body, and
+asserts it is absent from all four of: the outbound LLM request body (read off
+the fetch spy), the stored brief markdown, the stored quote markdown, and the
+generate response — plus the event payload as a fifth. Not vacuous: appending
+`Contact: <email>` to briefMarkdown failed it (and US-007's equivalent) on the
+LLM body.
+
+grep -rnE "\b(name|email)\b" src/llm/ src/graph/prompts.ts src/estimator/ still
+returns exactly the same 4 previously-adjudicated lines as US-003..US-008. No
+new surface; this story touched none of those directories.
+
+A send failure never fails the request, and the test asserts that properly:
+200 AND GenerateResponseSchema valid AND state DONE AND the brief and quote
+re-read from D1 afterwards AND the quote_email_failed event AND no
+quote_email_sent event. "Does not throw" would have been worth nothing.
+
+Mutations, one at a time, each reverted from a backup:
+- a Resend failure propagates (`if (!sent.ok) throw`) => ONLY the two
+  send-failure tests failed, "expected 500 to be 200".
+- the event log on failure removed (log only on success) => the same two tests
+  failed, "expected [] to have a length of 1".
+- lead email appended to briefMarkdown => ONLY the two PII tests failed
+  (this story's canary and US-007's "never sends or renders a lead field").
+- attachments key added => ONLY the no-attachment test.
+- deliver's try/catch removed => ONLY "still returns 200 when the delivery path
+  itself throws".
+
+That last one is beyond the plan, added during self-review. sendQuoteEmail
+never throws, but getLeadEmailByConversation, signId and PUBLIC_SITE_URL can.
+An escaping throw would 500 a request whose brief and quote are ALREADY
+committed and — worse and less obvious — skip finish(), so the session would
+stay parked at GENERATE forever and the conversation row would never close.
+deliver() swallows, records quote_email_failed, and the `.catch` on that log is
+load-bearing: if D1 is what threw, recording the event throws too.
+
+New var, not a secret: PUBLIC_SITE_URL ("https://www.unodigit.com.au") in
+wrangler.toml + Env. The emailed link is
+`${PUBLIC_SITE_URL}/q/${quoteId}?sig=${signId(quoteId, key)}`. Deliberately NOT
+derived from ALLOWED_ORIGIN's first entry: that is a CORS allowlist containing
+localhost, and reordering it must never change what lands in a client's inbox.
+The test verifies the emitted signature against verifyId rather than pattern-
+matching the URL — a wrong signature is a dead link (403) in the inbox.
+
+RESEND_API_KEY is deliberately NOT added to REQUIRED_SECRETS. An unset key
+degrades nothing that guards anything; it only stops delivery, which is already
+a non-fatal, event-logged path. A 503 for the whole API because email is
+misconfigured would directly contradict "a send failure must not fail the
+request". sendQuoteEmail returns {ok:false,error:'no_api_key'} without making a
+request, so a misconfigured deploy does not spend a guaranteed-401 round trip
+per quote. Reasoning recorded in env.ts, SETUP.md and sync-secrets.sh.
+
+SETUP.md: PUBLIC_SITE_URL added to the vars table; the secrets table is now
+five with QUOTE_LINK_SIGNING_KEY; a dedicated deploy-blocker section for it
+(create with openssl rand -hex 32, push before `pnpm bot:deploy`, rotation
+invalidates every link already emailed); a new "Email delivery (Resend)"
+section covering HTML-only/no-SDK, the quotes@unodigit.com.au sender and the
+SPF/DKIM verification requirement, and how to read quote_email_sent vs
+quote_email_failed. sync-secrets.sh: QUOTE_LINK_SIGNING_KEY added at
+op://application/ba_bot/quote_link_signing_key.
+
+TDD: wrote test/mail/resend.test.ts first — RED at module level ("Cannot find
+module '../../src/mail/template'"), baseline 151 still green. Added no-op stubs
+so each test failed for its OWN reason: 11 of 13 failed distinctly ("expected
+'' to contain 'PawBook'", "expected { ok: false, error: 'stub' } to deeply
+equal { ok: true, id: … }", "expected [] to have a length of 1"). The 2 that
+passed against the stub are negatives that cannot fail against a deny-all stub
+("makes no request when the api key is unset", "never emails when the
+conversation has no lead"); both are covered by mutation instead. GREEN at
+165 tests / 17 files, zero warnings. Both packages typecheck (exit 0).
+
+Test-isolation: this file uses 198.51.100.x, one IP per test. A shared IP would
+rate-limit later tests, and a rate-limited request produces no quote and
+therefore no email — so these tests would have "passed" while asserting on a
+branch that never ran.
+
+DEPLOY BLOCKERS carried into Plan 3, both real today:
+- op://application/ba_bot/quote_link_signing_key still does not exist.
+  /api/* returns 503 on EVERY route until it is created and pushed.
+- unodigit.com.au is not DNS-verified in Resend. Until SPF/DKIM are in place
+  every send 422s; the visitor still gets their quote on screen, and the
+  failure is visible only as a quote_email_failed row in `events`.
+- The /q/ route the emailed link points at is a Plan 3 deliverable. The API
+  behind it (GET /api/quote/:id) works; the page does not exist yet, so a link
+  emailed before Plan 3 ships resolves to a 404 on the site.

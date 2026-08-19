@@ -6,11 +6,14 @@ export interface Env {
   LLM_API_KEY: string
   TURNSTILE_SECRET: string
   IP_HASH_SALT: string
-  // Declared here for Task 8/9. Deliberately NOT in index.ts's REQUIRED_SECRETS
-  // yet: nothing reads them, so failing every request on their absence would
-  // take the whole API down for a feature that does not exist. Add them to the
-  // 503 guard in the same commit that first uses them.
+  // In REQUIRED_SECRETS (src/index.ts): an unset key HMACs every quote id under
+  // the empty string, so every quote becomes world-readable.
   QUOTE_LINK_SIGNING_KEY: string
+  // NOT in REQUIRED_SECRETS, on purpose. An unset key degrades nothing that is
+  // guarding anything — it only stops delivery, which is already a non-fatal,
+  // event-logged path (src/mail/resend.ts). Refusing all traffic because email
+  // is misconfigured would contradict the rule that a send failure must not
+  // fail the request.
   RESEND_API_KEY: string
 
   // vars — plaintext in wrangler.toml, safe to review and diff
@@ -24,6 +27,11 @@ export interface Env {
   QUOTE_VALID_DAYS: string
   MAX_TOTAL_TURNS: string
   ALLOWED_ORIGIN: string
+  // Origin the emailed quote link points at. Deliberately NOT derived from the
+  // first entry of ALLOWED_ORIGIN: that is a CORS allowlist containing
+  // localhost, and reordering it must not silently change what lands in a
+  // client's inbox.
+  PUBLIC_SITE_URL: string
 }
 
 // Alias to avoid `interface Env extends Env {}` resolving to itself inside the

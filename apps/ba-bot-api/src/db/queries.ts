@@ -247,3 +247,26 @@ export async function getBriefByConversation(
     .bind(conversationId)
     .first<BriefRow>()
 }
+
+/**
+ * The lead's email address for a conversation, or null when the interview never
+ * reached CONTACT.
+ *
+ * The ONLY read of `leads.email` outside the contact route. It is deliberately
+ * narrow — one column, no row object — so a caller cannot accidentally thread a
+ * whole lead record somewhere it must not go. Australian Privacy Act APP 8: the
+ * returned value goes straight into the Resend envelope and nowhere else. It
+ * must never reach src/llm/, src/graph/prompts.ts, src/estimator/, the
+ * renderers, or any event payload.
+ */
+export async function getLeadEmailByConversation(
+  db: D1Database,
+  conversationId: string,
+): Promise<string | null> {
+  const row = await db
+    .prepare('SELECT l.email AS email FROM conversations c JOIN leads l ON l.id = c.lead_id WHERE c.id = ?')
+    .bind(conversationId)
+    .first<{ email: string }>()
+  const email = row?.email
+  return typeof email === 'string' && email.trim() ? email.trim() : null
+}

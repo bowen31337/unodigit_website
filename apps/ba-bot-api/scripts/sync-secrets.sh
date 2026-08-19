@@ -23,16 +23,31 @@ SECRETS=(
   "RESEND_API_KEY:op://application/resend/api_key"
   "TURNSTILE_SECRET:op://application/turnstile/secret_key"
   "IP_HASH_SALT:op://application/ba_bot/ip_hash_salt"
+  "QUOTE_LINK_SIGNING_KEY:op://application/ba_bot/quote_link_signing_key"
 )
 
-# The last two 1Password entries must be created before this script will
-# succeed — `op read` exits non-zero on a missing item and `set -e` stops here.
-#   op://application/turnstile/secret_key — Cloudflare dashboard → Turnstile → your site → secret key
-#   op://application/ba_bot/ip_hash_salt  — generate once: openssl rand -hex 32
+# These 1Password entries must be created before this script will succeed —
+# `op read` exits non-zero on a missing item and `set -e` stops here.
+#   op://application/turnstile/secret_key          — Cloudflare dashboard → Turnstile → your site → secret key
+#   op://application/ba_bot/ip_hash_salt           — generate once: openssl rand -hex 32
+#   op://application/ba_bot/quote_link_signing_key — generate once: openssl rand -hex 32
+#                                                    DOES NOT EXIST YET. Create it before the next deploy.
 #
-# The Worker refuses traffic with 503 while TURNSTILE_SECRET or IP_HASH_SALT is
-# unset (see src/index.ts) — an unsalted ip_hash is a reversible IP, so a
-# missing salt must fail closed rather than degrade quietly.
+# The Worker refuses traffic with 503 while TURNSTILE_SECRET, IP_HASH_SALT or
+# QUOTE_LINK_SIGNING_KEY is unset (see src/index.ts) — an unsalted ip_hash is a
+# reversible IP, and an unset signing key HMACs every quote id under the empty
+# string, making every quote in the database world-readable to anyone who can
+# guess an id. Both must fail closed rather than degrade quietly.
+#
+# RESEND_API_KEY is deliberately NOT in that 503 list. An unset key stops
+# delivery and nothing else; the send path already logs a `quote_email_failed`
+# event and returns the brief and quote anyway, so refusing all traffic would
+# be a strictly worse outcome than a quote the client reads on screen but does
+# not receive by mail. Rotating the key never needs a redeploy.
+#
+# A signing-key rotation invalidates every quote link already emailed: the
+# signature is HMAC(quote id) under this key, so old links start returning 403.
+# Rotate only with that in mind.
 
 CLOUDFLARE_API_TOKEN="$(op read "$CF_TOKEN_REF")"
 export CLOUDFLARE_API_TOKEN

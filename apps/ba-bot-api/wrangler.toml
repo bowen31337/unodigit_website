@@ -36,3 +36,7 @@ MAX_TOTAL_TURNS = "40"
 # have failed every browser call with an opaque CORS error. The apex is listed for
 # when its DNS starts resolving; only `www` does today. localhost covers `pnpm dev`.
 ALLOWED_ORIGIN = "https://www.unodigit.com.au,https://unodigit.com.au,http://localhost:3000"
+# Where the emailed quote link points. Separate from ALLOWED_ORIGIN on purpose:
+# that is a CORS allowlist that contains localhost, and reordering it must never
+# change the URL a client receives in their inbox. The /q/ route is Plan 3.
+PUBLIC_SITE_URL = "https://www.unodigit.com.au"

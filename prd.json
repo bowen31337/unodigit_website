@@ -183,8 +183,8 @@
       ],
       "expectedTests": 140,
       "priority": 9,
-      "passes": false,
-      "notes": "QUOTE_LINK_SIGNING_KEY needs a new 1Password entry: openssl rand -hex 32."
+      "passes": true,
+      "notes": "165 tests / 17 files, both packages typecheck. DEPLOY BLOCKER: op://application/ba_bot/quote_link_signing_key still does not exist (openssl rand -hex 32) and /api/* returns 503 until it is pushed; unodigit.com.au must also be DNS-verified in Resend or every send 422s. Added PUBLIC_SITE_URL var for the emailed link."
     }
   ]
 }

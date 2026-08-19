@@ -9,9 +9,11 @@ import { priceQuote } from '../pricing/quote'
 import { buildBriefSections, renderBrief } from '../render/brief'
 import { renderQuote } from '../render/quote'
 import {
-  getBriefByConversation, getConversation, insertBrief, insertQuote, recordEvent,
-  type QuoteRow,
+  getBriefByConversation, getConversation, getLeadEmailByConversation, insertBrief,
+  insertQuote, recordEvent, type QuoteRow,
 } from '../db/queries'
+import { sendQuoteEmail } from '../mail/resend'
+import { signId } from '../util/sign'
 import { quotesToday, recordQuote, utcDay } from '../guards/ratelimit'
 import type { Slots, StateId } from '../graph/states'
 import { step } from '../graph/transitions'
@@ -103,6 +105,63 @@ export function quoteFromRow(row: QuoteRow, minimumAud: number): Quote {
     weeks: row.weeks,
     confidence: row.confidence as Quote['confidence'],
     belowFloor: row.weighted_tasks * row.rate_aud < minimumAud,
+  }
+}
+
+/**
+ * Emails the finished artifacts to the lead, if there is one.
+ *
+ * PII boundary. This is the ONLY place in the generate flow that reads a lead's
+ * email address, and it does so AFTER the estimate has run and both artifacts
+ * are persisted — so the address is structurally incapable of reaching the
+ * estimator, the renderers, or any prompt. It goes from D1 straight into the
+ * Resend envelope. Neither the address nor the lead's name is written to the
+ * event payload: `leads` already holds it, and the event log is a support
+ * surface read by anyone with dashboard access.
+ *
+ * Failure is logged and swallowed, never propagated. The brief and the quote
+ * are already in the database and the visitor already has their number on
+ * screen; turning a delivery problem into a 500 would cost them both.
+ */
+async function deliver(
+  env: Env,
+  conversationId: string,
+  a: { quoteId: string; projectName: string; briefMarkdown: string; quoteMarkdown: string },
+): Promise<void> {
+  try {
+    const to = await getLeadEmailByConversation(env.DB, conversationId)
+    if (!to) return
+
+    // The signature is lowercase hex, so nothing here needs URL-encoding.
+    const sig = await signId(a.quoteId, env.QUOTE_LINK_SIGNING_KEY)
+    const quoteUrl = `${env.PUBLIC_SITE_URL.replace(/\/$/, '')}/q/${a.quoteId}?sig=${sig}`
+
+    const sent = await sendQuoteEmail({
+      apiKey: env.RESEND_API_KEY,
+      to,
+      projectName: a.projectName,
+      briefMarkdown: a.briefMarkdown,
+      quoteMarkdown: a.quoteMarkdown,
+      quoteUrl,
+    })
+
+    await recordEvent(
+      env.DB,
+      conversationId,
+      sent.ok ? 'quote_email_sent' : 'quote_email_failed',
+      sent.ok ? { quoteId: a.quoteId, providerId: sent.id ?? null } : { quoteId: a.quoteId, error: sent.error },
+    )
+  } catch (err) {
+    // `sendQuoteEmail` never throws, but the lead lookup, the signing key and
+    // PUBLIC_SITE_URL can. An unhandled throw here would 500 a request whose
+    // brief and quote are already committed AND skip `finish()`, leaving the
+    // session parked at GENERATE forever. Swallowing is strictly better than
+    // both. The `.catch` on the log is not decorative: if D1 is what threw,
+    // recording the event will throw too.
+    await recordEvent(env.DB, conversationId, 'quote_email_failed', {
+      quoteId: a.quoteId,
+      error: err instanceof Error ? err.message : String(err),
+    }).catch(() => undefined)
   }
 }
 
@@ -217,12 +276,13 @@ export function registerGenerateRoutes(
 
     const validUntil = now + Number(c.env.QUOTE_VALID_DAYS) * DAY_MS
     const quoteId = newId('quote')
+    // The emailed artifact does show the rate; only the chat headline hides it.
+    const quoteMarkdown = renderQuote({ quote, shape, projectName, validUntil, rateShown: true })
 
     await insertQuote(c.env.DB, {
       id: quoteId,
       briefId,
-      // The emailed artifact does show the rate; only the chat headline hides it.
-      markdown: renderQuote({ quote, shape, projectName, validUntil, rateShown: true }),
+      markdown: quoteMarkdown,
       mode: quote.mode,
       totalTasks: quote.totalTasks,
       weightedTasks: quote.weightedTasks,
@@ -245,6 +305,10 @@ export function registerGenerateRoutes(
       .prepare('UPDATE conversations SET tokens_in = tokens_in + ?, tokens_out = tokens_out + ? WHERE id = ?')
       .bind(estimate.promptTokens, estimate.completionTokens, conversationId)
       .run()
+
+    await deliver(c.env, conversationId, {
+      quoteId, projectName, briefMarkdown, quoteMarkdown,
+    })
 
     return await finish(quoteId, quote, headlineFor(quote))
   })
