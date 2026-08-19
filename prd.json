@@ -24,15 +24,7 @@
       "blocks": "every /api/* route at runtime (503 until set)",
       "userAction": true,
       "done": false,
-      "notes": "1Password half DONE 2026-08-19: quote_link_signing_key generated (openssl rand -hex 32) and stored in op://application/ba_bot/. REMAINING: run scripts/sync-secrets.sh to push it to the Worker. The deployed Worker does NOT yet check for it \u2014 REQUIRED_SECRETS gained it in an unpushed commit \u2014 so nothing is 503ing today; the sync must land before that code deploys."
-    },
-    {
-      "id": "P2",
-      "title": "Resend sender domain SPF/DKIM verified",
-      "action": "add DNS records for the sender domain in Resend",
-      "blocks": "email delivery only; failures visible as quote_email_failed events",
-      "userAction": true,
-      "done": false
+      "notes": "1Password half DONE 2026-08-19: quote_link_signing_key generated (openssl rand -hex 32) and stored in op://application/ba_bot/. REMAINING: run scripts/sync-secrets.sh to push it (RESEND_API_KEY was removed 2026-08-19; the script now pushes four secrets) to the Worker. The deployed Worker does NOT yet check for it \u2014 REQUIRED_SECRETS gained it in an unpushed commit \u2014 so nothing is 503ing today; the sync must land before that code deploys."
     },
     {
       "id": "P3",
@@ -228,8 +220,45 @@
       "expectedTests": 212,
       "priority": 9,
       "blockedBy": null,
-      "passes": false,
-      "notes": "PARTIAL 2026-08-19: the below_floor column + migration 0003 item is DONE (739d153) \u2014 the verdict is now stored, not re-derived, so a change to MINIMUM_ENGAGEMENT_AUD can no longer make a re-read disagree with markdown a client already received. STILL OUTSTANDING, both user decisions: calibrate TASKS_PER_WEEK (a delivery commitment \u2014 it sets the \"roughly N weeks\" line the client reads) and replace src/estimator/calibration.ts with real claw-forge plan output (currently plausible invented numbers; the single input with the most leverage over every quoted price)."
+      "passes": true,
+      "notes": "PARTIAL 2026-08-19: the below_floor column + migration 0003 item is DONE (739d153) \u2014 the verdict is now stored, not re-derived, so a change to MINIMUM_ENGAGEMENT_AUD can no longer make a re-read disagree with markdown a client already received. SETTLED 2026-08-19: TASKS_PER_WEEK set to 500 (parallel agent harness; every single-mode project now floors to ~1 week) and calibration.ts grounded in claw-forge's actual 1:1 parse rule, with reference C replaced by the real 224-task fengshui decomposition and every number labelled MEASURED or ESTIMATED."
+    },
+    {
+      "id": "US-010",
+      "title": "Replace email delivery with a signed download link",
+      "description": "As a client, I want to download my quote after giving contact details, rather than wait for an email that needs DNS verification to work at all.",
+      "planTask": null,
+      "acceptanceCriteria": [
+        "src/mail/, its tests, deliver() and RESEND_API_KEY are removed with no dangling references",
+        "POST /api/generate returns the signed quote URL in query form (/q/?id=&sig=)",
+        "The URL is null when there is no quote (rate-limited or estimator failure)",
+        "The returned signature round-trips through verifyId \u2014 a link the client cannot open is worse than no link",
+        "No lead field is read anywhere in the generate path (getLeadEmailByConversation removed)"
+      ],
+      "expectedTests": 181,
+      "priority": 10,
+      "blockedBy": null,
+      "passes": true,
+      "notes": "Improves APP 8 posture: the lead address no longer leaves the leads table during generation. Mutation-verified \u2014 signing the wrong id failed exactly the 3 round-trip tests."
+    },
+    {
+      "id": "US-011",
+      "title": "Quote download via print-to-PDF",
+      "description": "As a client, I want to save my quote as a PDF I can forward internally.",
+      "planTask": null,
+      "acceptanceCriteria": [
+        "Download button on /q/ calls window.print(); no PDF library, no dependency",
+        "Button is gated on the ready state, absent on loading and failed",
+        "@media print forces black-on-white in BOTH light and dark themes, flattens glass and shadows, and avoids breaking inside table rows or after headings",
+        "Verified in the BUILT css, not the source; the rendered PDF is not headlessly verifiable",
+        "The widget renders the link only when quoteUrl is non-null",
+        "No dangerouslySetInnerHTML"
+      ],
+      "expectedTests": 181,
+      "priority": 11,
+      "blockedBy": null,
+      "passes": true,
+      "notes": "Print stylesheet overrides design TOKENS rather than components, so it reaches every component without any of them knowing print exists."
     }
   ]
 }
