@@ -119,7 +119,7 @@
       "priority": 4,
       "blockedBy": null,
       "passes": true,
-      "notes": "Replaces the Access-gated admin API for now. Spec section 12 deviation, user-approved 2026-08-19. scripts/admin/ (6 scripts + _lib.sh, _format.py, README); delete order quotes→briefs→messages→events→conversations→leads derived from the REFERENCES clauses in 0001_initial.sql; cascade and --dry-run-changes-nothing both proven against a local miniflare fixture; rate_limit/rate_limit_turns verified intact; every caller value escaped via sql_lit; 184 tests / 18 files unchanged."
+      "notes": "Replaces the Access-gated admin API for now. Spec section 12 deviation, user-approved 2026-08-19. scripts/admin/ (6 scripts + _lib.sh, _format.py, README); delete order quotes\u2192briefs\u2192messages\u2192events\u2192conversations\u2192leads derived from the REFERENCES clauses in 0001_initial.sql; cascade and --dry-run-changes-nothing both proven against a local miniflare fixture; rate_limit/rate_limit_turns verified intact; every caller value escaped via sql_lit; 184 tests / 18 files unchanged."
     },
     {
       "id": "US-004",
@@ -229,7 +229,7 @@
       "priority": 9,
       "blockedBy": null,
       "passes": false,
-      "notes": "Decision task, not purely code. RATE_PER_TASK_AUD settled at 25 on 2026-08-19. below_floor item DONE 2026-08-19: migrations/0003_quotes_below_floor.sql adds quotes.below_floor (INTEGER NOT NULL DEFAULT 0, backfilled from the current MINIMUM_ENGAGEMENT_AUD with the historical-floor caveat documented in the migration); insertQuote writes it (16/16/16); quoteFromRow now reads row.below_floor instead of re-deriving from the live env var, and its signature dropped the now-dead minimumAud parameter (both call sites in generate.ts and quote.ts updated). Suite 184->187/19, both packages typecheck. TASKS_PER_WEEK and src/estimator/calibration.ts remain outstanding business decisions — story still fails overall."
+      "notes": "PARTIAL 2026-08-19: the below_floor column + migration 0003 item is DONE (739d153) \u2014 the verdict is now stored, not re-derived, so a change to MINIMUM_ENGAGEMENT_AUD can no longer make a re-read disagree with markdown a client already received. STILL OUTSTANDING, both user decisions: calibrate TASKS_PER_WEEK (a delivery commitment \u2014 it sets the \"roughly N weeks\" line the client reads) and replace src/estimator/calibration.ts with real claw-forge plan output (currently plausible invented numbers; the single input with the most leverage over every quoted price)."
     }
   ]
 }
