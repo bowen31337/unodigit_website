@@ -1535,3 +1535,47 @@ claw-forge's — the ground truth claw-forge provides is the TOTAL TASK COUNT fo
 a given spec, and the per-category split into our 7 buckets remains our own
 model. Calibration should treat total_tasks as measured and the bucket split as
 illustrative.
+
+### 2026-08-19 — claw-forge's task calculation, extracted from source
+
+User's direction: don't RUN `claw-forge plan` (it writes to .claw-forge/state.db
+and reconciles with the existing session); extract the calculation logic. Done —
+and the answer is that there is no calculation. It is a parse, strictly 1:1.
+
+  claw_forge/spec/parser.py ~350   "each bullet = one feature"
+    every <feature> element, and every legacy "- "/"* " text bullet, inside
+    <core_features> becomes exactly one FeatureItem.
+  claw_forge/spec/cli.py _write_plan_to_db
+    exactly one `db.add(Task(` per feature — grep finds a single occurrence.
+
+Nothing fans out: no generated test task, no review task, no per-category
+overhead. ONE SPEC BULLET = ONE TASK = ONE UNIT OF COST.
+
+This VALIDATES the estimator's central design decision. "Estimate the shape,
+not the bullets" is sound precisely because there is no conversion factor
+between them — predicting per-category bullet counts IS predicting the task
+count. Had claw-forge multiplied (say a test task per feature), every quote
+would have been low by that factor.
+
+Determinism confirmed from claw-forge's own docstring: "Planning is
+deterministic and fully offline — no model is called and no API key is
+required." So all the variability lives upstream in create-spec, the LLM step
+this estimator approximates.
+
+Two caveats now recorded in calibration.ts:
+  - claw-forge's ProjectSpec.features comment says 100-400 items, wider than
+    the 100-300 our spec quotes; PROGRAM_MODE_THRESHOLD (300) therefore splits
+    somewhat earlier than claw-forge strictly requires. Not a defect — a
+    deliberately earlier split — but know it is our choice, not claw-forge's.
+  - _write_plan_to_db(append_e2e=True) adds E2E tasks beyond the 1:1 rule. Off
+    by default. If it is ever enabled for real delivery, task counts rise and
+    the calibration understates.
+
+calibration.ts rewritten: entry C is now the REAL fengshui decomposition (224
+tasks, from the committed export), replacing an invented 284. Every number is
+now labelled MEASURED or ESTIMATED. Only C's TOTAL is measured; A, B, and all
+per-category splits including C's remain estimates, because claw-forge's
+categories are project-specific (32 distinct in that export, only 3 overlapping
+ours by name) and cannot be measured into our 7-bucket weighting taxonomy.
+
+Suite 187/19 green, frozen prompt still composed only from the frozen constant.
