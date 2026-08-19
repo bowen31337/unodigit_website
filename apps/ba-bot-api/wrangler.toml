@@ -20,6 +20,19 @@ routes = [
   { pattern = "admin.claw-forge.net", custom_domain = true },
 ]
 
+# MUST stay true while any deployed client still points at
+# unodigit-ba-bot.unodigit.workers.dev. Adding `routes` above makes wrangler
+# default `workers_dev` to FALSE, which silently 404s that hostname on the next
+# deploy — and the live marketing site reads it from apps/web/.env.production,
+# so the bot dies the moment the Worker ships ahead of the site. This line is
+# what keeps the two deploys independent.
+#
+# Safe to set false once the site has been rebuilt against api.claw-forge.net
+# AND nothing else references the workers.dev name. Until then it is load-
+# bearing. The admin surface is unaffected either way: src/api/admin.ts gates
+# on ADMIN_HOSTNAME, so /admin 404s on workers.dev whether or not it answers.
+workers_dev = true
+
 [[d1_databases]]
 binding = "DB"
 database_name = "ba_bot"
@@ -109,9 +122,9 @@ PUBLIC_SITE_URL = "https://www.unodigit.com.au"
 # keeps the dashboard off the open internet.
 ADMIN_HOSTNAME = "admin.claw-forge.net"
 # <team>.cloudflareaccess.com — the JWKS host and the expected `iss`.
-# TODO: fill from the Cloudflare Zero Trust team domain before deploying.
-ACCESS_TEAM_DOMAIN = ""
-# The Access application's Audience (AUD) tag. Created with the application;
-# copy it from Zero Trust → Access → Applications → (the admin app) → Overview.
-# TODO: fill before deploying. Empty means every admin request 401s.
-ACCESS_AUD = ""
+ACCESS_TEAM_DOMAIN = "unodigit.cloudflareaccess.com"
+# Audience tag of the "BA bot metrics" Access application
+# (id 57d9e91f-e7aa-47d6-95d8-ec0ef0c5a312). Recreating the application mints a
+# NEW aud and every request starts 401ing until this line is updated — the
+# check is doing its job at that point, not failing.
+ACCESS_AUD = "d799d53d6d05a546b69b64f09d34f92288e409bbfa86d580519d37c585303f1d"
