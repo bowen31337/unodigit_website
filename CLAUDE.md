@@ -145,9 +145,23 @@ element-qualified class (`textarea.field-chat`), not a utility.
 `components/BaBot/` is a floating requirements-elicitation assistant, mounted **once in
 `app/layout.tsx`** so the interview survives client-side navigation between routes.
 
-- Talks to the Worker over CORS; the origin is baked in at build time from
-  `NEXT_PUBLIC_BA_BOT_URL` (see `apps/web/.env.production`). With that variable absent
-  the component renders **nothing** rather than a launcher onto a dead endpoint.
+- **The browser never calls the Worker directly.** `apps/web/public/_worker.js` is a
+  Cloudflare Pages *Advanced Mode* proxy: it serves `/api/*` on the site's own origin
+  and forwards to the bot Worker at the edge. Same-origin means no CORS, no preflight,
+  and no `api.claw-forge.net` anywhere in the client bundle (verified against
+  `out/_next/`). `public/_routes.json` restricts invocation to `/api/*` — without it,
+  Advanced Mode routes *every* request through the Worker, turning each static CDN hit
+  into an invocation.
+  - It lives in `public/` because the static export copies that verbatim into `out/`,
+    and `_worker.js` is read from *inside* the uploaded directory. A `functions/`
+    directory would not work: `wrangler pages deploy` has no `--functions` flag and
+    resolves it against the CWD, which in CI is the repo root.
+  - `NEXT_PUBLIC_BA_BOT_URL` is therefore **empty in `.env.production`** — empty means
+    same-origin. It stays set in `.env.development` because `pnpm dev` has no Pages
+    Function, so `/api/chat` on :3000 is just a 404.
+  - Because empty is now the correct production value, the old
+    `if (!BOT_API) return null` guard had to go: it would have read the empty string as
+    "unconfigured" and hidden the widget on the live site.
 - `useBaBot.ts` owns conversation state and persists it to `sessionStorage`
   (single-sitting semantics — a half-finished interview should not resurface days later).
 - The panel is the translucent layer; message bubbles are deliberately **opaque**, since

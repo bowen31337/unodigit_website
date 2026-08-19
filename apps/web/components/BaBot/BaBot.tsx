@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { MessageSquareText, X, RotateCcw, Maximize2, Minimize2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { BOT_API, OPENING_LINE, TURNSTILE_ERRORS, useBaBot } from './useBaBot';
+import { OPENING_LINE, TURNSTILE_ERRORS, useBaBot } from './useBaBot';
 import ContactForm from './ContactForm';
 import Turnstile, { TURNSTILE_SITE_KEY } from './Turnstile';
 
@@ -140,7 +140,12 @@ export default function BaBot() {
     el.style.height = `${el.scrollHeight}px`;
   }, [draft, expanded]);
 
-  if (!BOT_API) return null;
+  // No `if (!BOT_API) return null` any more. That guard existed because the
+  // endpoint was a separate deployment that a build might not know about, so
+  // shipping a launcher onto a dead URL was a real possibility. The proxy in
+  // public/_worker.js now ships in the same deployment as this page, and its
+  // production value is the empty string (same-origin) — a falsy value that
+  // guard would have read as "not configured" and hidden the widget entirely.
 
   // Turn zero is the only turn the Worker challenges. `hydrated` matters
   // because sessionStorage is read in an effect: before it lands, a visitor

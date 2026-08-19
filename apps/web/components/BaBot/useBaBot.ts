@@ -9,10 +9,24 @@ import type {
   StateId,
 } from '@unodigit/ba-bot-contract';
 
-/** Baked in at build time — the site is a static export, so there is no runtime
- * config. When it is absent the widget renders nothing at all rather than
- * shipping a launcher that opens onto a dead endpoint. */
-export const BOT_API = process.env.NEXT_PUBLIC_BA_BOT_URL;
+/**
+ * Prefix for every bot call.
+ *
+ * **Empty string is the production value and means same-origin.**
+ * `public/_worker.js` proxies `/api/*` to the bot Worker from the edge, so the
+ * browser only ever talks to the site's own hostname: no CORS, no preflight,
+ * and the Worker's address never reaches the client bundle.
+ *
+ * The variable survives as the escape hatch for `pnpm dev`, where there is no
+ * Pages Function to do the proxying and `/api/chat` on :3000 is simply a 404 —
+ * so .env.development still points at an absolute origin.
+ *
+ * Baked in at build time: the site is a static export and has no runtime
+ * config. It no longer gates whether the widget renders — the proxy ships in
+ * the same deployment as the page, so there is no longer a configuration under
+ * which the endpoint is absent.
+ */
+export const BOT_API = process.env.NEXT_PUBLIC_BA_BOT_URL ?? '';
 
 export interface Turn {
   role: 'user' | 'assistant';
@@ -115,7 +129,6 @@ export function useBaBot() {
    * unset — the widget falls back to its static copy.
    */
   const generate = useCallback(async (convId: string) => {
-    if (!BOT_API) return;
     try {
       const res = await fetch(`${BOT_API}/api/generate`, {
         method: 'POST',
@@ -189,7 +202,7 @@ export function useBaBot() {
      */
     async (text: string, turnstileToken?: string | null) => {
       const message = text.trim();
-      if (!message || pending || finished || !BOT_API) return;
+      if (!message || pending || finished) return;
 
       setError(null);
       setErrorCode(null);
@@ -248,7 +261,7 @@ export function useBaBot() {
 
   const submitContact = useCallback(
     async (input: Omit<ContactRequest, 'conversationId'>): Promise<boolean> => {
-      if (!conversationId || !BOT_API) return false;
+      if (!conversationId) return false;
 
       setError(null);
       setPending(true);
