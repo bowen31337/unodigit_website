@@ -940,12 +940,22 @@
    theme was active on screen, without those components knowing print exists.
    ========================================================================== */
 @media print {
-  /* Black-on-white regardless of the active theme. Both selectors carry the
-     same specificity as the dark-mode blocks above (0,1,0) and this rule
-     comes later in the file, so source order — not specificity — is what
-     makes it win when dark mode and print are both active; the same pattern
-     the `prefers-contrast` block above already relies on. */
-  :root,
+  /* Black-on-white regardless of the active theme.
+
+     `:root:root` is deliberate, not a typo. Source order alone is NOT enough
+     here: the system-default dark block at the top of this file is
+     `:root:not([data-theme='light'])`, and `:not()` takes the specificity of
+     its argument, so that selector is (0,2,0) — it outranks a plain `:root`
+     (0,1,0) no matter how late this block appears. A print emulation caught
+     this: the page kept `background: rgb(0,0,0)` under `@media print` and
+     would have printed a full-bleed black page.
+
+     Repeating `:root` raises this to (0,2,0), which ties that block and wins
+     on source order, and outranks `[data-theme='dark']` (0,1,0) outright.
+     If a higher-specificity theme selector is ever added above, this needs
+     to rise with it — verify by emulating print, not by reading the file. */
+  :root:root,
+  :root:root[data-theme='dark'],
   [data-theme='dark'] {
     --bg:           #ffffff;
     --bg-secondary: #ffffff;

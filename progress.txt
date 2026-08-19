@@ -1757,3 +1757,53 @@ keeps visitor-supplied project names from executing.
 
 Gates: build --force 23 pages exit 0, out/q/index.html emitted; Worker suite
 181/19 unchanged; ws:typecheck --force 3/3 clean, 0 cached.
+
+### 2026-08-19 — E2E with screenshots found a real print bug the CSS text hid
+
+Ran a genuine local stack: local Worker (wrangler dev, .dev.vars with TEST-ONLY
+values so no DeepSeek spend and no real Turnstile), local D1 migrated through
+0003, a seeded brief+quote fixture, and the dev site pointed at localhost:8787
+via a gitignored apps/web/.env.local. Screenshots via CDP.
+
+API verified against a RUNNING Worker, not just unit tests:
+  valid sig    -> 200 + markdown
+  bad sig      -> 403
+  unknown id   -> 403        (indistinguishable — enumeration defence holds live)
+
+BUG FOUND, and it is exactly the class the previous story could not verify.
+`cdp('Emulation.setEmulatedMedia', media='print')` showed the quote page still
+computing `background: rgb(0,0,0)` and `color: rgb(255,255,255)` under print —
+it would have printed a FULL-BLEED BLACK PAGE. The earlier verification proved
+the @media print block was PRESENT in the built CSS, which is true and
+insufficient: present is not the same as winning.
+
+Cause: the print block used `:root, [data-theme='dark']` (0,1,0), but the
+system-default dark block at globals.css:238 is `:root:not([data-theme='light'])`
+— and `:not()` takes the specificity of its ARGUMENT, making it (0,2,0). A
+(0,2,0) selector beats (0,1,0) regardless of source order, so the later print
+block never applied. The code comment asserted "same specificity as the
+dark-mode blocks above (0,1,0)", which was true of line 301 and false of line
+238 — it checked one of the two.
+
+Fix: `:root:root` (0,2,0) ties line 238 and then wins on source order.
+Re-verified by emulation: bodyBackground rgb(255,255,255), bodyColor rgb(0,0,0),
+h1 rgb(0,0,0), header/footer/download-button all non-visible.
+
+Also corrected a measurement error of my own: I first read
+`getComputedStyle(button).display` and called the Download button a second bug.
+That returns the button's OWN display and ignores an ancestor's display:none —
+the button's wrapper already had `print:hidden` and was working. Re-checked with
+`offsetParent !== null`, which accounts for ancestors.
+
+Failure states confirmed in the browser: bad signature and missing parameters
+both render the SAME copy ("This link is not valid") with no Download button, so
+the UI does not undo the Worker's deliberate 403/403 indistinguishability.
+
+STILL NOT VERIFIED: the actual PDF written by a real print dialogue. Emulation
+proves the computed styles under print media; it does not drive the OS print
+pipeline or paginate. Print one before sending a quote to a client.
+
+Rule this earns: for anything whose output is RENDERED, assert on computed style
+in an emulated environment, not on the presence of a rule in a stylesheet. CSS
+that exists and CSS that applies are different claims, and only one of them is
+what the client sees.
