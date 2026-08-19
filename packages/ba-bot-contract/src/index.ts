@@ -140,7 +140,7 @@ export const ErrorResponseSchema = z.union([
       'forbidden', // 403
       'not_found', // 404
       // 409, from POST /api/generate when the KV session has expired and the
-      // slots are gone. Quoting an empty brief would email the client a dollar
+      // slots are gone. Quoting an empty brief would hand the client a dollar
       // figure derived from nothing, so the request is refused instead.
       'session_expired', // 409
       'internal_error', // 500
@@ -267,8 +267,8 @@ export const QuoteSchema = z
   .strict()
 export type Quote = z.infer<typeof QuoteSchema>
 
-/** POST /api/generate. `quote` (and `quoteId`) is absent in exactly two cases,
- *  and in both the brief is still delivered:
+/** POST /api/generate. `quote` (and `quoteId`, and `quoteUrl`) is absent in
+ *  exactly two cases, and in both the brief is still delivered:
  *    1. the per-IP daily rate limit was hit, so no estimate was ever run; and
  *    2. the estimator failed (parse, empty, truncated, or provider), so there
  *       is no shape to price.
@@ -278,12 +278,29 @@ export type Quote = z.infer<typeof QuoteSchema>
  *  `belowFloor: true`; the renderer replaces the band with a starter-engagement
  *  message. Nulling it there would make "below floor" indistinguishable from
  *  the two cases above at the client, which are different things to say to a
- *  visitor. */
+ *  visitor.
+ *
+ *  `quoteUrl` is the client's ONLY route to the full quote. Email delivery was
+ *  decommissioned (US-010) — nothing is sent to the lead — so the widget must
+ *  learn the signed link from this response or the client never reaches their
+ *  quote at all. Shape: `${PUBLIC_SITE_URL}/q/?id=<quoteId>&sig=<hex>`, with
+ *  BOTH values in the query string. That is spec §11's Preferred form and it is
+ *  load-bearing: the site is `output: 'export'` with `trailingSlash: true`, so
+ *  a path-form `/q/<id>` cannot be pre-rendered for an id that did not exist at
+ *  build time and resolves to Cloudflare Pages' `404.html`.
+ *
+ *  Null whenever `quoteId` is null — there is no quote to link to and inventing
+ *  a URL for one would hand the client a permanent 403. It is also null in the
+ *  rare case where the link could not be built at all (a missing
+ *  `PUBLIC_SITE_URL` or a signing failure); the brief and the quote are already
+ *  persisted by then, so a delivery problem must degrade this field rather than
+ *  fail the request. */
 export const GenerateResponseSchema = z
   .object({
     briefId: z.string(),
     quoteId: z.string().nullable(),
     quote: QuoteSchema.nullable(),
+    quoteUrl: z.string().nullable(),
     headline: z.string(),
     state: StateIdSchema,
   })
@@ -293,8 +310,8 @@ export type GenerateResponse = z.infer<typeof GenerateResponseSchema>
 /** GET /api/quote/:id?sig=… — the hosted quote page's only data source.
  *
  *  `markdown` is the CANONICAL stored artifact: the exact bytes that were
- *  rendered, persisted and emailed. The page renders it rather than
- *  re-deriving anything, so what a client reads online is what they were sent.
+ *  rendered and persisted at generate time. The page renders it rather than
+ *  re-deriving anything, so what a client reads today is what was quoted.
  *  `quote` is the same structured payload POST /api/generate returns, mapped
  *  off the stored row.
  *

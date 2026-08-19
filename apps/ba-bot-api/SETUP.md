@@ -49,10 +49,11 @@ Provider configuration is **not** secret and lives in `[vars]` in `wrangler.toml
 | `LLM_MODEL_HEAVY` | `deepseek-v4-pro` |
 | `PUBLIC_SITE_URL` | `https://www.unodigit.com.au` |
 
-`PUBLIC_SITE_URL` is the origin of the quote link that goes into the client's email
-(`${PUBLIC_SITE_URL}/q/?id=<quoteId>&sig=<hmac>`). It is deliberately **separate from
-`ALLOWED_ORIGIN`**: that one is a CORS allowlist containing `http://localhost:3000`, and
-reordering it must never change the URL a client receives.
+`PUBLIC_SITE_URL` is the origin of the quote link `POST /api/generate` returns as
+`quoteUrl` (`${PUBLIC_SITE_URL}/q/?id=<quoteId>&sig=<hmac>`), which the widget shows the
+client. It is deliberately **separate from `ALLOWED_ORIGIN`**: that one is a CORS
+allowlist containing `http://localhost:3000`, and reordering it must never change the URL
+a client receives.
 
 **Both the id and the signature are in the query string, and that is load-bearing.**
 The site is `output: 'export'` with `trailingSlash: true`, so a dynamic `/q/[id]` route
@@ -62,8 +63,8 @@ Spec §11 therefore specifies a **static shell** at `app/q/page.tsx` that reads
 `?id=…&sig=…` and fetches the quote from the Worker client-side. That page is a Plan 3
 deliverable — until it ships the link 404s, even though the API behind it
 (`GET /api/quote/:id`) already works. The shape is pinned by a test
-(`test/api/generate.test.ts`) because links already emailed **cannot be reissued**:
-changing it later strands every quote sent before the change.
+(`test/api/quote-link.test.ts`) because a link already handed to a client **cannot be
+reissued**: changing it later strands every quote produced before the change.
 
 To change any of these, edit `wrangler.toml` and redeploy. **Do not** `wrangler secret put`
 them: a secret shadows a var of the same name, so setting one silently overrides the
@@ -72,12 +73,11 @@ must stay the OpenAI-format host exactly as it appears in `wrangler.toml`
 (`https://api.deepseek.com`) — `src/llm/openai-compat.ts` appends `/chat/completions`
 itself, and DeepSeek's `/anthropic` endpoint would need a different adapter.
 
-Only these five are real secrets:
+Only these four are real secrets:
 
 | Secret | Where it comes from |
 | --- | --- |
 | `LLM_API_KEY` | DeepSeek console |
-| `RESEND_API_KEY` | Resend dashboard |
 | `TURNSTILE_SECRET` | Cloudflare dashboard → Turnstile → your site → secret key |
 | `IP_HASH_SALT` | generate once: `openssl rand -hex 32` |
 | `QUOTE_LINK_SIGNING_KEY` | generate once: `openssl rand -hex 32` |
@@ -105,10 +105,10 @@ address; an unset signing key HMACs every quote id under the empty string, which
 can reproduce, so every quote in the database becomes world-readable to anyone who can
 guess an id).
 
-`RESEND_API_KEY` is deliberately **not** on that list. An unset key stops delivery and
-nothing else: the send path logs a `quote_email_failed` event and still returns the brief
-and the quote, so a 503 for the whole API would be strictly worse than a quote the
-visitor reads on screen but does not receive by mail.
+That is now the whole list — `RESEND_API_KEY` was removed in US-010 along with the email
+path, and `scripts/sync-secrets.sh` no longer pushes it. If it was already pushed to a
+deployed Worker, remove it with `pnpm wrangler secret delete RESEND_API_KEY`; nothing
+reads it any more.
 
 Secrets cannot be read back from Cloudflare once set — 1Password stays the source of truth.
 
@@ -126,24 +126,30 @@ op item edit ba_bot quote_link_signing_key="$(openssl rand -hex 32)"   # or crea
 The reference `scripts/sync-secrets.sh` expects is
 `op://application/ba_bot/quote_link_signing_key`.
 
-Rotating this key **invalidates every quote link already emailed** — the signature is
-`HMAC-SHA256(quoteId)` under the key, so previously-sent links start returning 403.
+Rotating this key **invalidates every quote link already handed out** — the signature is
+`HMAC-SHA256(quoteId)` under the key, so links produced before the rotation start
+returning 403. Since US-010 that link is the *only* way a client reaches their quote, so
+a rotation is not a cosmetic change.
 
-### Email delivery (Resend)
+### Quote delivery (download link, not email)
 
-Quotes are delivered as **HTML only, with no attachment**, by a direct `fetch` to
-`https://api.resend.com/emails` (`src/mail/resend.ts`). The `resend` SDK is not installed
-and should not be — one POST does not justify a dependency in a Worker bundle.
+**Email delivery was decommissioned in US-010.** `src/mail/` and `RESEND_API_KEY` are
+gone, no message is sent to the lead, and no `quote_email_sent` / `quote_email_failed`
+event is ever written. The Resend sender domain was never DNS-verified, so every send
+would have 422'd anyway — visible only as a `quote_email_failed` row.
 
-The sender is `quotes@unodigit.com.au` (the `FROM` constant in `src/mail/resend.ts`).
-**`unodigit.com.au` must be added as a domain in Resend and DNS-verified (SPF + DKIM, and
-the return-path record Resend asks for) before any quote will deliver.** Until it is
-verified, every send fails with a 422 and the Worker records a `quote_email_failed` event
-— visibly, but only in the `events` table; the visitor still gets a 200 and their number
-on screen. Changing the sender address means re-verifying.
+Delivery is now the signed link `POST /api/generate` returns as `quoteUrl`:
 
-Delivery failures never fail the request, by design: the brief and quote are already
-persisted before the send is attempted. Check the `events` table for
-`quote_email_failed` (payload carries the Resend status and message) versus
-`quote_email_sent` (payload carries the provider id). Neither payload contains the
-recipient address — that lives only in `leads`.
+```
+${PUBLIC_SITE_URL}/q/?id=<quoteId>&sig=<hmac>
+```
+
+The widget shows it once the interview reaches a quote, and the `/q/` page offers
+print-to-PDF. `quoteUrl` is `null` whenever `quoteId` is — rate limited, or the estimator
+failed — because there is no quote to link to; the brief is still returned in both cases.
+
+Link construction never fails the request: it happens after the brief and the quote are
+committed, so a missing `PUBLIC_SITE_URL` or a signing failure records a
+`quote_link_failed` event and returns `quoteUrl: null` rather than a 500. The payload
+carries the quote id and the error, never any lead field — no lead field is read anywhere
+in the generate path at all now.

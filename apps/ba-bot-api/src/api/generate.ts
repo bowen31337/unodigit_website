@@ -9,10 +9,9 @@ import { priceQuote } from '../pricing/quote'
 import { buildBriefSections, renderBrief } from '../render/brief'
 import { renderQuote } from '../render/quote'
 import {
-  getBriefByConversation, getConversation, getLeadEmailByConversation, insertBrief,
+  getBriefByConversation, getConversation, insertBrief,
   insertQuote, recordEvent, type QuoteRow,
 } from '../db/queries'
-import { sendQuoteEmail } from '../mail/resend'
 import { signId } from '../util/sign'
 import { quotesToday, recordQuote, utcDay } from '../guards/ratelimit'
 import type { Slots, StateId } from '../graph/states'
@@ -40,9 +39,9 @@ const plural = (n: number): string => (n === 1 ? '' : 's')
 
 /**
  * The chat-visible line. The per-task rate NEVER appears here: it is internal
- * pricing mechanics, shown only in the emailed quote where the weighting and
- * the band explain it. A rate in the chat invites a negotiation about the
- * decomposition rather than about the outcome.
+ * pricing mechanics, shown only in the quote artifact behind the signed link,
+ * where the weighting and the band explain it. A rate in the chat invites a
+ * negotiation about the decomposition rather than about the outcome.
  */
 function headlineFor(q: Quote): string {
   if (q.belowFloor) {
@@ -68,11 +67,11 @@ const nonEmpty = (slots: Slots, key: string): boolean =>
  * carrying `GENERATE` with `initialState()`'s EMPTY slot bag. Ungated, that
  * renders a brief whose every section reads "_Not captured during the
  * interview._", then persists it, sends it to DeepSeek, prices whatever comes
- * back, stores it, and emails the client a dollar figure derived from nothing.
+ * back, stores it, and hands the client a dollar figure derived from nothing.
  *
  * The gate is the two slots `buildBriefSections` cannot produce a meaningful
- * artifact without: `project_name` titles the brief, the quote and the email
- * subject, and `problem` IS the "## Problem" section and the substance the
+ * artifact without: `project_name` titles both the brief and the quote, and
+ * `problem` IS the "## Problem" section and the substance the
  * estimator sizes against. Both are captured in the very first graph state
  * (its exitGate requires project_name, audience and problem together), so any
  * session that genuinely walked the interview has them.
@@ -127,7 +126,7 @@ async function quoteRowForBrief(db: D1Database, briefId: string): Promise<QuoteR
  *  has already changed once for its sibling RATE_PER_TASK_AUD (see
  *  progress.txt, 2026-08-19 pricing-configuration entry), so a re-read of an
  *  OLD quote could return a verdict that disagrees with the markdown already
- *  rendered, stored, and emailed to the client. The stored markdown is the
+ *  rendered, stored, and linked to the client. The stored markdown is the
  *  artifact the client actually read; it is the authority, so the verdict
  *  that produced it is stored alongside it and simply read back, not
  *  recomputed against whatever the env var holds today.
@@ -150,71 +149,45 @@ export function quoteFromRow(row: QuoteRow): Quote {
 }
 
 /**
- * Emails the finished artifacts to the lead, if there is one.
+ * The signed, downloadable link to the hosted quote — the ONLY way the client
+ * ever reaches it. Email delivery was decommissioned (US-010): nothing is sent
+ * to the lead, so this URL travels back in the generate response and the widget
+ * renders it.
  *
- * PII boundary. This is the ONLY place in the generate flow that reads a lead's
- * email address, and it does so AFTER the estimate has run and both artifacts
- * are persisted — so the address is structurally incapable of reaching the
- * estimator, the renderers, or any prompt. It goes from D1 straight into the
- * Resend envelope. Neither the address nor the lead's name is written to the
- * event payload: `leads` already holds it, and the event log is a support
- * surface read by anyone with dashboard access.
+ * Both id and signature go in the QUERY, per spec §11. The site is
+ * output:'export' with trailingSlash:true, so a dynamic /q/[id] route cannot be
+ * pre-rendered for ids that do not exist at build time — a path-form link
+ * resolves to Cloudflare Pages' 404.html and is permanently dead. A static shell
+ * at app/q/page.tsx reading ?id=&sig= works because the path IS known at build
+ * time. Do not "tidy" this into a path.
  *
- * Failure is logged and swallowed, never propagated. The brief and the quote
- * are already in the database and the visitor already has their number on
- * screen; turning a delivery problem into a 500 would cost them both.
+ * The id and signature are both [A-Za-z0-9_-]/lowercase-hex, so neither needs
+ * URL-encoding.
+ *
+ * PII: this function takes a quote id and nothing else. Since `deliver()` was
+ * removed there is no read of `leads.email` (or any other lead field) anywhere
+ * in the generate path — the address is now structurally incapable of leaving
+ * the `leads` table during generation at all, which is the strongest form of
+ * the Australian Privacy Act APP 8 posture this route can hold.
+ *
+ * Failure is logged and swallowed, never propagated, and answered with `null`.
+ * `signId` can throw and `PUBLIC_SITE_URL` can be unset; by the time this runs
+ * the brief and the quote are already committed and the visitor already has
+ * their number on screen. An unhandled throw would 500 that request AND skip
+ * `finish()`, parking the session at GENERATE forever. The `.catch` on the log
+ * is not decorative: if D1 is what threw, recording the event will throw too.
  */
-async function deliver(
-  env: Env,
-  conversationId: string,
-  a: { quoteId: string; projectName: string; briefMarkdown: string; quoteMarkdown: string },
-): Promise<void> {
+async function quoteLink(env: Env, conversationId: string, quoteId: string): Promise<string | null> {
   try {
-    const to = await getLeadEmailByConversation(env.DB, conversationId)
-    if (!to) return
-
-    // Both id and signature go in the QUERY, per spec section 11. The site is
-    // output:'export', so a dynamic /q/[id] route cannot be pre-rendered for ids
-    // that do not exist at build time — a path-form link resolves to Pages'
-    // 404.html and is permanently dead. A static shell at app/q/page.tsx reading
-    // ?id=&sig= works because the path is known at build time.
-    //
-    // This shape is load-bearing and effectively permanent: links already
-    // emailed cannot be reissued, so changing it later strands every quote sent
-    // before the change.
-    //
-    // The id and signature are both [A-Za-z0-9_-]/lowercase-hex, so neither
-    // needs URL-encoding.
-    const sig = await signId(a.quoteId, env.QUOTE_LINK_SIGNING_KEY)
+    const sig = await signId(quoteId, env.QUOTE_LINK_SIGNING_KEY)
     const base = env.PUBLIC_SITE_URL.replace(/\/$/, '')
-    const quoteUrl = `${base}/q/?id=${a.quoteId}&sig=${sig}`
-
-    const sent = await sendQuoteEmail({
-      apiKey: env.RESEND_API_KEY,
-      to,
-      projectName: a.projectName,
-      briefMarkdown: a.briefMarkdown,
-      quoteMarkdown: a.quoteMarkdown,
-      quoteUrl,
-    })
-
-    await recordEvent(
-      env.DB,
-      conversationId,
-      sent.ok ? 'quote_email_sent' : 'quote_email_failed',
-      sent.ok ? { quoteId: a.quoteId, providerId: sent.id ?? null } : { quoteId: a.quoteId, error: sent.error },
-    )
+    return `${base}/q/?id=${quoteId}&sig=${sig}`
   } catch (err) {
-    // `sendQuoteEmail` never throws, but the lead lookup, the signing key and
-    // PUBLIC_SITE_URL can. An unhandled throw here would 500 a request whose
-    // brief and quote are already committed AND skip `finish()`, leaving the
-    // session parked at GENERATE forever. Swallowing is strictly better than
-    // both. The `.catch` on the log is not decorative: if D1 is what threw,
-    // recording the event will throw too.
-    await recordEvent(env.DB, conversationId, 'quote_email_failed', {
-      quoteId: a.quoteId,
+    await recordEvent(env.DB, conversationId, 'quote_link_failed', {
+      quoteId,
       error: err instanceof Error ? err.message : String(err),
     }).catch(() => undefined)
+    return null
   }
 }
 
@@ -255,10 +228,15 @@ export function registerGenerateRoutes(
           ? RATE_LIMITED_HEADLINE
           : ESTIMATOR_FAILED_HEADLINE
 
+      // The link is rebuilt, not stored: the signature is a deterministic
+      // HMAC over the quote id, so a refresh returns the identical URL. A
+      // visitor who closed the widget and came back must still be able to open
+      // their quote — with email gone this response is their only copy of it.
       return c.json({
         briefId: existing.id,
         quoteId: row?.id ?? null,
         quote,
+        quoteUrl: row ? await quoteLink(c.env, conversationId, row.id) : null,
         headline,
         state: session.state,
       })
@@ -298,14 +276,19 @@ export function registerGenerateRoutes(
     })
 
     /** Everything after the brief shares one exit: advance the session, close
-     *  the conversation row, answer. */
+     *  the conversation row, answer.
+     *
+     *  `quoteUrl` defaults to null so the two no-quote exits below (rate
+     *  limited, estimator failed) cannot accidentally carry a link: there is no
+     *  quote behind it, and a fabricated one would only ever 403. */
     const finish = async (
       quoteId: string | null, quote: Quote | null, headline: string,
+      quoteUrl: string | null = null,
     ) => {
       const result = step(session, { slots: {}, readyToAdvance: true, offTopic: false })
       await persistSession(c.env, conversationId, result.next)
       await endConversation(c.env.DB, conversationId, result.next.state, now)
-      return c.json({ briefId, quoteId, quote, headline, state: result.next.state })
+      return c.json({ briefId, quoteId, quote, quoteUrl, headline, state: result.next.state })
     }
 
     // Spec §10: one quote per IP per day, gating the artifact rather than the
@@ -340,7 +323,7 @@ export function registerGenerateRoutes(
 
     const validUntil = now + Number(c.env.QUOTE_VALID_DAYS) * DAY_MS
     const quoteId = newId('quote')
-    // The emailed artifact does show the rate; only the chat headline hides it.
+    // The linked artifact does show the rate; only the chat headline hides it.
     const quoteMarkdown = renderQuote({ quote, shape, projectName, validUntil, rateShown: true })
 
     await insertQuote(c.env.DB, {
@@ -371,10 +354,9 @@ export function registerGenerateRoutes(
       .bind(estimate.promptTokens, estimate.completionTokens, conversationId)
       .run()
 
-    await deliver(c.env, conversationId, {
-      quoteId, projectName, briefMarkdown, quoteMarkdown,
-    })
-
-    return await finish(quoteId, quote, headlineFor(quote))
+    return await finish(
+      quoteId, quote, headlineFor(quote),
+      await quoteLink(c.env, conversationId, quoteId),
+    )
   })
 }

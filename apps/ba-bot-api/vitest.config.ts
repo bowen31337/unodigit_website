@@ -17,7 +17,6 @@ export default defineConfig({
           TURNSTILE_SECRET: 'test-turnstile',
           IP_HASH_SALT: 'test-salt',
           QUOTE_LINK_SIGNING_KEY: 'test-quote-signing-key-0123456789abcdef0123456789abcdef',
-          RESEND_API_KEY: 'test-resend-key',
         },
       },
     }),

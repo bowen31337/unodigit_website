@@ -20,7 +20,6 @@ CF_TOKEN_REF="op://application/cloudflare_api/api_token"
 # name                → 1Password reference
 SECRETS=(
   "LLM_API_KEY:op://application/deepseek/api_key"
-  "RESEND_API_KEY:op://application/resend/api_key"
   "TURNSTILE_SECRET:op://application/turnstile/secret_key"
   "IP_HASH_SALT:op://application/ba_bot/ip_hash_salt"
   "QUOTE_LINK_SIGNING_KEY:op://application/ba_bot/quote_link_signing_key"
@@ -39,15 +38,17 @@ SECRETS=(
 # string, making every quote in the database world-readable to anyone who can
 # guess an id. Both must fail closed rather than degrade quietly.
 #
-# RESEND_API_KEY is deliberately NOT in that 503 list. An unset key stops
-# delivery and nothing else; the send path already logs a `quote_email_failed`
-# event and returns the brief and quote anyway, so refusing all traffic would
-# be a strictly worse outcome than a quote the client reads on screen but does
-# not receive by mail. Rotating the key never needs a redeploy.
+# RESEND_API_KEY was removed here in US-010 along with the whole email path.
+# `op://application/resend/api_key` is left untouched in 1Password — this script
+# simply stops pushing it. Nothing in the Worker reads it any more; delete the
+# Cloudflare secret with `pnpm wrangler secret delete RESEND_API_KEY` if you
+# want it gone from the deployed environment too.
 #
-# A signing-key rotation invalidates every quote link already emailed: the
+# A signing-key rotation invalidates every quote link already handed out: the
 # signature is HMAC(quote id) under this key, so old links start returning 403.
-# Rotate only with that in mind.
+# That is now the ONLY delivery mechanism there is — with email gone, a rotation
+# is the difference between a client reaching their quote and not. Rotate only
+# with that in mind.
 
 CLOUDFLARE_API_TOKEN="$(op read "$CF_TOKEN_REF")"
 export CLOUDFLARE_API_TOKEN

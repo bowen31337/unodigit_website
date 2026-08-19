@@ -7,14 +7,10 @@ export interface Env {
   TURNSTILE_SECRET: string
   IP_HASH_SALT: string
   // In REQUIRED_SECRETS (src/index.ts): an unset key HMACs every quote id under
-  // the empty string, so every quote becomes world-readable.
+  // the empty string, so every quote becomes world-readable. It matters MORE
+  // since US-010 removed email delivery, not less — the signed link is now the
+  // only way a client ever reaches their quote.
   QUOTE_LINK_SIGNING_KEY: string
-  // NOT in REQUIRED_SECRETS, on purpose. An unset key degrades nothing that is
-  // guarding anything — it only stops delivery, which is already a non-fatal,
-  // event-logged path (src/mail/resend.ts). Refusing all traffic because email
-  // is misconfigured would contradict the rule that a send failure must not
-  // fail the request.
-  RESEND_API_KEY: string
 
   // vars — plaintext in wrangler.toml, safe to review and diff
   LLM_BASE_URL: string
@@ -31,10 +27,10 @@ export interface Env {
   // actually meters DeepSeek spend.
   MAX_TURNS_PER_IP_PER_DAY: string
   ALLOWED_ORIGIN: string
-  // Origin the emailed quote link points at. Deliberately NOT derived from the
-  // first entry of ALLOWED_ORIGIN: that is a CORS allowlist containing
-  // localhost, and reordering it must not silently change what lands in a
-  // client's inbox.
+  // Origin the signed quote link points at (POST /api/generate returns it as
+  // `quoteUrl`). Deliberately NOT derived from the first entry of
+  // ALLOWED_ORIGIN: that is a CORS allowlist containing localhost, and
+  // reordering it must not silently change the link a client is handed.
   PUBLIC_SITE_URL: string
 }
 

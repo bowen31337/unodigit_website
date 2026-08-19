@@ -1618,3 +1618,92 @@ Also confirmed: RESEND_API_KEY was already wired at
 op://application/resend/api_key in scripts/sync-secrets.sh since Plan 2, and the
 reference resolves (re_ prefix, 36 chars). No change needed; it ships with the
 same sync run as the signing key.
+
+### 2026-08-19 — US-010: email delivery removed, quote is a download link
+
+User decision. Resend's sender domain was never DNS-verified (SPF/DKIM), so
+every send would have 422'd anyway — visible only as a `quote_email_failed`
+row. Rather than fix the DNS, delivery was decommissioned: the client now gets
+the signed link back from POST /api/generate and the widget shows it.
+
+Deleted: src/mail/ (resend.ts, template.ts), test/mail/resend.test.ts,
+`deliver()` and its one call site, `getLeadEmailByConversation`,
+RESEND_API_KEY from src/env.ts, vitest.config.ts, scripts/sync-secrets.sh and
+SETUP.md. Grep for resend/RESEND/deliver(/sendQuoteEmail/mail/ across src/,
+test/, scripts/, vitest.config.ts, wrangler.toml and SETUP.md now returns only
+prose explaining the removal — no code reference survives.
+
+`getLeadEmailByConversation` had exactly one caller (`deliver()`), checked by
+grep before deleting. Its doc comment was replaced by a note at the same spot
+in src/db/queries.ts saying why it is absent, so a future story re-adds it
+deliberately instead of widening some other lead query to smuggle the address.
+
+KEPT, and now more load-bearing than before: src/util/sign.ts, src/api/quote.ts,
+QUOTE_LINK_SIGNING_KEY, PUBLIC_SITE_URL. The signed link stopped being a
+secondary copy of the email and became the ONLY delivery mechanism, so a
+signing-key rotation is now the difference between a client reaching their
+quote and not. Both SETUP.md and sync-secrets.sh say so.
+
+Contract: GenerateResponseSchema gains `quoteUrl: z.string().nullable()`.
+Shape is unchanged from what `deliver()` built —
+`${PUBLIC_SITE_URL}/q/?id=<quoteId>&sig=<hex>`, BOTH values in the QUERY. Spec
+§11 Preferred form, and load-bearing: the site is output:'export' with
+trailingSlash:true, so a path-form /q/<id> resolves to Pages' 404.html. Not to
+be "tidied" into a path. Null whenever quoteId is null (rate limited, estimator
+failed) — the brief is still delivered in both cases, and a fabricated link to
+a quote that does not exist would only ever 403. `finish()` defaults quoteUrl
+to null so the two no-quote exits cannot accidentally carry one. The idempotent
+re-read rebuilds the link rather than storing it: the signature is a
+deterministic HMAC over the id, so a refresh returns byte-identical output, and
+with email gone that response is the client's only copy of the link.
+
+`deliver()` became `quoteLink()`, which still swallows every failure and now
+answers null, recording `quote_link_failed`. The failure mode being guarded is
+not only the 500: an escaping throw also skips finish(), so the session would
+never advance to DONE despite both artifacts being committed.
+
+PRIVACY, the property this change was worth having on its own: NO lead field
+(`name`, `email`) is read anywhere in the generate path any more —
+getLeadEmailByConversation existed only for deliver(). Under Australian Privacy
+Act APP 8 that is strictly better than the previous "read late, envelope only"
+posture: the address no longer leaves the `leads` table during generation at
+all. Verified by grep — `grep -rnE "\b(name|email)\b" src/llm/ src/graph/
+prompts.ts src/estimator/` returns the 4 previously-adjudicated lines plus
+calibration.ts:45 ("only three overlap ours by name", prose added by the
+2026-08-19 claw-forge rewrite, not by this story); `grep -nE "\b(name|email)\b"
+src/api/generate.ts` returns 4 lines, all prose: the ESTIMATOR_FAILED headline's
+human follow-up promise and three comments. Zero reads.
+
+Tests 187/19 -> 181/19, zero warnings, both packages typecheck (tsc --noEmit,
+exit 0). test/mail/resend.test.ts (-14) deleted; new test/api/quote-link.test.ts
+(+9) keeps the FILE count at 19. Four of its tests are retargeted, not new:
+"still returns 200 when the send fails / when the delivery path throws" became
+"still returns 200 with readable artifacts when the link cannot be built"
+(PUBLIC_SITE_URL undefined — same resilience property, different downstream
+step); "never emails when the conversation has no lead" became "returns a
+working link for a conversation with no lead attached"; the PII canary became
+"reads no lead field anywhere in the generate path", now asserting exactly ONE
+outbound call rather than "present in the envelope, absent elsewhere". The link
+SHAPE test moved out of generate.test.ts, still parsed with `new URL()` and
+never regex-matched — a regex passes on /q/quote_abc?id=… and on an id that
+merely appears somewhere in the string.
+
+The deliverable is the signature round-trip: the returned sig is verified with
+`verifyId` under the real binding, with a wrong id and a wrong key checked to
+FAIL so a vacuously-true verifier cannot satisfy it. Mutation-checked — changed
+quoteLink to `signId(quoteId + 'x', …)` while still putting the real id in the
+URL. EXACTLY the three tests that round-trip failed ("expected false to be
+true"); all 178 others stayed green, including the shape test, which is the
+point: the URL still parses, still carries a 64-hex sig, still names the right
+quote id, and GET /api/quote/:id would 403 every client forever — because that
+route deliberately makes a bad signature indistinguishable from an unknown id.
+Nothing but the round-trip catches it. Restored; 181/19 green.
+
+KNOWN STALE, deliberately not fixed here (not this story's files):
+  - CLAUDE.md "Known gaps" still says `mail/resend.ts` exists and is part of
+    the system that handles GENERATE. It no longer does.
+  - prd.json prerequisite P2 ("Resend sender domain SPF/DKIM verified",
+    userAction: true) is now moot — there is nothing left to deliver by mail.
+  - The /q/ page and the widget were NOT touched. The page is a separate story;
+    until it ships, the returned link still 404s on Pages even though the API
+    behind it works.
