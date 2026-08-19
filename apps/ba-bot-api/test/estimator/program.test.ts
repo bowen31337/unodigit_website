@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { runEstimate } from '../../src/estimator/estimate'
-import { PROGRAM_MODE_ADDENDUM } from '../../src/estimator/prompt'
+import { ESTIMATOR_SYSTEM_PROMPT, PROGRAM_MODE_ADDENDUM } from '../../src/estimator/prompt'
 import type { LlmClient, ChatResponse } from '../../src/llm/types'
 
 function stub(responses: Array<Partial<ChatResponse>>) {
@@ -88,6 +88,47 @@ describe('runEstimate program mode', () => {
     if (!r.ok) return
     expect(r.shape.mode).toBe('single')
     expect(r.shape.total_tasks).toBe(350)
+  })
+
+  /**
+   * DeepSeek's prefix cache is a BYTE match on the leading messages and is
+   * ~98% cheaper on a hit, so the frozen ESTIMATOR_SYSTEM_PROMPT must stay
+   * FIRST in the program pass too — sharing the prefix the first pass already
+   * warmed. Sending [PROGRAM_MODE_ADDENDUM, ESTIMATOR_SYSTEM_PROMPT, user]
+   * instead misses the cache on every program-mode call while producing
+   * identical output: the suite stays green and only the bill changes. Order
+   * is therefore pinned explicitly, not just membership.
+   */
+  it('keeps the frozen prompt first in the program pass, ahead of the addendum', async () => {
+    const sent: Array<Array<{ role: string; content: string }>> = []
+    const client = {
+      async chat(req: { messages: Array<{ role: string; content: string }> }): Promise<ChatResponse> {
+        sent.push(req.messages)
+        return {
+          content: sent.length === 1 ? bigSingle : program,
+          finishReason: 'stop',
+          promptTokens: 500,
+          completionTokens: 200,
+        }
+      },
+    }
+    const r = await runEstimate(client as unknown as LlmClient, args)
+
+    // Guard against a vacuous pass: without a successful second pass there is
+    // no program-pass message list to assert on at all.
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.shape.mode).toBe('program')
+    expect(sent).toHaveLength(2)
+
+    const second = sent[1]!
+    expect(second[0]!.role).toBe('system')
+    expect(second[0]!.content).toBe(ESTIMATOR_SYSTEM_PROMPT)
+    expect(second[1]!.role).toBe('system')
+    expect(second[1]!.content).toBe(PROGRAM_MODE_ADDENDUM)
+    // The brief follows the frozen pair, so nothing per-request precedes them.
+    expect(second[2]!.role).toBe('user')
+    expect(second[2]!.content).toBe(args.briefText)
   })
 
   it('sums token usage across both passes', async () => {

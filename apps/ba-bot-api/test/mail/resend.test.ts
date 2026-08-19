@@ -291,10 +291,18 @@ describe('POST /api/generate — email delivery', () => {
     // The link must be the real signed one, not a bare id: GET /api/quote/:id
     // rejects an unsigned or wrongly-signed request with 403, so an unverified
     // link is a dead link in the client's inbox.
-    const match = html.match(/https:\/\/[^"']*\/q\/([^?"']+)\?sig=([0-9a-fA-F]+)/)
-    expect(match).not.toBeNull()
-    expect(match![1]).toBe(json.quoteId)
-    expect(await verifyId(match![1]!, match![2]!, env.QUOTE_LINK_SIGNING_KEY)).toBe(true)
+    //
+    // Both id and signature live in the QUERY (spec §11) — the site is
+    // output:'export', so the old `/q/<id>?sig=` path form resolved to Pages'
+    // 404.html. The shape itself is pinned in test/api/generate.test.ts.
+    const href = /href="(https:\/\/[^"]+)"/.exec(html)
+    expect(href).not.toBeNull()
+    // `renderEmailHtml` escapes the href, so `&` arrives as `&amp;`.
+    const url = new URL(href![1]!.replace(/&amp;/g, '&'))
+    const id = url.searchParams.get('id')!
+    const sig = url.searchParams.get('sig')!
+    expect(id).toBe(json.quoteId)
+    expect(await verifyId(id, sig, env.QUOTE_LINK_SIGNING_KEY)).toBe(true)
 
     const events = await eventsOfType(conversationId, 'quote_email_sent')
     expect(events.results).toHaveLength(1)

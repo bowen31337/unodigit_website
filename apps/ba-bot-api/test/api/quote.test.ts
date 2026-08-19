@@ -1,6 +1,8 @@
 import { env, exports } from 'cloudflare:workers'
 import { describe, it, expect } from 'vitest'
-import { QuoteSchema } from '@unodigit/ba-bot-contract'
+import {
+  ErrorResponseSchema, QuoteDetailResponseSchema, QuoteSchema,
+} from '@unodigit/ba-bot-contract'
 import { createConversation, insertBrief, insertQuote } from '../../src/db/queries'
 import { signId } from '../../src/util/sign'
 import { newId } from '../../src/util/ids'
@@ -88,6 +90,32 @@ describe('GET /api/quote/:id', () => {
       confidence: 'high',
       belowFloor: false,
     })
+  })
+
+  // Plan 3's hosted quote page is the only consumer of this route, and it will
+  // validate the response against the contract before rendering it. Without a
+  // schema there is nothing for it to validate against; with a schema that does
+  // not match, it rejects every valid quote.
+  it('returns a 200 body that validates against the contract', async () => {
+    const id = await seedQuote()
+    const res = await get(id, await signId(id, env.QUOTE_LINK_SIGNING_KEY))
+
+    const parsed = QuoteDetailResponseSchema.safeParse(await res.json())
+    expect(parsed.success).toBe(true)
+    // `.strict()` on the schema means this also proves the route sends no
+    // field the contract does not describe.
+    expect(parsed.success && parsed.data.markdown).toBe(MARKDOWN)
+  })
+
+  // `forbidden` is the ONLY code this route ever returns, and it was missing
+  // from the contract's error union — so a Plan 3 client validating errors
+  // against the contract failed to parse every single 403.
+  it('returns a 403 body that validates against the contract', async () => {
+    const id = await seedQuote()
+    const res = await get(id, await signId(id, OTHER_KEY))
+
+    expect(res.status).toBe(403)
+    expect(ErrorResponseSchema.safeParse(await res.json()).success).toBe(true)
   })
 
   it('403s on a tampered signature', async () => {

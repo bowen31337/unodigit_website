@@ -56,6 +56,41 @@ function headlineFor(q: Quote): string {
   return `~${q.totalTasks} tasks · estimated A$${aud(q.lowAud)}–${aud(q.highAud)} · roughly ${q.weeks} week${plural(q.weeks)}`
 }
 
+const nonEmpty = (slots: Slots, key: string): boolean =>
+  typeof slots[key] === 'string' && (slots[key] as string).trim().length > 0
+
+/**
+ * Does this session carry enough substance to put a price on?
+ *
+ * Slots live ONLY in KV, under SESSION_TTL_SECONDS (86400). `loadSession`
+ * deliberately falls back to the durable D1 row when the key is gone, but D1
+ * holds only `state` and `turn_count` — so an expired session comes back
+ * carrying `GENERATE` with `initialState()`'s EMPTY slot bag. Ungated, that
+ * renders a brief whose every section reads "_Not captured during the
+ * interview._", then persists it, sends it to DeepSeek, prices whatever comes
+ * back, stores it, and emails the client a dollar figure derived from nothing.
+ *
+ * The gate is the two slots `buildBriefSections` cannot produce a meaningful
+ * artifact without: `project_name` titles the brief, the quote and the email
+ * subject, and `problem` IS the "## Problem" section and the substance the
+ * estimator sizes against. Both are captured in the very first graph state
+ * (its exitGate requires project_name, audience and problem together), so any
+ * session that genuinely walked the interview has them.
+ *
+ * Deliberately NOT gated on the rest. `audience`, `solution_summary`,
+ * `mvp_must` and friends make a brief richer, but requiring them would 409 a
+ * terse-yet-genuine interview — and whether enough was asked is the graph's
+ * job, not this route's. The guard exists to catch a VANISHED session, not to
+ * grade one.
+ *
+ * A session force-advanced past the first state without answering can also
+ * land here. `session_expired` is a slightly generous name for that case, but
+ * the remedy is identical — restart the interview — and quoting it would be
+ * exactly as wrong.
+ */
+const hasEnoughToQuote = (slots: Slots): boolean =>
+  nonEmpty(slots, 'project_name') && nonEmpty(slots, 'problem')
+
 const projectNameOf = (slots: Slots): string => {
   const raw = slots.project_name
   return typeof raw === 'string' && raw.trim() ? raw.trim() : 'Your project'
@@ -132,9 +167,21 @@ async function deliver(
     const to = await getLeadEmailByConversation(env.DB, conversationId)
     if (!to) return
 
-    // The signature is lowercase hex, so nothing here needs URL-encoding.
+    // Both id and signature go in the QUERY, per spec section 11. The site is
+    // output:'export', so a dynamic /q/[id] route cannot be pre-rendered for ids
+    // that do not exist at build time — a path-form link resolves to Pages'
+    // 404.html and is permanently dead. A static shell at app/q/page.tsx reading
+    // ?id=&sig= works because the path is known at build time.
+    //
+    // This shape is load-bearing and effectively permanent: links already
+    // emailed cannot be reissued, so changing it later strands every quote sent
+    // before the change.
+    //
+    // The id and signature are both [A-Za-z0-9_-]/lowercase-hex, so neither
+    // needs URL-encoding.
     const sig = await signId(a.quoteId, env.QUOTE_LINK_SIGNING_KEY)
-    const quoteUrl = `${env.PUBLIC_SITE_URL.replace(/\/$/, '')}/q/${a.quoteId}?sig=${sig}`
+    const base = env.PUBLIC_SITE_URL.replace(/\/$/, '')
+    const quoteUrl = `${base}/q/?id=${a.quoteId}&sig=${sig}`
 
     const sent = await sendQuoteEmail({
       apiKey: env.RESEND_API_KEY,
@@ -218,6 +265,17 @@ export function registerGenerateRoutes(
     }
 
     const slots = session.slots
+    if (!hasEnoughToQuote(slots)) {
+      await recordEvent(c.env.DB, conversationId, 'generate_session_expired', {
+        state: session.state,
+      })
+      // 409, not 404 and not 500. The conversation exists and the request is
+      // well-formed; what is missing is the visitor's interview state, which
+      // makes this a wrong-state condition. A 500 would also mislead: nothing
+      // failed, and there is nothing to retry.
+      return c.json({ error: 'session_expired' }, 409)
+    }
+
     const projectName = projectNameOf(slots)
     const sections = buildBriefSections(slots)
     const briefMarkdown = renderBrief(sections, projectName)

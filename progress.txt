@@ -820,3 +820,130 @@ DEPLOY BLOCKERS carried into Plan 3, both real today:
 - The /q/ route the emailed link points at is a Plan 3 deliverable. The API
   behind it (GET /api/quote/:id) works; the page does not exist yet, so a link
   emailed before Plan 3 ships resolves to a 404 on the site.
+
+### 2026-08-19 — Plan 2 final-review fix wave (five findings)
+
+Whole-branch review of Plan 2. Five verified findings, fixed in one wave. Suite
+165 -> 172 tests / 17 files, zero warnings; both apps/ba-bot-api and
+packages/ba-bot-contract typecheck (tsc --noEmit, exit 0).
+
+1. CRITICAL — the emailed link shape was never pinned, and was wrong.
+   generate.ts emitted `${PUBLIC_SITE_URL}/q/${quoteId}?sig=${sig}`. The site is
+   output:'export' with trailingSlash:true, so a dynamic /q/[id] route cannot be
+   pre-rendered for ids that do not exist at build time — every emailed quote
+   link resolved to Pages' 404.html and was PERMANENTLY DEAD. Spec section 11
+   marks a static shell at app/q/page.tsx reading `?id=…&sig=…` as Preferred for
+   exactly this reason. Code now emits `${base}/q/?id=${quoteId}&sig=${sig}`.
+   Why 165 tests missed it: the only two references were fixture strings passed
+   INTO renderEmailHtml, which assert nothing about what generate.ts produces,
+   plus one route assertion whose regex was written around the old shape.
+   New test "emails a /q/?id=&sig= query link, never the dead /q/<id> path form"
+   drives a real generate through to the Resend call, extracts the href with a
+   SHAPE-AGNOSTIC regex (`href="(https://[^"]+)"` — so a regression is extracted
+   and then caught, not silently unmatched), un-escapes `&amp;` (renderEmailHtml
+   escapes the href), and asserts contains '/q/?id=', contains '&sig=', NOT
+   /\/q\/quote_/, and — via `new URL()`, not a regex — pathname '/q/' with
+   searchParams.get('id') === the quote id and sig matching ^[0-9a-f]{64}$.
+   RED by mutation (restoring the path form): the new test failed
+   "expected 'https://www.unodigit.com.au/q/quote_4…' to contain '/q/?id='", and
+   resend.test.ts's link test failed too. Reverted, GREEN.
+   test/mail/resend.test.ts's own link assertion was rewritten to parse with
+   `new URL()` rather than pin a path shape — it was RED at the start of this
+   wave (the controller's code change had already landed).
+   SETUP.md's PUBLIC_SITE_URL paragraph documented the dead form; corrected, with
+   the static-shell reasoning and the "links already emailed cannot be reissued"
+   warning.
+
+2. IMPORTANT — a KV miss quoted an empty brief.
+   Slots live ONLY in KV (SESSION_TTL_SECONDS 86400). loadSession deliberately
+   falls back to the durable D1 row, but D1 holds only state and turn_count — so
+   an expired session came back carrying GENERATE with initialState()'s EMPTY
+   slot bag. buildBriefSections({}) renders every section as "_Not captured
+   during the interview._", and that empty brief was persisted, sent to DeepSeek,
+   priced, stored, and EMAILED TO THE CLIENT as a dollar commitment. No guard, no
+   test.
+   Fixed with hasEnoughToQuote(slots), gating on non-empty `project_name` AND
+   non-empty `problem`, returning 409 {error:'session_expired'} — 409 because the
+   conversation exists and the request is well-formed; what is missing is the
+   visitor's interview state, which is a wrong-state condition, not a not-found
+   and not a 500 (nothing failed and there is nothing to retry).
+   Why those two slots: project_name titles the brief, the quote and the email
+   subject; problem IS the "## Problem" section and the substance the estimator
+   sizes against. Both are captured in the FIRST graph state, whose exitGate
+   requires project_name + audience + problem together, so any session that
+   genuinely walked the interview has them. Deliberately NOT gated on audience,
+   solution_summary or mvp_must: requiring them would 409 a terse-but-genuine
+   interview, and whether enough was asked is the graph's job, not this route's.
+   The guard catches a VANISHED session, it does not grade one.
+   Placement is AFTER the idempotency read and AFTER the GENERATE state gate, so
+   a conversation that already has a brief still gets it back on a refresh even
+   once its KV entry has expired — that path never reads slots.
+   Known imprecision, recorded not fixed: a session force-advanced past the first
+   state without answering also lands here and is told 'session_expired'. The
+   remedy is identical (restart the interview) and quoting it would be exactly as
+   wrong, so the generous name is accepted.
+   RED observed: both new 409 tests returned "expected 200 to be 409" — and the
+   200 is the point, the empty brief really was persisted and answered with the
+   estimator-failed headline.
+   Three tests: (a) KV absent + D1 GENERATE -> 409 {error:'session_expired'},
+   fetch spy never called (covers BOTH the LLM and Resend, since both go through
+   fetch), no brief row, global quotes count unchanged, and a retry still 409s;
+   (b) slots present but `problem` missing -> 409, which pins that the guard
+   reads more than project_name; (c) a session carrying ONLY project_name +
+   problem still returns 200 with a real quote and exactly one LLM call, so the
+   guard is not over-broad.
+
+3. IMPORTANT — contract was missing what Plan 3 must consume.
+   'forbidden' is the ONLY code src/api/quote.ts ever returns (bad signature and
+   unknown id are deliberately indistinguishable), and it was absent from
+   ErrorResponseSchema and ErrorCodeSchema — a Plan 3 client validating errors
+   against the contract failed to parse EVERY 403. Added, along with
+   'session_expired' from finding 2 (in the no-`state` branch of the union: the
+   whole point of that failure is that the session is gone, so the durable row's
+   state — always GENERATE — tells the client nothing actionable).
+   Added QuoteDetailResponseSchema { markdown: string, quote: QuoteSchema },
+   .strict(), mirroring src/api/quote.ts's 200 body exactly, plus the inferred
+   QuoteDetailResponse type. Nothing invented — read off the route.
+   RED observed: "TypeError: Cannot read properties of undefined (reading
+   'safeParse')" for QuoteDetailResponseSchema, and "expected false to be true"
+   for both ErrorResponseSchema assertions (403 and 409).
+   Browser safety re-verified: grep -rnE "cloudflare|D1Database|KVNamespace"
+   packages/ba-bot-contract/src returns zero matches.
+
+4. IMPORTANT — the program pass's cached prefix was unpinned.
+   estimate.ts sends [ESTIMATOR_SYSTEM_PROMPT, PROGRAM_MODE_ADDENDUM, user] for
+   the second pass, but estimate.test.ts pinned messages[0] for the FIRST pass
+   only. Swapping the program pass's order misses DeepSeek's prefix cache (a byte
+   match, ~98% cheaper on a hit) on every program-mode call while producing
+   identical output — the suite stays green and only the bill changes.
+   New test in program.test.ts records every call's message list and asserts the
+   SECOND pass has [0] = ESTIMATOR_SYSTEM_PROMPT, [1] = PROGRAM_MODE_ADDENDUM,
+   [2] = the brief, with roles. It first asserts r.ok and shape.mode==='program'
+   and sent.length===2 so it cannot pass vacuously against an implementation that
+   never reaches a second pass.
+   Mutation-checked: swapping the two system messages in estimate.ts failed
+   EXACTLY this one test — "expected 'This project is too large for one cla…' to
+   be 'You estimate how much software a proj…'". Reverted; estimate.ts is
+   byte-unchanged in this wave (empty git diff on that path).
+
+5. MINOR — half-corrected contract comment finished.
+   GenerateResponseSchema's doc said `quote` is absent "ONLY when the rate limit
+   was hit". generate.ts also nulls it on estimator failure (parse/empty/
+   truncated/provider). The US-007 controller note fixed only the belowFloor
+   half. Comment now names both cases, says the two are distinguished by
+   `headline` rather than by the payload, and keeps the belowFloor explanation.
+
+Out of scope, deliberately untouched and still open:
+- RATE_PER_TASK_AUD (10) vs MINIMUM_ENGAGEMENT_AUD (6000) — every single-mode
+  quote prices below the floor. A business pricing decision for the user, not a
+  code fix. Both remain documented placeholders.
+- apps/web/app/q/page.tsx — Plan 3 Task 3.
+- The rate-check / recordQuote atomicity gap, and the unmetered-estimator-failure
+  gap (a failed estimate does not call recordQuote, so it costs a heavy-model
+  call without consuming the daily allowance). Recorded, deferred.
+
+PII grep `grep -rnE "\b(name|email)\b" src/llm/ src/graph/prompts.ts
+src/estimator/` returns the same 4 previously-adjudicated lines as US-003..US-009
+(prompts.ts do-not-ask line; calibration.ts's "email + SMS reminders" prose; two
+prompt.ts JSON-schema "name": string fields). This wave touched none of those
+directories.

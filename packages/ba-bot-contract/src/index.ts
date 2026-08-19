@@ -106,13 +106,26 @@ export type HealthResponse = z.infer<typeof HealthResponseSchema>
  * one code that additionally carries the conversation's actual `state`, so
  * it gets its own branch of the union rather than an optional field on all
  * of them — a 400/403/404/500/503 body can never have a `state` key.
+ *
+ * `session_expired` is also a 409 but deliberately carries NO `state`: the
+ * whole point of that failure is that the session is gone, so the state on the
+ * durable row (always `GENERATE`) would say nothing the client can act on.
  */
 export const ErrorResponseSchema = z.union([
   z.object({
     error: z.enum([
       'invalid_body', // 400
       'challenge_failed', // 403
+      // 403, from GET /api/quote/:id — a bad signature and an unknown id are
+      // deliberately indistinguishable, so this is the ONLY code that route
+      // ever returns. Its absence here meant a client validating errors
+      // against the contract could not parse a single one of them.
+      'forbidden', // 403
       'not_found', // 404
+      // 409, from POST /api/generate when the KV session has expired and the
+      // slots are gone. Quoting an empty brief would email the client a dollar
+      // figure derived from nothing, so the request is refused instead.
+      'session_expired', // 409
       'internal_error', // 500
       'not_configured', // 503
     ]),
@@ -129,8 +142,10 @@ export type ErrorResponse = z.infer<typeof ErrorResponseSchema>
 export const ErrorCodeSchema = z.enum([
   'invalid_body',
   'challenge_failed',
+  'forbidden',
   'not_found',
   'wrong_state',
+  'session_expired',
   'internal_error',
   'not_configured',
 ])
@@ -232,12 +247,18 @@ export const QuoteSchema = z
   .strict()
 export type Quote = z.infer<typeof QuoteSchema>
 
-/** POST /api/generate. `quote` is absent ONLY when the rate limit was hit — the
- *  brief is still delivered. A project priced below the engagement floor DOES
- *  carry a quote, with `belowFloor: true`; the renderer replaces the band with a
- *  starter-engagement message. Nulling it there would make "below floor"
- *  indistinguishable from "rate limited" at the client, which are different
- *  things to say to a visitor. */
+/** POST /api/generate. `quote` (and `quoteId`) is absent in exactly two cases,
+ *  and in both the brief is still delivered:
+ *    1. the per-IP daily rate limit was hit, so no estimate was ever run; and
+ *    2. the estimator failed (parse, empty, truncated, or provider), so there
+ *       is no shape to price.
+ *  The two are distinguished by `headline`, not by the payload.
+ *
+ *  A project priced below the engagement floor DOES carry a quote, with
+ *  `belowFloor: true`; the renderer replaces the band with a starter-engagement
+ *  message. Nulling it there would make "below floor" indistinguishable from
+ *  the two cases above at the client, which are different things to say to a
+ *  visitor. */
 export const GenerateResponseSchema = z
   .object({
     briefId: z.string(),
@@ -248,3 +269,22 @@ export const GenerateResponseSchema = z
   })
   .strict()
 export type GenerateResponse = z.infer<typeof GenerateResponseSchema>
+
+/** GET /api/quote/:id?sig=… — the hosted quote page's only data source.
+ *
+ *  `markdown` is the CANONICAL stored artifact: the exact bytes that were
+ *  rendered, persisted and emailed. The page renders it rather than
+ *  re-deriving anything, so what a client reads online is what they were sent.
+ *  `quote` is the same structured payload POST /api/generate returns, mapped
+ *  off the stored row.
+ *
+ *  Every failure — bad signature, missing signature, unknown id — is 403
+ *  `{ error: 'forbidden' }`, deliberately indistinguishable so quote ids are
+ *  not enumerable. */
+export const QuoteDetailResponseSchema = z
+  .object({
+    markdown: z.string(),
+    quote: QuoteSchema,
+  })
+  .strict()
+export type QuoteDetailResponse = z.infer<typeof QuoteDetailResponseSchema>

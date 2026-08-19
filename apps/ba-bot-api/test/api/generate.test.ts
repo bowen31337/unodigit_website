@@ -1,6 +1,8 @@
 import { env, exports } from 'cloudflare:workers'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { GenerateResponseSchema, type EstimateShape } from '@unodigit/ba-bot-contract'
+import {
+  ErrorResponseSchema, GenerateResponseSchema, type EstimateShape,
+} from '@unodigit/ba-bot-contract'
 import app from '../../src/index'
 import { endConversation } from '../../src/api/generate'
 import { createConversation, insertLead, updateConversationState } from '../../src/db/queries'
@@ -69,6 +71,32 @@ function mockEstimator(content: unknown) {
   )
 }
 
+/**
+ * One spy for both outbound calls, routed on host, so the Resend request body
+ * can be read back. Responses are built lazily inside the implementation for
+ * the same reason as `mockEstimator`.
+ */
+function mockEstimatorAndResend(content: unknown) {
+  const calls: Array<{ url: string; init: RequestInit }> = []
+  vi.spyOn(globalThis, 'fetch').mockImplementation(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      calls.push({ url, init: init ?? {} })
+
+      if (url.includes('api.resend.com')) {
+        return new Response(JSON.stringify({ id: 'a1b2c3d4-resend-id' }), {
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: JSON.stringify(content) }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: 900, completion_tokens: 400 },
+      }), { headers: { 'content-type': 'application/json' } })
+    },
+  )
+  return { resend: () => calls.filter((c) => c.url.includes('api.resend.com')) }
+}
+
 /** A spy that fails loudly if the estimator is reached at all. Asserting only
  *  the response shape would pass on an implementation that ran the estimate and
  *  then discarded it — the exact spend the rate limit exists to prevent. */
@@ -90,6 +118,20 @@ async function postGenerate(body: unknown, overrides?: Record<string, unknown>) 
   return await app.fetch(new Request('https://api.test/api/generate', init), { ...env, ...overrides })
 }
 
+/** Attaches a lead to a conversation so `deliver()` has somewhere to send.
+ *  FK ordering: the lead row must exist before conversations.lead_id points at it. */
+async function attachLead(conversationId: string, email: string): Promise<void> {
+  const leadId = newId('lead')
+  await insertLead(env.DB, {
+    id: leadId, createdAt: Date.now(), name: null, email,
+    company: 'Acme', role: null, ipHash: 'x', country: null, asn: null, userAgent: null,
+    utmSource: null, utmMedium: null, utmCampaign: null, referrer: null, landingPage: null,
+    consentMarketing: true, consentTs: Date.now(),
+  })
+  await env.DB.prepare('UPDATE conversations SET lead_id = ? WHERE id = ?')
+    .bind(leadId, conversationId).run()
+}
+
 async function seed(state = 'GENERATE', s: Record<string, unknown> = slots): Promise<string> {
   const id = newId('conv')
   await createConversation(env.DB, id, Date.now())
@@ -97,6 +139,17 @@ async function seed(state = 'GENERATE', s: Record<string, unknown> = slots): Pro
   await env.SESSIONS.put(sessionKey(id), JSON.stringify({
     state, slots: s, turnsInState: 0, totalTurns: 20, forcedAdvances: [],
   }))
+  return id
+}
+
+/** A conversation whose D1 row says GENERATE but whose KV session is gone —
+ *  the 86400s TTL expired, or KV is momentarily eventually-consistent.
+ *  `loadSession` reseeds state and turn count from D1 but CANNOT recover slots,
+ *  because slots live only in KV. */
+async function seedWithoutKv(state = 'GENERATE'): Promise<string> {
+  const id = newId('conv')
+  await createConversation(env.DB, id, Date.now())
+  await updateConversationState(env.DB, id, state, 20)
   return id
 }
 
@@ -161,6 +214,51 @@ describe('POST /api/generate', () => {
 
     // Exactly one estimate: no repair retry, no program pass at 137 tasks.
     expect(spy).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * The emailed link shape is EFFECTIVELY PERMANENT. A link that has already
+   * landed in a client's inbox cannot be reissued, so changing this shape
+   * later strands every quote ever emailed before the change — there is no
+   * migration, no redirect we control, and no second chance.
+   *
+   * Spec §11 marks the static shell at `app/q/page.tsx` reading `?id=…&sig=…`
+   * as Preferred: the site is `output: 'export'` with `trailingSlash: true`,
+   * so a dynamic `/q/[id]` route cannot be pre-rendered for ids that do not
+   * exist at build time. The old path form (`/q/<quoteId>?sig=…`) therefore
+   * resolved to Cloudflare Pages' `404.html` — every emailed quote link was
+   * permanently dead. Nothing in the suite pinned the shape, which is why the
+   * defect survived 165 tests.
+   */
+  it('emails a /q/?id=&sig= query link, never the dead /q/<id> path form', async () => {
+    const m = mockEstimatorAndResend(shape)
+    const conversationId = await seed()
+    await attachLead(conversationId, 'client@example.invalid')
+
+    const res = await postGenerate({ conversationId }, { RATE_PER_TASK_AUD: RATE })
+    const json = await res.json<Body>()
+    expect(m.resend()).toHaveLength(1)
+
+    const sent = JSON.parse(String(m.resend()[0]!.init.body)) as { html: string }
+    // Extract the href WITHOUT pinning the shape in the regex itself, so a
+    // regression to the path form is still extracted and then caught by the
+    // assertions below rather than silently failing to match.
+    const href = /href="(https:\/\/[^"]+)"/.exec(String(sent.html))
+    expect(href).not.toBeNull()
+
+    // `renderEmailHtml` escapes the href, so `&` arrives as `&amp;`.
+    const link = href![1]!.replace(/&amp;/g, '&')
+
+    expect(link).toContain('/q/?id=')
+    expect(link).toContain('&sig=')
+    // The dead path form, spelled out. A quote id is always `quote_…`.
+    expect(link).not.toMatch(/\/q\/quote_/)
+
+    // Parsed, not pattern-matched: the id must be the `id` QUERY parameter.
+    const url = new URL(link)
+    expect(url.pathname).toBe('/q/')
+    expect(url.searchParams.get('id')).toBe(json.quoteId)
+    expect(url.searchParams.get('sig')).toMatch(/^[0-9a-f]{64}$/)
   })
 
   it('never puts the per-task rate in the headline', async () => {
@@ -373,6 +471,83 @@ describe('POST /api/generate', () => {
     // profitably is the harm this branch exists to prevent.
     expect(json.headline).not.toMatch(/1,?129/)
     expect(json.headline).not.toMatch(/1,?881/)
+  })
+
+  /**
+   * Slots live ONLY in KV, under an 86400s TTL. `loadSession` falls back to the
+   * durable D1 row for `state` and `turn_count`, but the slots are gone — it
+   * returns `initialState()`'s empty slot bag while carrying `GENERATE` from
+   * D1. Without a guard, `buildBriefSections({})` renders every section as
+   * "_Not captured during the interview._", and that empty brief is persisted,
+   * sent to DeepSeek, priced, stored, and EMAILED TO THE CLIENT as a dollar
+   * commitment derived from nothing.
+   */
+  it('409s session_expired when the KV session is gone, and quotes nothing', async () => {
+    const spy = forbidLlm()
+    const conversationId = await seedWithoutKv()
+
+    const res = await postGenerate({ conversationId }, { RATE_PER_TASK_AUD: RATE })
+
+    // 409, not 404 and not 500: the conversation exists and the request is
+    // well-formed — the visitor's interview state is gone, which is a
+    // wrong-state condition.
+    expect(res.status).toBe(409)
+    const body = await res.json()
+    expect(body).toEqual({ error: 'session_expired' })
+    // A new code is worthless to a Plan 3 client if the contract cannot parse it.
+    expect(ErrorResponseSchema.safeParse(body).success).toBe(true)
+
+    // Zero outbound calls. The spy covers BOTH the estimator — the expensive
+    // call, and the one that would turn an empty brief into a priced artifact —
+    // and Resend, so this is also the "no email was sent" assertion.
+    expect(spy).not.toHaveBeenCalled()
+
+    // No degraded artifact of any kind. Quotes are counted globally because
+    // with no brief there is no brief_id to join on, and this file's other
+    // tests have already written rows.
+    expect(await briefRow(conversationId)).toBeNull()
+    const quotes = await env.DB.prepare('SELECT COUNT(*) AS n FROM quotes')
+      .first<{ n: number }>()
+
+    // A retry must not creep past the guard either.
+    const retry = await postGenerate({ conversationId }, { RATE_PER_TASK_AUD: RATE })
+    expect(retry.status).toBe(409)
+    expect(await briefRow(conversationId)).toBeNull()
+    expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM quotes').first<{ n: number }>())!.n)
+      .toBe(quotes!.n)
+  })
+
+  it('409s session_expired when the session carries a name but no problem', async () => {
+    const spy = forbidLlm()
+    // Present in KV, so this is not the expiry path — it pins that the guard
+    // reads more than `project_name`. A brief whose "## Problem" section is a
+    // placeholder is not something to quote a number against.
+    const conversationId = await seed('GENERATE', { project_name: 'PawBook' })
+
+    const res = await postGenerate({ conversationId }, { RATE_PER_TASK_AUD: RATE })
+    expect(res.status).toBe(409)
+    expect(await res.json()).toEqual({ error: 'session_expired' })
+    expect(spy).not.toHaveBeenCalled()
+    expect(await briefRow(conversationId)).toBeNull()
+  })
+
+  // The guard must not be over-broad. A terse but genuine interview still gets
+  // its quote: the graph decides whether enough was asked, not this route.
+  it('still generates for a session carrying only the required slots', async () => {
+    const spy = mockEstimator(shape)
+    const conversationId = await seed('GENERATE', {
+      project_name: 'PawBook',
+      problem: 'Booking a groomer takes six phone calls.',
+    })
+
+    const res = await postGenerate({ conversationId }, { RATE_PER_TASK_AUD: RATE })
+    expect(res.status).toBe(200)
+
+    const json = await res.json<Body>()
+    expect(GenerateResponseSchema.safeParse(json).success).toBe(true)
+    expect(json.quote!.totalTasks).toBe(137)
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect((await briefRow(conversationId))!.markdown).toContain('PawBook')
   })
 
   it('rejects an invalid body with 400', async () => {

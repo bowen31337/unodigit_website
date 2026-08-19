@@ -50,11 +50,20 @@ Provider configuration is **not** secret and lives in `[vars]` in `wrangler.toml
 | `PUBLIC_SITE_URL` | `https://www.unodigit.com.au` |
 
 `PUBLIC_SITE_URL` is the origin of the quote link that goes into the client's email
-(`${PUBLIC_SITE_URL}/q/<quoteId>?sig=<hmac>`). It is deliberately **separate from
+(`${PUBLIC_SITE_URL}/q/?id=<quoteId>&sig=<hmac>`). It is deliberately **separate from
 `ALLOWED_ORIGIN`**: that one is a CORS allowlist containing `http://localhost:3000`, and
-reordering it must never change the URL a client receives. The `/q/` route itself is a
-Plan 3 deliverable — until it ships, the link resolves to a 404 on the site even though
-the API behind it (`GET /api/quote/:id`) already works.
+reordering it must never change the URL a client receives.
+
+**Both the id and the signature are in the query string, and that is load-bearing.**
+The site is `output: 'export'` with `trailingSlash: true`, so a dynamic `/q/[id]` route
+cannot be pre-rendered for ids that do not exist at build time — a path-form link
+(`/q/<quoteId>?sig=…`) resolves to Cloudflare Pages' `404.html` and is permanently dead.
+Spec §11 therefore specifies a **static shell** at `app/q/page.tsx` that reads
+`?id=…&sig=…` and fetches the quote from the Worker client-side. That page is a Plan 3
+deliverable — until it ships the link 404s, even though the API behind it
+(`GET /api/quote/:id`) already works. The shape is pinned by a test
+(`test/api/generate.test.ts`) because links already emailed **cannot be reissued**:
+changing it later strands every quote sent before the change.
 
 To change any of these, edit `wrangler.toml` and redeploy. **Do not** `wrangler secret put`
 them: a secret shadows a var of the same name, so setting one silently overrides the
