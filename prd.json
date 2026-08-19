@@ -1,190 +1,213 @@
 {
   "project": "unodigit-ba-bot",
-  "branchName": "feat/ba-bot-estimator",
-  "description": "Plan 2 \u2014 Estimator & Artifacts. Turns the GENERATE state from wired-but-inert into the step that produces a project brief, an indicative quote, and an email.",
-  "plan": "docs/superpowers/plans/2026-08-18-ba-bot-estimator-artifacts.md",
+  "branchName": "feat/ba-bot-frontend-dashboard",
+  "description": "Plan 3 \u2014 Frontend, Admin API & Dashboard. Closes the launch blockers carried out of Plans 1-2, gives the emailed quote link a real page, and builds the internal dashboard behind Cloudflare Access.",
+  "plan": "docs/superpowers/plans/2026-08-19-ba-bot-frontend-dashboard.md",
   "spec": "docs/superpowers/specs/2026-08-18-ba-bot-design.md",
   "complexity": {
-    "score": 7,
+    "score": 8,
     "category": "medium",
     "estimated_iterations": 14,
-    "reasoning": "9 functional requirements x2, 3 integration points x3 (DeepSeek, Resend, D1), 1 database change x2, 2 external APIs x3 => 35/5 = 7"
+    "reasoning": "8 functional requirements x2, 3 integration points x3 (Turnstile, Cloudflare Access, D1), 4 ui components x1.5, 1 database change x2, 2 external APIs x3 => 39/5 = 7.8"
   },
   "reviewPolicy": "per-story",
   "baseline": {
-    "tests": 68,
-    "testFiles": 8,
-    "note": "Plan 1 merged at ff1ae4d. Suite must never regress below this and must stay warning-free."
+    "tests": 175,
+    "testFiles": 17,
+    "note": "Plan 2 complete at 0f9efaf. Suite must never regress below this and must stay warning-free."
   },
+  "prerequisites": [
+    {
+      "id": "P1",
+      "title": "QUOTE_LINK_SIGNING_KEY in 1Password",
+      "action": "openssl rand -hex 32 -> op://application/ba_bot/quote_link_signing_key, then scripts/sync-secrets.sh",
+      "blocks": "every /api/* route at runtime (503 until set)",
+      "userAction": true,
+      "done": false
+    },
+    {
+      "id": "P2",
+      "title": "Resend sender domain SPF/DKIM verified",
+      "action": "add DNS records for the sender domain in Resend",
+      "blocks": "email delivery only; failures visible as quote_email_failed events",
+      "userAction": true,
+      "done": false
+    },
+    {
+      "id": "P3",
+      "title": "Move unodigit.com.au nameservers to Cloudflare",
+      "action": "move DNS from OnlyDomains to Cloudflare, then add the Worker Custom Domain and two Access applications",
+      "blocks": "US-004 through US-008. Cloudflare Access cannot front a workers.dev hostname, so the admin API cannot be protected as spec section 12 requires until the zone moves. Do NOT substitute a bearer secret or allowlisted header.",
+      "userAction": true,
+      "done": false
+    }
+  ],
   "userStories": [
     {
       "id": "US-001",
-      "title": "Contract additions",
-      "description": "As the UI and the Worker, we need shared wire types for the estimator, quote, and generate response so they cannot drift.",
+      "title": "Turnstile and per-IP rate limiting on /api/chat",
+      "description": "As the business, I want the chat endpoint guarded, because MAX_TOTAL_TURNS caps one session and not how many sessions an attacker opens \u2014 today DeepSeek spend is unmetered.",
       "planTask": 1,
       "acceptanceCriteria": [
-        "packages/ba-bot-contract exports CategoryNameSchema, ConfidenceSchema, EstimateCategorySchema, SubsystemSchema, EstimateShapeSchema, QuoteSchema, GenerateResponseSchema and their inferred types",
-        "EstimateShapeSchema is a discriminatedUnion on mode with single and program variants",
-        "Contract package typecheck clean; Worker typecheck clean",
-        "No Cloudflare imports in the contract package"
+        "A first message with no turnstile token is rejected 403 and makes ZERO LLM calls (assert the fetch spy)",
+        "Turnstile is required only on the first turn, not every turn",
+        "Exceeding MAX_TURNS_PER_IP_PER_DAY returns 429 and makes ZERO LLM calls",
+        "The turn is recorded BEFORE the model call, so a provider outage still consumes quota",
+        "Raw IP is never stored; every rate_limit ip_hash is 64 hex chars",
+        "Mutation-checked: moving recordTurn after the LLM call, and returning 403 instead of 429, each fail a distinct test"
       ],
-      "expectedTests": 68,
+      "expectedTests": 182,
       "priority": 1,
-      "passes": true,
-      "notes": "StateIdSchema already existed in the file; appended new section directly after ErrorCodeSchema. All new types are plain interfaces/schemas with no I/O \u2014 safe for Task 2 (pricing) and Task 3 (estimator) to import directly."
+      "blockedBy": null,
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-002",
-      "title": "Category-weighted banded pricing",
-      "description": "As the business, I want task counts converted to a defensible price band so the quote reflects real complexity variance.",
+      "title": "Commit the BA bot widget",
+      "description": "As the deployed site, I need the widget in git \u2014 it is untracked, CI builds from a fresh checkout, so production currently ships with no widget at all.",
       "planTask": 2,
       "acceptanceCriteria": [
-        "CATEGORY_WEIGHTS covers all 7 categories; Integrations weighted above UI/UX",
-        "weightedTasks sums across categories and across subsystems in program mode",
-        "Bands are +/-25/35/50 percent for high/medium/low confidence",
-        "belowFloor is true when the midpoint is under MINIMUM_ENGAGEMENT_AUD",
-        "weeks rounds up and is never zero",
-        "Module is pure: no I/O, no LLM"
+        "components/BaBot/ (5 files) committed",
+        "Every key in the committed .env files is NEXT_PUBLIC_*; the Turnstile value is the site key (public half)",
+        "git check-ignore confirms the .gitignore negations actually re-include the env files",
+        "pnpm build --force succeeds and emits apps/web/out (--force defeats a Turbo cache hit that would mask a compile failure)",
+        "CLAUDE.md is NOT committed \u2014 it carries the user's own in-progress edit"
       ],
-      "expectedTests": 80,
+      "expectedTests": 182,
       "priority": 2,
-      "passes": true,
-      "notes": "CATEGORY_WEIGHTS is a pure data module; priceQuote applies confidence-dependent band widths (\u00b125/35/50%) and enforces belowFloor flag for engagement floor. Both modules are pure and import only from @unodigit/ba-bot-contract."
+      "blockedBy": null,
+      "passes": false,
+      "notes": "No Worker tests change; apps/web has no suite, so pnpm build is the gate."
     },
     {
       "id": "US-003",
-      "title": "Shape estimator, single mode",
-      "description": "As the quoting system, I want the model to return the SHAPE of a claw-forge decomposition rather than 100-300 bullets, cutting output tokens ~45x.",
+      "title": "Public quote page /q/ (static shell, query params)",
+      "description": "As a client following an emailed link, I want to read my quote \u2014 the page does not exist, so every link sent today 404s.",
       "planTask": 3,
       "acceptanceCriteria": [
-        "runEstimate returns a Zod-validated EstimateShape",
-        "ESTIMATOR_SYSTEM_PROMPT is byte-frozen and sent as the first message",
-        "Exactly one repair retry on malformed JSON; empty and truncated short-circuit without retrying",
-        "A shape whose category counts contradict total_tasks is rejected as unparseable",
-        "PII grep over src/llm, src/graph/prompts.ts and src/estimator returns only the do-not-ask prompt line"
+        "Page lives at app/q/page.tsx and reads BOTH id and sig from useSearchParams \u2014 NOT a dynamic /q/[id] route, which static export cannot pre-render",
+        "useSearchParams is wrapped in Suspense or the static export build fails",
+        "Renders quotes.markdown verbatim; does not re-derive or re-format it",
+        "A 403 renders 'this link is not valid' and never distinguishes unknown-id from bad-signature",
+        "A missing id or sig renders the same failure state without calling the Worker",
+        "pnpm build --force succeeds and emits apps/web/out/q/"
       ],
-      "expectedTests": 88,
+      "expectedTests": 182,
       "priority": 3,
-      "passes": true,
-      "notes": "88/10 pass, zero warnings; typecheck clean; PII grep clean (extra src/estimator hits are the schema field name \"name\" and calibration prose \"email\", not lead data)."
+      "blockedBy": null,
+      "passes": false,
+      "notes": "Link shape is effectively permanent \u2014 links already emailed cannot be reissued."
     },
     {
       "id": "US-004",
-      "title": "Estimator program mode",
-      "description": "As a large project, I want to be split into subsystems, because claw-forge targets 100-300 bullets per spec and a phased first-subsystem price converts better than one large total.",
+      "title": "Cloudflare Access JWT verification",
+      "description": "As the admin API, I want requests authenticated by verifying the Access JWT, because protecting only the Pages route leaves the data open to anyone who knows the Worker URL.",
       "planTask": 4,
       "acceptanceCriteria": [
-        "A first pass over PROGRAM_MODE_THRESHOLD triggers a second program-mode pass",
-        "Under the threshold makes exactly one call",
-        "A failed program pass falls back to the valid oversized single estimate rather than erroring",
-        "Token usage is summed across both passes",
-        "The frozen prompt is the first system message in both passes so the cached prefix is shared"
+        "Verifies the JWT SIGNATURE against the Access public keys, not merely the header's presence",
+        "Checks aud against the application AUD tag, so a JWT for another app in the same team is rejected",
+        "Checks exp",
+        "JWKS cached in KV with a TTL, not fetched per request",
+        "Middleware mounted on /admin/* only; public chat endpoints stay unauthenticated",
+        "No JWT library added \u2014 WebCrypto RS256",
+        "Mutation-checked: removing signature verification fails a test"
       ],
-      "expectedTests": 92,
+      "expectedTests": 190,
       "priority": 4,
-      "passes": true,
-      "notes": "92/11 zero warnings, typecheck clean. Fixed plan's bigSingle fixture (540) to 350: it violated the Task-1 schema's own max(400) on bullets/total_tasks, making tests 3-4 structurally unsatisfiable regardless of implementation; corrected to stay schema-valid and still over programThreshold."
-    },
-    {
-      "id": "US-004a",
-      "title": "Oversized first pass reaches program mode",
-      "description": "As a large project, I want an over-400-task first pass to route to program mode instead of failing schema validation, because the spec sets no upper bound on the program-mode trigger.",
-      "planTask": null,
-      "acceptanceCriteria": [
-        "A first pass over 400 tasks reaches program mode instead of returning reason:'parse'",
-        "The ceiling is raised (2000), not removed: an absurd 5000-task pass is still rejected",
-        "SubsystemSchema.total_tasks stays at max(400) \u2014 the per-subsystem bound is intentional",
-        "totalsAgree requires each subsystem to agree with its own total, not just the umbrella",
-        "Frozen ESTIMATOR_SYSTEM_PROMPT, PROGRAM_MODE_ADDENDUM and CALIBRATION are byte-unchanged"
-      ],
-      "expectedTests": 96,
-      "priority": 4.5,
-      "passes": true,
-      "notes": "Controller ruling, not a plan task \u2014 spec beats plan. RED confirmed for both fixes by reverting source and re-running, not by assertion. Deferred: askOnce maxTokens 1600 may truncate a 6-subsystem program shape; degrades gracefully to the single estimate."
+      "blockedBy": "P3",
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-005",
-      "title": "Brief and quote markdown renderers",
-      "description": "As the dashboard and the email, we need markdown as the single canonical artifact form.",
+      "title": "Admin read API",
+      "description": "As sales, I want to read leads, conversations, briefs, quotes, funnel and costs through an authenticated API.",
       "planTask": 5,
       "acceptanceCriteria": [
-        "buildBriefSections degrades to a visible placeholder for missing slots rather than omitting headings",
-        "renderBrief never contains a lead field",
-        "renderQuote omits the per-task rate when rateShown is false",
-        "belowFloor replaces the band with a starter-engagement message",
-        "Program mode lists subsystems in dependency order labelled Phase 1..N; a cycle falls back to declaration order without throwing",
-        "Both renderers are pure"
+        "GET /admin/leads paginated (default 50) \u2014 an unbounded scan is a latent outage",
+        "GET /admin/conversation/:id returns transcript, slots per turn, off-topic flags",
+        "GET /admin/brief/:conversationId and /admin/quote/:id return stored markdown",
+        "GET /admin/funnel groups by abandoned_at_state",
+        "GET /admin/costs returns tokens and cost per conversation plus a rolling total",
+        "CSV export quotes fields containing commas or quotes",
+        "Every route sits behind the US-004 middleware"
       ],
-      "expectedTests": 108,
+      "expectedTests": 202,
       "priority": 5,
-      "passes": true,
-      "notes": "Actual suite is 106/12 (baseline 96/11 per US-004a, +10 tests/1 file), not the plan's 104/12 (which assumed the pre-US-004a 92/11 baseline). Fixed a self-contradictory plan test fixture: the shared belowFloor:true Quote fixture broke 2 sibling tests expecting the band/per-task-rate path; flipped the default to false and overrode true only in the floor-specific test. Controller hardening: added negative assertions that belowFloor omits the band numbers and rate (was asserting only the message's presence), a phase-order test with subsystems declared out of dependency order, and the missing dependency-cycle test the criteria required. 106 -> 108."
+      "blockedBy": "P3",
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-006",
-      "title": "Brief and quote persistence",
-      "description": "As sales, I want every brief and quote stored as markdown in D1 so the dashboard can render them.",
+      "title": "DELETE /admin/lead/:id \u2014 Privacy Act deletion path",
+      "description": "As a data subject, I want my personal information deleted on request, as spec section 8 requires.",
       "planTask": 6,
       "acceptanceCriteria": [
-        "insertBrief, insertQuote, getQuoteById, getBriefByConversation exported and tested against real D1",
-        "insertQuote column/placeholder/bind counts are all 15 and stated in the report",
-        "A quote insert with an unknown brief_id throws (foreign keys are enforced)",
-        "subsystems_json round-trips as null in single mode"
+        "Deletion cascades to conversations, messages, events, briefs and quotes \u2014 a retained transcript still contains what the visitor typed",
+        "rate_limit rows are NOT deleted (salted hashes, not personal information; clearing them hands an abuser a reset button)",
+        "The deletion is logged as an event without retaining what was deleted",
+        "Unknown lead returns 404 (already behind Access, so enumeration is not a concern here)",
+        "Tests query EACH dependent table to prove the cascade, not merely that the endpoint returned 200"
       ],
-      "expectedTests": 110,
+      "expectedTests": 210,
       "priority": 6,
-      "passes": true,
-      "notes": "Appended the four helpers verbatim from plan Task 6; 115 tests / 13 files, both packages typecheck. insertQuote is 15 columns / 15 placeholders / 15 binds, bind order verified pairwise against the migration's column order. FK error is verbatim 'D1_ERROR: FOREIGN KEY constraint failed: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_FOREIGNKEY)'."
+      "blockedBy": "P3",
+      "passes": false,
+      "notes": "Spec section 8 writes /api/lead/:id but section 12 requires /admin/* \u2014 the prefix rule wins, since Access matches on path."
     },
     {
       "id": "US-007",
-      "title": "POST /api/generate orchestration",
-      "description": "As a visitor who finished the interview, I want a brief and an indicative quote produced and persisted.",
+      "title": "Dashboard \u2014 leads and conversation views",
+      "description": "As sales, I want a leads table and a conversation detail view.",
       "planTask": 7,
       "acceptanceCriteria": [
-        "404 unknown conversation; 409 unless the session is at GENERATE",
-        "Idempotent: an existing brief for the conversation is returned without a second estimate",
-        "Rate-limited requests return the brief with quote null AND make no LLM call (assert the fetch spy)",
-        "Estimator failure still returns the brief with a graceful headline, never a 500",
-        "conversations.ended_at is written; abandoned_at_state is written when a session ends before DONE",
-        "headline never contains the per-task rate"
+        "app/admin/ renders a sortable, paginated leads table",
+        "Conversation view shows transcript, slots per turn and off-topic flags",
+        "Uses globals.css design tokens \u2014 no hardcoded hex, size, radius or duration",
+        "Follows the existing server/client component split",
+        "pnpm build --force succeeds"
       ],
-      "expectedTests": 122,
+      "expectedTests": 210,
       "priority": 7,
-      "passes": true,
-      "notes": "Done at 128 tests / 14 files. Idempotency is checked BEFORE the state gate, otherwise a refresh after a successful generate (session now DONE) would 409 instead of returning the brief. abandoned_at_state is written by endConversation(), unit-tested against the D1 column."
+      "blockedBy": "P3",
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-008",
-      "title": "HMAC-signed quote retrieval",
-      "description": "As a client following an emailed link, I want to read my quote without an account, while quote ids stay unguessable.",
+      "title": "Dashboard \u2014 brief, quote, funnel, costs, export",
+      "description": "As sales, I want the artifacts and the funnel and cost views, plus CSV export.",
       "planTask": 8,
       "acceptanceCriteria": [
-        "signId/verifyId round-trip; tampered id, tampered signature, and wrong key all fail",
-        "Verification is constant-time and length-safe",
-        "GET /api/quote/:id returns 403 on bad signature AND 403 on unknown id, so ids are not enumerable",
-        "200 returns markdown and the quote payload"
+        "Renders briefs.markdown and quotes.markdown verbatim",
+        "Funnel view shows drop-off by abandoned_at_state",
+        "Costs view shows tokens and cost per conversation and a rolling total",
+        "CSV download works",
+        "pnpm build --force succeeds"
       ],
-      "expectedTests": 132,
+      "expectedTests": 210,
       "priority": 8,
-      "passes": true,
-      "notes": "151 tests / 16 files. Constant-time via crypto.subtle.verify (no === on MAC bytes); bad signature and unknown id return byte-identical 403 {error:forbidden}. QUOTE_LINK_SIGNING_KEY is now in REQUIRED_SECRETS \u2014 create it (openssl rand -hex 32) and push it before the next deploy or /api/* 503s."
+      "blockedBy": "P3",
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-009",
-      "title": "Resend email delivery",
-      "description": "As a client, I want the full cost breakdown emailed to me, with a link to the hosted quote.",
+      "title": "Settle the remaining placeholders",
+      "description": "As the business, I want the uncalibrated numbers settled before a real client sees a quote.",
       "planTask": 9,
       "acceptanceCriteria": [
-        "HTML only, no attachment; fetch against api.resend.com with no SDK dependency added",
-        "A send failure logs an event and does NOT fail the request",
-        "The recipient address is read from the leads row at send time and never passes through the estimator, renderers, or any prompt",
-        "SETUP.md and scripts/sync-secrets.sh updated for RESEND_API_KEY and QUOTE_LINK_SIGNING_KEY"
+        "TASKS_PER_WEEK calibrated \u2014 it is a delivery commitment, it sets the 'roughly N weeks' line the client reads",
+        "src/estimator/calibration.ts replaced with real claw-forge plan output, not plausible placeholders",
+        "below_floor added as a column plus migration, removing the idempotent re-read's re-derivation, BEFORE MINIMUM_ENGAGEMENT_AUD next changes"
       ],
-      "expectedTests": 140,
+      "expectedTests": 212,
       "priority": 9,
-      "passes": true,
-      "notes": "165 tests / 17 files, both packages typecheck. DEPLOY BLOCKER: op://application/ba_bot/quote_link_signing_key still does not exist (openssl rand -hex 32) and /api/* returns 503 until it is pushed; unodigit.com.au must also be DNS-verified in Resend or every send 422s. Added PUBLIC_SITE_URL var for the emailed link."
+      "blockedBy": null,
+      "passes": false,
+      "notes": "Decision task, not purely code. RATE_PER_TASK_AUD settled at 25 on 2026-08-19."
     }
   ]
 }

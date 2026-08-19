@@ -983,3 +983,51 @@ STILL UNCALIBRATED, unchanged by this: TASKS_PER_WEEK = 25 (a delivery
 commitment, it sets the "roughly N weeks" line the client reads) and
 src/estimator/calibration.ts (plausible placeholders, NOT real claw-forge plan
 output). The estimate is only ever as good as that constant.
+
+================================================================================
+# Plan 3 — Frontend, Admin API & Dashboard
+================================================================================
+
+Plan:  docs/superpowers/plans/2026-08-19-ba-bot-frontend-dashboard.md
+Spec:  docs/superpowers/specs/2026-08-18-ba-bot-design.md  (binding authority)
+State: prd.json  (Plan 2's final state archived at
+       docs/superpowers/archive/prd-plan2-complete.json)
+
+Everything above this line is Plan 2's log. The "Codebase patterns an
+implementer must know" and "Constraints that are not negotiable" sections near
+the top of this file still apply in full — read them.
+
+## Baseline at start
+
+Plan 2 complete at 0f9efaf. Worker suite 175 tests / 17 files, zero warnings.
+Both apps/ba-bot-api and packages/ba-bot-contract typecheck clean. Never regress.
+
+## Plan 3 shape
+
+Nine stories. FOUR are unblocked (US-001 chat guards, US-002 commit the widget,
+US-003 the /q/ page, US-009 placeholders); FIVE are gated on P3.
+
+## The P3 gate — architectural, not a convenience
+
+Spec section 12 requires TWO Cloudflare Access applications and says why one is
+not enough: the dashboard is a static page calling the Worker from the browser,
+so protecting only the Pages route leaves the admin API open to anyone who knows
+the URL. The second application must front the Worker's hostname.
+
+Cloudflare Access CANNOT protect a workers.dev hostname — it injects
+Cf-Access-Jwt-Assertion only for hostnames it proxies, which requires an active
+zone. SETUP.md records that unodigit.com.au is not one: its DNS is at
+OnlyDomains, and a CNAME to *.workers.dev does not route to a Worker because
+dispatch matches the Host header against a configured route.
+
+So until the zone moves there is NO way to authenticate the admin API that does
+not contradict the spec's own reasoning ("hand-rolled auth would be the most
+likely source of a security incident in the project"). Do NOT work around this
+with a shared bearer secret, an allowlisted header, or a signed cookie. Stop at
+the gate and report.
+
+## Deploy hazard carried in
+
+QUOTE_LINK_SIGNING_KEY is in REQUIRED_SECRETS but does not exist in 1Password.
+Deploying before it is created returns 503 on EVERY /api/* route — including the
+currently-live /api/chat. Do not deploy or push to main until P1 is done.
