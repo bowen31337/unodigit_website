@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { MessageSquareText, X, RotateCcw } from 'lucide-react';
+import { MessageSquareText, X, RotateCcw, Maximize2, Minimize2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BOT_API, OPENING_LINE, useBaBot } from './useBaBot';
 import ContactForm from './ContactForm';
@@ -22,6 +22,7 @@ const SHEET_SPRING = { type: 'spring', bounce: 0.2, visualDuration: 0.3 } as con
  */
 export default function BaBot() {
   const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [draft, setDraft] = useState('');
   const reduceMotion = useReducedMotion();
   const bot = useBaBot();
@@ -32,25 +33,73 @@ export default function BaBot() {
   const onContact = bot.state === 'CONTACT' && !bot.finished;
   const done = bot.finished && bot.state !== 'CONTACT';
 
-  // Escape closes from anywhere — the panel is non-modal (the page stays
-  // usable behind it), so there is no focus trap to fight.
+  // Publish the *visual* viewport to CSS so globals.css can size the panel off
+  // it. `dvh` already follows the mobile URL bar, but it does not know about
+  // the on-screen keyboard — only visualViewport does, and without this a
+  // focused composer on iOS sits underneath it. Kept mounted rather than gated
+  // on `open` so the panel's first painted frame is already the right height.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return; // The `100dvh` fallbacks in globals.css cover this.
+
+    const root = document.documentElement;
+    const write = () => {
+      root.style.setProperty('--babot-vh', `${vv.height}px`);
+      // How far the visual viewport's bottom edge sits above the layout
+      // viewport's. A pinch-zoom or a scrollbar can make this a few stray
+      // pixels; only a keyboard-sized lift is worth reacting to.
+      const lift = window.innerHeight - vv.height - vv.offsetTop;
+      root.style.setProperty('--babot-kb', lift > 40 ? `${Math.round(lift)}px` : '0px');
+    };
+
+    // The first write is synchronous on purpose. visualViewport `scroll` fires
+    // continuously during a pinch, so the *handler* is frame-throttled — but a
+    // background tab runs no frames, and deferring the initial write there
+    // would leave the var unset until the tab is next touched.
+    write();
+    let frame = 0;
+    const sync = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(write);
+    };
+
+    vv.addEventListener('resize', sync);
+    vv.addEventListener('scroll', sync);
+    return () => {
+      cancelAnimationFrame(frame);
+      vv.removeEventListener('resize', sync);
+      vv.removeEventListener('scroll', sync);
+      root.style.removeProperty('--babot-vh');
+      root.style.removeProperty('--babot-kb');
+    };
+  }, []);
+
+  // Escape steps back one level — maximised → docked → closed — rather than
+  // discarding the conversation from full screen in one keystroke. The panel is
+  // non-modal (the page stays usable behind it), so there is no focus trap.
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (expanded) setExpanded(false);
+      else setOpen(false);
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open]);
+  }, [open, expanded]);
 
   useEffect(() => {
     if (open && !onContact && !done) inputRef.current?.focus();
   }, [open, onContact, done]);
 
   // Pin to the newest turn. `behavior: smooth` is skipped under reduced motion.
+  // Re-runs on `expanded` too: resizing the panel changes how much of the
+  // transcript fits, which would otherwise leave the last turn off-screen.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     el.scrollTo({ top: el.scrollHeight, behavior: reduceMotion ? 'auto' : 'smooth' });
-  }, [bot.messages, bot.pending, onContact, reduceMotion]);
+  }, [bot.messages, bot.pending, onContact, expanded, reduceMotion]);
 
   if (!BOT_API) return null;
 
@@ -88,13 +137,11 @@ export default function BaBot() {
           <motion.div
             role="dialog"
             aria-label="Project scoping assistant"
-            className={cn(
-              'glass-thick fixed z-[60] flex flex-col overflow-hidden',
-              // Phone: a bottom sheet flush to the edges. Desktop: a panel
-              // anchored to the launcher's corner.
-              'inset-x-0 bottom-0 max-h-[85dvh] rounded-t-2xl',
-              'sm:inset-x-auto sm:bottom-s7 sm:right-s7 sm:h-[min(600px,75dvh)] sm:w-[400px] sm:rounded-2xl',
-            )}
+            // Geometry — phone sheet, desktop dock, and the maximised variant
+            // of each — is `.babot-panel` in globals.css, because all of it is
+            // viewport arithmetic against --babot-vh.
+            data-expanded={expanded}
+            className="babot-panel glass-thick"
             initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 24, scale: 0.98 }}
             animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
             exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 24, scale: 0.98 }}
@@ -121,6 +168,22 @@ export default function BaBot() {
                     <RotateCcw size={16} aria-hidden />
                   </button>
                 )}
+                {/* aria-pressed, not two unrelated buttons: this is one control
+                    with an on/off state, and a screen reader should hear it
+                    that way rather than watching the label swap underneath it. */}
+                <button
+                  type="button"
+                  onClick={() => setExpanded((v) => !v)}
+                  aria-pressed={expanded}
+                  aria-label={expanded ? 'Restore assistant to the corner' : 'Maximise assistant'}
+                  className="btn btn-plain min-h-[36px] px-s3"
+                >
+                  {expanded ? (
+                    <Minimize2 size={16} aria-hidden />
+                  ) : (
+                    <Maximize2 size={16} aria-hidden />
+                  )}
+                </button>
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
@@ -134,81 +197,93 @@ export default function BaBot() {
 
             <div
               ref={scrollRef}
-              className="flex-1 space-y-s4 overflow-y-auto px-s5 py-s5"
+              className="babot-transcript px-s5 py-s5"
               aria-live="polite"
               aria-atomic="false"
             >
-              <Bubble role="assistant">{OPENING_LINE}</Bubble>
+              <div className="babot-column space-y-s4">
+                <Bubble role="assistant">{OPENING_LINE}</Bubble>
 
-              {bot.messages.map((m, i) => (
-                <Bubble key={i} role={m.role}>
-                  {m.content}
-                </Bubble>
-              ))}
+                {bot.messages.map((m, i) => (
+                  <Bubble key={i} role={m.role}>
+                    {m.content}
+                  </Bubble>
+                ))}
 
-              {bot.pending && (
-                <Bubble role="assistant">
-                  <span className="inline-flex gap-1" aria-label="Thinking">
-                    {[0, 1, 2].map((d) => (
-                      <motion.span
-                        key={d}
-                        className="inline-block h-1.5 w-1.5 rounded-full"
-                        style={{ background: 'var(--label-tertiary)' }}
-                        animate={reduceMotion ? undefined : { opacity: [0.3, 1, 0.3] }}
-                        transition={{ duration: 1.2, repeat: Infinity, delay: d * 0.15 }}
-                      />
-                    ))}
-                  </span>
-                </Bubble>
-              )}
+                {bot.pending && (
+                  <Bubble role="assistant">
+                    <span className="inline-flex gap-1" aria-label="Thinking">
+                      {[0, 1, 2].map((d) => (
+                        <motion.span
+                          key={d}
+                          className="inline-block h-1.5 w-1.5 rounded-full"
+                          style={{ background: 'var(--label-tertiary)' }}
+                          animate={reduceMotion ? undefined : { opacity: [0.3, 1, 0.3] }}
+                          transition={{ duration: 1.2, repeat: Infinity, delay: d * 0.15 }}
+                        />
+                      ))}
+                    </span>
+                  </Bubble>
+                )}
 
-              {done && (
-                <p className="type-footnote px-s2" style={{ color: 'var(--label-secondary)' }}>
-                  Thanks — that is everything we need. We will follow up by email with your
-                  scope and estimate.
-                </p>
-              )}
+                {done && (
+                  <p className="type-footnote px-s2" style={{ color: 'var(--label-secondary)' }}>
+                    Thanks — that is everything we need. We will follow up by email with your
+                    scope and estimate.
+                  </p>
+                )}
 
-              {bot.error && (
-                <p className="type-footnote px-s2" role="alert" style={{ color: 'var(--red-ink)' }}>
-                  {bot.error}
-                </p>
-              )}
-            </div>
-
-            <div style={{ borderTop: '1px solid var(--separator)' }}>
-              {onContact ? (
-                <ContactForm pending={bot.pending} onSubmit={bot.submitContact} />
-              ) : done ? null : (
-                <div className="flex items-end gap-s3 p-s4">
-                  <textarea
-                    ref={inputRef}
-                    rows={1}
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      // Enter sends, Shift+Enter breaks the line — the chat
-                      // convention. IME composition must never be interrupted.
-                      if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                        e.preventDefault();
-                        submit();
-                      }
-                    }}
-                    placeholder="Describe what you want to build…"
-                    aria-label="Your message"
-                    className="field field-chat max-h-32 flex-1"
-                  />
-                  <button
-                    type="button"
-                    onClick={submit}
-                    disabled={!draft.trim() || bot.pending}
-                    className="btn btn-filled min-h-[44px] shrink-0 px-s5"
+                {bot.error && (
+                  <p
+                    className="type-footnote px-s2"
+                    role="alert"
+                    style={{ color: 'var(--red-ink)' }}
                   >
-                    Send
-                  </button>
-                </div>
-              )}
+                    {bot.error}
+                  </p>
+                )}
+              </div>
             </div>
+
+            {/* Omitted entirely once the interview is done — an empty footer
+                still painted its separator as a stray hairline. */}
+            {!done && (
+              <div className="babot-composer">
+                <div className="babot-column">
+                  {onContact ? (
+                    <ContactForm pending={bot.pending} onSubmit={bot.submitContact} />
+                  ) : (
+                    <div className="flex items-end gap-s3 p-s4">
+                      <textarea
+                        ref={inputRef}
+                        rows={1}
+                        value={draft}
+                        onChange={(e) => setDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          // Enter sends, Shift+Enter breaks the line — the chat
+                          // convention. IME composition must never be interrupted.
+                          if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                            e.preventDefault();
+                            submit();
+                          }
+                        }}
+                        placeholder="Describe what you want to build…"
+                        aria-label="Your message"
+                        className="field field-chat max-h-32 flex-1"
+                      />
+                      <button
+                        type="button"
+                        onClick={submit}
+                        disabled={!draft.trim() || bot.pending}
+                        className="btn btn-filled min-h-[44px] shrink-0 px-s5"
+                      >
+                        Send
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

@@ -758,6 +758,117 @@
     -webkit-mask-image: linear-gradient(black, transparent);
             mask-image: linear-gradient(black, transparent);
   }
+
+  /* ==========================================================================
+     BA BOT PANEL
+
+     Sizing lives here rather than as Tailwind arbitrary values on the component
+     because it is viewport arithmetic, and the old inline version was wrong in
+     three separate ways:
+
+     1. It set a *fixed* height (`min(600px, 75dvh)`). Flexbox then had to fit
+        header + transcript + composer inside it, and once the composer became
+        the CONTACT form (~392px) there was nowhere for the overflow to go.
+     2. Neither scrolling child declared `min-height: 0`, so their automatic
+        minimum size was their content size and the footer refused to shrink.
+        Measured at a 620px viewport: the submit button rendered 46px *below*
+        the panel's own bottom edge, where `overflow: hidden` ate it.
+     3. `dvh` follows the mobile URL bar but not the on-screen keyboard, so a
+        focused composer on iOS puts Send underneath it.
+
+     --babot-vh (usable height) and --babot-kb (how far the keyboard lifts the
+     viewport's bottom edge) are mirrored onto <html> by BaBot.tsx from
+     window.visualViewport, the only measurement that sees the keyboard. Both
+     carry fallbacks so the pre-hydration frame and no-visualViewport browsers
+     still lay out correctly.
+     ========================================================================== */
+  .babot-panel {
+    --babot-gap: var(--space-7);
+    --babot-fit: var(--babot-vh, 100dvh);
+
+    position: fixed;
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+
+    /* Phone: a bottom sheet flush to the edges, riding above the keyboard. */
+    inset-inline: 0;
+    bottom: var(--babot-kb, 0px);
+    height: calc(var(--babot-fit) * 0.86);
+    max-height: calc(var(--babot-fit) - var(--space-5));
+    border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
+
+    /* Layout, not gesture — a spring has nothing to attach to here, so this is
+       one of the few fixed-duration transitions in the system. Reduced motion
+       collapses it globally further down the file. */
+    transition:
+      width var(--duration-base) var(--ease-ios),
+      height var(--duration-base) var(--ease-ios),
+      border-radius var(--duration-base) var(--ease-ios);
+  }
+
+  /* Maximised on a phone: full bleed. There is no page left worth seeing. */
+  .babot-panel[data-expanded='true'] {
+    height: var(--babot-fit);
+    max-height: var(--babot-fit);
+    border-radius: 0;
+  }
+
+  @media (min-width: 640px) {
+    .babot-panel {
+      inset-inline: auto;
+      right: var(--babot-gap);
+      bottom: calc(var(--babot-gap) + var(--babot-kb, 0px));
+      width: 400px;
+      /* Grows with the display instead of stopping dead at 600px, and never
+         claims more than what is actually on screen minus the two gutters. */
+      height: min(720px, calc(var(--babot-fit) - 2 * var(--babot-gap)));
+      max-height: calc(var(--babot-fit) - 2 * var(--babot-gap));
+      border-radius: var(--radius-2xl);
+    }
+
+    .babot-panel[data-expanded='true'] {
+      width: min(960px, calc(100vw - 2 * var(--babot-gap)));
+      height: calc(var(--babot-fit) - 2 * var(--babot-gap));
+      max-height: calc(var(--babot-fit) - 2 * var(--babot-gap));
+      border-radius: var(--radius-2xl);
+    }
+  }
+
+  /* The three rows. `min-height: 0` is the load-bearing part of both scrollers:
+     without it a flex child will not shrink below its content, which is exactly
+     how the contact form escaped the panel. */
+  .babot-panel > header { flex: 0 0 auto; }
+
+  .babot-transcript {
+    flex: 1 1 0;
+    min-height: 3rem;
+    overflow-y: auto;
+    /* Reaching the end of the transcript must not start scrolling the page
+       behind the panel — the panel is non-modal, so nothing else stops it. */
+    overscroll-behavior: contain;
+  }
+
+  /* Takes its natural height when there is room and scrolls what will not fit
+     when there is not: on a 620px laptop the contact form is taller than the
+     panel that contains it. Shrinking before overflowing is the whole fix. */
+  .babot-composer {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-top: 1px solid var(--separator);
+  }
+
+  /* Maximised, the panel is wide enough that an 85%-wide bubble would run past
+     800px — well beyond a readable measure. Cap the column, not the bubble; at
+     the docked 400px this rule is a no-op. */
+  .babot-column {
+    margin-inline: auto;
+    width: 100%;
+    max-width: 44rem;
+  }
 }
 
 @layer utilities {

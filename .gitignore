@@ -62,6 +62,11 @@ next-env.d.ts
 # Superpowers SDD workspace (scratch: ledger, briefs, review packages)
 .superpowers/
 
+# UI before/after captures. Kept locally while working on a change and shared
+# by hand — they are large binaries that date fast, and the repo is not where
+# they earn their keep.
+docs/screenshots/
+
 # Turborepo local task cache (root and per-package)
 .turbo/
 
