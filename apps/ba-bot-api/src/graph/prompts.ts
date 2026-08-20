@@ -56,22 +56,32 @@ Set ready_to_advance to true only once all three are known.`,
   SOLUTION_SHAPE: `Current topic: the solution.
 Find out what the product actually does and what makes it different from what exists today.
 Slot fields: solution_summary (string), differentiator (string).
-Set ready_to_advance to true once solution_summary is clear.`,
+Set ready_to_advance to true only once BOTH solution_summary and differentiator
+are known. If they cannot name a differentiator, ask what their team would miss
+if they kept using the current approach — that answer is the differentiator.`,
 
   USERS_AND_SCOPE: `Current topic: users and scope.
 Find out the distinct types of user, and what is genuinely required for a first release versus what can wait.
 Slot fields: personas (array of strings), mvp_must (array of strings), mvp_wont (array of strings).
-Set ready_to_advance to true once there is at least one persona and one must-have.`,
+Set ready_to_advance to true only once there are at least TWO distinct personas,
+at least THREE must-haves for the first release, and at least ONE thing
+explicitly out of scope. Ask what can wait — a first release with no boundary is
+not a scope.`,
 
   FEATURE_MAP: `Current topic: feature map.
 Walk the client through what the system needs to do, one area at a time. The areas are: Authentication & User Management, Core functionality, Data management, UI/UX, API layer, Admin features, Integrations. Skip any area that clearly does not apply to their product, and say so.
 Slot fields: covered_categories (array of strings, using the area names exactly as written above), features (array of strings, each one short behaviour).
-Set ready_to_advance to true once at least three areas are covered.`,
+Set ready_to_advance to true only once at least FIVE of the seven areas are
+covered. Work through the ones not yet discussed, naming the area as you go, and
+say so plainly when one does not apply to their product — a skipped area still
+counts as covered.`,
 
   CONSTRAINTS: `Current topic: constraints.
 Find out any technology preferences, target timeline, rough budget expectation, and third-party services that must be integrated.
 Slot fields: stack_preference (string), timeline (string), budget_band (string), integrations (array of strings).
-Set ready_to_advance to true once either timeline or budget_band is known.`,
+Set ready_to_advance to true only once timeline is known AND at least one of
+budget_band or stack_preference is known. If they will not give a budget, accept
+a stack or hosting preference instead and move on — never press twice on money.`,
 
   // UNREACHABLE for a visible reply. Advancing into CONTACT swaps the composer
   // for the form (BaBot.tsx), so no LLM turn ever runs in this state and this

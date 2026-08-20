@@ -104,7 +104,8 @@ describe('handover into CONTACT', () => {
   it('replaces a trailing question with the hand-off when entering CONTACT', async () => {
     mockLlm({
       reply: "Perfect — that's your baseline. To wrap this stage, any third-party services to integrate?",
-      slots: { timeline: 'three months' },
+      // CONSTRAINTS now needs timeline AND (budget_band OR stack_preference).
+      slots: { timeline: 'three months', budget_band: '80-120k AUD' },
       ready_to_advance: true,
       off_topic: false,
     })

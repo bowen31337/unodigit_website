@@ -5,6 +5,13 @@ export interface BriefSections {
   problem: string
   solution: string
   users: string
+  /** What the system must DO, area by area. FEATURE_MAP is the longest state in
+   *  the graph (up to 12 turns) and its slots were not rendered here at all, so
+   *  every feature the visitor described was discarded before the estimator saw
+   *  the brief. Raising the FEATURE_MAP exit gate from 3 areas to 5 changed the
+   *  interview but not the estimate — 84 tasks against 87 — because the extra
+   *  answers had nowhere to go. */
+  features: string
   scope: string
   constraints: string
 }
@@ -24,6 +31,24 @@ const bullets = (items: string[]): string =>
 
 const para = (text: string): string => (text ? text : MISSING)
 
+/** Areas covered, then the behaviours themselves. The area list matters to the
+ *  estimator on its own: it decomposes per category, so naming the categories
+ *  that were explored — and, by omission, those that were not — is signal even
+ *  where few concrete features were captured. */
+function featureSection(slots: Slots): string {
+  const categories = list(slots, 'covered_categories')
+  const features = list(slots, 'features')
+  if (!categories.length && !features.length) return MISSING
+
+  return [
+    categories.length ? `**Areas covered:** ${categories.join(', ')}` : '',
+    categories.length && features.length ? '' : '',
+    features.length ? bullets(features) : '',
+  ]
+    .filter((x) => x !== '')
+    .join('\n')
+}
+
 export function buildBriefSections(slots: Slots): BriefSections {
   const name = str(slots, 'project_name') || 'the project'
   const audience = str(slots, 'audience')
@@ -41,6 +66,7 @@ export function buildBriefSections(slots: Slots): BriefSections {
     problem: para(problem),
     solution: para([solution, differentiator && `Differentiator: ${differentiator}`].filter(Boolean).join('\n\n')),
     users: bullets(list(slots, 'personas')),
+    features: featureSection(slots),
     scope: [
       '**Must have**',
       bullets(list(slots, 'mvp_must')),
@@ -74,6 +100,9 @@ export function renderBrief(sections: BriefSections, projectName: string): strin
     '',
     '## Target users',
     sections.users,
+    '',
+    '## Feature map',
+    sections.features,
     '',
     '## MVP scope',
     sections.scope,

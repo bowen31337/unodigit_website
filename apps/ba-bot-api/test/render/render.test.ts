@@ -45,6 +45,41 @@ const quote: Quote = {
   lowAud: 601, highAud: 1247, weeks: 4, confidence: 'medium', belowFloor: false,
 }
 
+describe('brief feature map', () => {
+  // FEATURE_MAP is the longest state in the graph, and its slots were never
+  // rendered into the brief — so every feature the visitor described was
+  // discarded before the estimator saw it. A live deep interview walked all
+  // seven areas over 5 turns and still estimated 84 tasks against 87 for a
+  // shallow one, because the answers had nowhere to land.
+  it('renders the areas covered and the behaviours captured', () => {
+    const md = renderBrief(buildBriefSections({
+      covered_categories: ['Authentication & User Management', 'Core functionality'],
+      features: ['Barcode scan in and out', 'Low-stock alerting per SKU'],
+    }), 'StockWatch')
+
+    expect(md).toContain('## Feature map')
+    expect(md).toContain('Authentication & User Management, Core functionality')
+    expect(md).toContain('- Barcode scan in and out')
+    expect(md).toContain('- Low-stock alerting per SKU')
+  })
+
+  // The category list is signal on its own: the estimator decomposes per
+  // category, so which areas were explored matters even with few features.
+  it('renders areas alone when no concrete features were captured', () => {
+    const md = renderBrief(buildBriefSections({
+      covered_categories: ['UI/UX', 'API layer'],
+    }), 'StockWatch')
+
+    expect(md).toContain('**Areas covered:** UI/UX, API layer')
+  })
+
+  it('marks the section missing when the interview captured neither', () => {
+    const md = renderBrief(buildBriefSections({ project_name: 'X' }), 'X')
+    expect(md).toContain('## Feature map')
+    expect(md).toMatch(/## Feature map\n_Not captured during the interview._/)
+  })
+})
+
 describe('buildBriefSections', () => {
   it('fills every section from slots', () => {
     const s = buildBriefSections(slots)

@@ -71,7 +71,11 @@ export const STATES: Record<StateId, StateDef> = {
         differentiator: z.string().optional(),
       })
       .strict(),
-    exitGate: (s) => !!str(s, 'solution_summary'),
+    // `differentiator` was a declared slot the gate never asked for, so the
+    // state exited after a single turn. It is the one field that separates
+    // "a stock tracker" from "a stock tracker that beats their spreadsheet",
+    // and the estimator sizes against that distinction.
+    exitGate: (s) => !!str(s, 'solution_summary') && !!str(s, 'differentiator'),
     maxTurns: 5,
   },
 
@@ -85,8 +89,15 @@ export const STATES: Record<StateId, StateDef> = {
         mvp_wont: z.array(z.string()).optional(),
       })
       .strict(),
-    exitGate: (s) => arr(s, 'personas').length > 0 && arr(s, 'mvp_must').length > 0,
-    maxTurns: 6,
+    // Was personas >= 1 && mvp_must >= 1, which one sentence satisfies. A
+    // single must-have is not an MVP, and `mvp_wont` — never required before —
+    // is what makes an estimate defensible: without a stated boundary every
+    // later disagreement is about scope nobody wrote down.
+    exitGate: (s) =>
+      arr(s, 'personas').length >= 2 &&
+      arr(s, 'mvp_must').length >= 3 &&
+      arr(s, 'mvp_wont').length >= 1,
+    maxTurns: 7,
   },
 
   FEATURE_MAP: {
@@ -98,7 +109,11 @@ export const STATES: Record<StateId, StateDef> = {
         features: z.array(z.string()).optional(),
       })
       .strict(),
-    exitGate: (s) => arr(s, 'covered_categories').length >= 3,
+    // 3 of 7 meant four whole areas — UI/UX, API layer, Admin, Integrations —
+    // were routinely never discussed, and they are real task volume. 5 rather
+    // than 7 because the prompt tells the model to skip areas that genuinely
+    // do not apply, and a hard 7 would force it to invent them.
+    exitGate: (s) => arr(s, 'covered_categories').length >= 5,
     maxTurns: 12,
   },
 
@@ -113,8 +128,13 @@ export const STATES: Record<StateId, StateDef> = {
         integrations: z.array(z.string()).optional(),
       })
       .strict(),
-    exitGate: (s) => !!str(s, 'timeline') || !!str(s, 'budget_band'),
-    maxTurns: 5,
+    // Was timeline OR budget_band. Timeline is now required — it is the one
+    // constraint that changes the shape of a proposal — plus at least one of
+    // budget or stack, so a visitor who will not name a number can still
+    // progress on a technical answer.
+    exitGate: (s) =>
+      !!str(s, 'timeline') && (!!str(s, 'budget_band') || !!str(s, 'stack_preference')),
+    maxTurns: 6,
   },
 
   // Handled by POST /api/contact, not by the LLM. The graph only waits here.
