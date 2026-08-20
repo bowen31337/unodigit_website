@@ -73,6 +73,12 @@ Find out any technology preferences, target timeline, rough budget expectation, 
 Slot fields: stack_preference (string), timeline (string), budget_band (string), integrations (array of strings).
 Set ready_to_advance to true once either timeline or budget_band is known.`,
 
+  // UNREACHABLE for a visible reply. Advancing into CONTACT swaps the composer
+  // for the form (BaBot.tsx), so no LLM turn ever runs in this state and this
+  // wording never reaches a visitor. The closing line the visitor actually sees
+  // is CONTACT_HANDOFF in graph/handoff. Kept because `ADDENDA` is a total map
+  // over StateId and a session resumed into CONTACT would otherwise have no
+  // prompt at all.
   CONTACT: `Current topic: handover to the contact form.
 Tell the client you have everything you need and that the short form below will send their brief and estimate.
 Slot fields: none. Set ready_to_advance to true immediately.`,

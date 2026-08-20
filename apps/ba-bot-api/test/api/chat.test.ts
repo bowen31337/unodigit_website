@@ -81,6 +81,57 @@ beforeEach(() => {
   ip = `192.0.2.${ipCounter}`
 })
 
+describe('handover into CONTACT', () => {
+  // Reported from production twice: the last chat message either asked a
+  // question the visitor could no longer answer, or promised a "next topic"
+  // that never arrived — because advancing into CONTACT swaps the composer for
+  // the form. The reply is written by the OUTGOING state, which cannot know it
+  // is the last one.
+  async function seedAtConstraints(): Promise<string> {
+    const id = newId('conv')
+    await createConversation(env.DB, id, Date.now())
+    await updateConversationState(env.DB, id, 'CONSTRAINTS', 6)
+    await env.SESSIONS.put(sessionKey(id), JSON.stringify({
+      state: 'CONSTRAINTS',
+      // CONSTRAINTS' exit gate needs timeline OR budget_band; the rest carry
+      // through from earlier states.
+      slots: { project_name: 'StockWatch', audience: 'ops team', problem: 'stockouts' },
+      turnsInState: 1, totalTurns: 6, forcedAdvances: [],
+    }))
+    return id
+  }
+
+  it('replaces a trailing question with the hand-off when entering CONTACT', async () => {
+    mockLlm({
+      reply: "Perfect — that's your baseline. To wrap this stage, any third-party services to integrate?",
+      slots: { timeline: 'three months' },
+      ready_to_advance: true,
+      off_topic: false,
+    })
+
+    const conversationId = await seedAtConstraints()
+    const res = await post({ conversationId, message: 'three months, 80-120k' })
+    const json = await res.json<{ reply: string; state: string }>()
+
+    expect(json.state).toBe('CONTACT')
+    expect(json.reply).not.toContain('?')
+    expect(json.reply).toContain("Perfect — that's your baseline.")
+    expect(json.reply).toContain('short form below')
+  })
+
+  it('leaves the reply untouched on a turn that does not enter CONTACT', async () => {
+    const reply = 'And what is your target timeline?'
+    mockLlm({ reply, slots: {}, ready_to_advance: false, off_topic: false })
+
+    const conversationId = await seedAtConstraints()
+    const res = await post({ conversationId, message: 'not sure yet' })
+    const json = await res.json<{ reply: string; state: string }>()
+
+    expect(json.state).toBe('CONSTRAINTS')
+    expect(json.reply).toBe(reply)
+  })
+})
+
 describe('prompt history', () => {
   // The bug: assistant turns were replayed to the model as their bare `reply`
   // text while `response_format: json_object` demanded a JSON object, and the

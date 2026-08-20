@@ -8,6 +8,7 @@ import { replayHistory } from '../llm/history'
 import { runTurn } from '../llm/turn'
 import { step } from '../graph/transitions'
 import { STATES, type Slots, type StateId } from '../graph/states'
+import { contactHandoffReply } from '../graph/handoff'
 import {
   appendMessageAtNextSeq, createConversation, getConversation, listMessages,
   recordEvent,
@@ -209,9 +210,21 @@ export function registerChatRoutes(
       offTopic: turn.value.off_topic,
     })
 
+    // The model wrote this reply under the OUTGOING state's addendum, so it
+    // does not know it is the last thing the visitor will read. Advancing into
+    // CONTACT swaps the composer for the form, which strands a trailing
+    // question or a "moving to the next topic" promise with no way to answer
+    // or continue. See graph/handoff.
+    const reply =
+      result.advanced && result.next.state === 'CONTACT'
+        ? contactHandoffReply(turn.value.reply)
+        : turn.value.reply
+
     await appendMessageAtNextSeq(c.env.DB, {
       id: newId('msg'), conversationId: convId, role: 'assistant',
-      content: turn.value.reply,
+      // The amended reply, not the raw one: the transcript must be what the
+      // visitor actually saw, the same rule the slots below follow.
+      content: reply,
       // The slots that were actually merged, not the ones the model proposed —
       // the transcript must agree with the session it produced.
       slotsJson: JSON.stringify(slots),
@@ -235,7 +248,7 @@ export function registerChatRoutes(
 
     return c.json({
       conversationId: convId,
-      reply: turn.value.reply,
+      reply,
       state: result.next.state,
       finished: result.finished,
     })
