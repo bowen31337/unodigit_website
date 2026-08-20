@@ -126,3 +126,49 @@ describe('step()', () => {
     expect(r.advanced).toBe(true)
   })
 })
+
+describe('array slot accumulation', () => {
+  // A shallow spread replaced arrays wholesale, so every array-based exit gate
+  // counted only the LAST turn. Live, FEATURE_MAP burned all 12 turns and
+  // force-advanced with zero categories recorded, though the visitor had walked
+  // all seven areas.
+  const base = { ...initialState(), state: 'FEATURE_MAP' as const }
+
+  it('accumulates array slots across turns instead of replacing them', () => {
+    const first = step(base, {
+      slots: { covered_categories: ['Core functionality', 'Data management'] },
+      readyToAdvance: false, offTopic: false,
+    })
+    const second = step(first.next, {
+      slots: { covered_categories: ['UI/UX', 'API layer'] },
+      readyToAdvance: false, offTopic: false,
+    })
+
+    expect(second.next.slots['covered_categories']).toEqual([
+      'Core functionality', 'Data management', 'UI/UX', 'API layer',
+    ])
+  })
+
+  it('does not duplicate a value the visitor repeats', () => {
+    const first = step(base, {
+      slots: { mvp_must: ['scan in/out'] }, readyToAdvance: false, offTopic: false,
+    })
+    const second = step(first.next, {
+      slots: { mvp_must: ['scan in/out', 'low-stock alerts'] },
+      readyToAdvance: false, offTopic: false,
+    })
+
+    expect(second.next.slots['mvp_must']).toEqual(['scan in/out', 'low-stock alerts'])
+  })
+
+  it('still overwrites scalar slots', () => {
+    const first = step(base, {
+      slots: { timeline: 'six months' }, readyToAdvance: false, offTopic: false,
+    })
+    const second = step(first.next, {
+      slots: { timeline: 'three months' }, readyToAdvance: false, offTopic: false,
+    })
+
+    expect(second.next.slots['timeline']).toBe('three months')
+  })
+})
