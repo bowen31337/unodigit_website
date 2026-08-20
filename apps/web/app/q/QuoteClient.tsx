@@ -124,9 +124,28 @@ function parseBlocks(source: string): Block[] {
 
 /** Splits on **bold** / _italic_ runs. Every returned segment is either a
  * plain string (a React text node, auto-escaped) or a <strong>/<em> element
- * wrapping a plain string — never raw HTML. */
+ * wrapping further parsed segments — never raw HTML. */
 const INLINE_PATTERN = /(\*\*[^*]+\*\*|_[^_]+_)/g;
 
+/**
+ * Parses one line of inline markup, RECURSIVELY.
+ *
+ * The recursion is the whole point. `_[^_]+_` happily matches across `*`
+ * characters, so the quote footer —
+ *
+ *   _This is an **indicative** estimate ... valid until **19 September 2026**._
+ *
+ * — matches as a single italic run whose inner text still contains `**`. The
+ * previous version emitted that inner text as a plain string, so the visitor
+ * read the asterisks literally on the rendered quote.
+ *
+ * Termination is structural, not a depth cap: each level strips at least two
+ * delimiter characters, so the string passed down is always strictly shorter.
+ *
+ * Still no `innerHTML` anywhere — every leaf is a React text node, so the
+ * markdown (which carries visitor-supplied text that flowed through the LLM)
+ * stays escaped no matter how deeply it nests.
+ */
 function renderInline(text: string, keyPrefix: string): ReactNode[] {
   return text
     .split(INLINE_PATTERN)
@@ -134,10 +153,10 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
     .map((part, idx) => {
       const key = `${keyPrefix}-${idx}`;
       if (part.startsWith('**') && part.endsWith('**') && part.length >= 4) {
-        return <strong key={key}>{part.slice(2, -2)}</strong>;
+        return <strong key={key}>{renderInline(part.slice(2, -2), key)}</strong>;
       }
       if (part.startsWith('_') && part.endsWith('_') && part.length >= 2) {
-        return <em key={key}>{part.slice(1, -1)}</em>;
+        return <em key={key}>{renderInline(part.slice(1, -1), key)}</em>;
       }
       return part;
     });
