@@ -194,3 +194,19 @@ describe('the public API is unaffected', () => {
     expect(res.status).toBe(200)
   })
 })
+
+// This bug class has now appeared four times: since() and daily() in db/admin,
+// and both date columns in the dashboard, all from confusing the schema's
+// millisecond timestamps for seconds. The dashboard is a JS string, so it
+// cannot be unit-tested directly — this guards the one mistake that matters.
+describe('dashboard timestamp units', () => {
+  it('never multiplies a millisecond timestamp by 1000 before formatting', async () => {
+    const { dashboardHtml } = await import('../../src/admin/dashboard')
+    const html = typeof dashboardHtml === 'function' ? dashboardHtml() : String(dashboardHtml)
+
+    expect(html).not.toMatch(/lastAt\s*\*\s*1000/)
+    expect(html).not.toMatch(/createdAt\s*\*\s*1000/)
+    expect(html).toMatch(/new Date\(r\.lastAt\)/)
+    expect(html).toMatch(/new Date\(r\.createdAt\)/)
+  })
+})

@@ -207,6 +207,11 @@ export function dashboardHtml(): string {
     return t;
   }
 
+  // Timestamps from this API are MILLISECONDS — every column is written from
+  // Date.now(). Never multiply by 1000 before new Date(...). Doing so put the
+  // events "Last seen" and the leads "When" column in the year 58602, and the
+  // same seconds/milliseconds confusion independently broke since() and
+  // daily() in db/admin. It is the recurring mistake in this codebase.
   function renderSummary(d) {
     var o = d.overview;
     var tiles = document.getElementById('tiles');
@@ -259,7 +264,7 @@ export function dashboardHtml(): string {
         td.appendChild(el('span', r.type, 'pill ' + (bad ? 'err' : 'ok')));
         tr.appendChild(td);
         tr.appendChild(el('td', fmtInt.format(r.count), 'n'));
-        tr.appendChild(el('td', new Date(r.lastAt * 1000).toLocaleString('en-AU'), 'mono'));
+        tr.appendChild(el('td', new Date(r.lastAt).toLocaleString('en-AU'), 'mono'));
         return tr;
       }
     ));
@@ -272,7 +277,7 @@ export function dashboardHtml(): string {
       d.leads,
       function (r) {
         var tr = el('tr');
-        tr.appendChild(el('td', new Date(r.createdAt * 1000).toLocaleDateString('en-AU'), 'mono'));
+        tr.appendChild(el('td', new Date(r.createdAt).toLocaleDateString('en-AU'), 'mono'));
         tr.appendChild(el('td', r.email, 'mono'));
         tr.appendChild(el('td', r.name || '—'));
         tr.appendChild(el('td', r.company || '—'));
