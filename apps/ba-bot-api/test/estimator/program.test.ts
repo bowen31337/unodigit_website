@@ -231,13 +231,13 @@ describe('US-004a: oversized first pass reaches program mode', () => {
     // runEstimate falls back to the valid oversized single result rather than
     // erroring — that fallback is existing US-004 behavior. What this test
     // pins is that the 900-task subsystem never becomes the returned shape.
-    // client.calls === 3 (1 first-pass call + 2 second-pass attempts, the
-    // repair retry) confirms the oversized-subsystem shape was genuinely
-    // rejected by validation both times, not skipped.
+    // client.calls === 4 (1 first-pass call + 3 second-pass attempts) confirms
+    // the oversized-subsystem shape was genuinely rejected by validation every
+    // time, not skipped.
     expect(r.ok).toBe(true)
     if (!r.ok) return
     expect(r.shape.mode).toBe('single')
-    expect(client.calls).toBe(3)
+    expect(client.calls).toBe(4)
   })
 
   it('a subsystem whose categories contradict its own total is rejected', async () => {
@@ -268,6 +268,6 @@ describe('US-004a: oversized first pass reaches program mode', () => {
     expect(r.ok).toBe(true)
     if (!r.ok) return
     expect(r.shape.mode).toBe('single')
-    expect(client.calls).toBe(3)
+    expect(client.calls).toBe(4)
   })
 })

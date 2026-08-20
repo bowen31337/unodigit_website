@@ -223,6 +223,28 @@ Consequences worth knowing before touching any of it:
   consistent, a full 7-turn interview measured **9.2s / 600 completion tokens** against
   **78.1s / 9012** with reasoning on — roughly 8x faster and 15x cheaper, same zero
   apologies.
+**The estimator had the same ceiling bug, and it silently killed the quote
+feature.** `estimator/estimate.ts` calls `LLM_MODEL_HEAVY` (`deepseek-v4-pro`, also a
+reasoning model) and capped it at 1600 — which truncated **5 of 5** real estimates at
+exactly 1600 with `finish_reason: 'length'`. Since `truncated` returned immediately,
+no `quotes` row was ever written, so `quoteUrl` was always null and every visitor got
+the "we will follow up by email" headline instead of their indicative quote. The
+`/q/` page, `GET /api/quote/:id`, the signed link and the widget's link button were
+all already built and correct — nothing reached them. Ceilings are now per pass,
+because the two passes differ ~3x in output size:
+
+| pass | ceiling | observed completion tokens | result |
+|---|---|---|---|
+| single | 8000 | 2429–4618 | 5/5 ok |
+| program | 8000 | 7358–8000+ | **4/5 truncated** |
+| program | 16000 | 6083–11481 | 5/5 ok |
+
+A truncated *program* pass is the quiet one: `runEstimate` falls back to the oversized
+single estimate, so a quote still appears and only the better phased artifact goes
+missing. Reasoning stays ON here deliberately — it is the one genuinely analytical
+call, and its repair path adds an assistant turn, which is exactly the context shape
+that makes `thinking: disabled` return whitespace.
+
 - **The 8000-token ceiling in `llm/turn.ts` is now slack, not a constraint** — turns
   finish in the low hundreds. Keep it: it costs nothing on turns that finish early and
   it covers the case where someone turns reasoning back on. Do not read it as evidence
