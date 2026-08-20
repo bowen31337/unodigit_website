@@ -211,7 +211,8 @@ export function dashboardHtml(): string {
     var o = d.overview;
     var tiles = document.getElementById('tiles');
     tiles.replaceChildren(
-      tile('Conversations', fmtInt.format(o.conversations), fmtInt.format(o.completed) + ' completed'),
+      tile('Conversations', fmtInt.format(o.conversations),
+        fmtInt.format(o.completed) + ' completed · ' + fmtInt.format(o.unfinished) + ' unfinished'),
       tile('Leads', fmtInt.format(o.leads), o.conversations ? Math.round(100 * o.leads / o.conversations) + '% of conversations' : ''),
       tile('Quotes', fmtInt.format(o.quotes), fmtInt.format(o.briefs) + ' briefs'),
       tile('Quoted value', fmtAud.format(o.quotedValueLowAud) + '–' + fmtAud.format(o.quotedValueHighAud)),

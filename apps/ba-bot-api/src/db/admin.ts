@@ -16,12 +16,23 @@
  * into a writable one.
  */
 
-/** Window start as a unix-seconds bound. `days <= 0` means all time, expressed
- *  as 0 rather than a conditional WHERE — building the clause itself
- *  conditionally is how a subquery ends up with a dangling AND. */
+/**
+ * Window start, in MILLISECONDS, because every timestamp column in this schema
+ * is milliseconds — they are all written from `Date.now()`.
+ *
+ * This returned unix SECONDS until it was measured against real data. A
+ * millisecond timestamp (1787227092049) is about a thousand times larger than
+ * any second-based bound (1787231034), so `created_at >= ?` was ALWAYS TRUE
+ * and every window — 24 hours, 7 days, 30 days — silently returned all time.
+ * Nothing looked broken: the numbers were plausible, just never filtered.
+ *
+ * `days <= 0` still means all time, expressed as 0 rather than a conditional
+ * WHERE — building the clause itself conditionally is how a subquery ends up
+ * with a dangling AND.
+ */
 export function since(days: number, nowMs = Date.now()): number {
   if (!Number.isFinite(days) || days <= 0) return 0
-  return Math.floor(nowMs / 1000) - Math.floor(days) * 86400
+  return nowMs - Math.floor(days) * 86_400_000
 }
 
 export interface Overview {
@@ -31,6 +42,9 @@ export interface Overview {
   briefs: number
   completed: number
   abandoned: number
+  /** Never reached POST /api/generate — the visitor closed the widget. Neither
+   *  completed nor abandoned; see the note in the query. */
+  unfinished: number
   totalCostUsd: number
   tokensIn: number
   tokensOut: number
@@ -49,6 +63,14 @@ export async function overview(db: D1Database, from: number): Promise<Overview> 
          COALESCE(SUM(tokens_out), 0)                          AS tokens_out,
          COALESCE(ROUND(AVG(turn_count), 1), 0)                AS avg_turns,
          COALESCE(SUM(abandoned_at_state IS NOT NULL), 0)      AS abandoned,
+         -- A conversation is only ever "ended" by POST /api/generate. Closing
+         -- the widget mid-interview writes nothing, so ended_at and
+         -- abandoned_at_state both stay NULL forever and such a session is
+         -- neither completed NOR abandoned. Counting only the first two made
+         -- the dashboard report 0 and 0 against 30 conversations, which reads
+         -- as "nothing to see" when in fact almost every visitor was dropping
+         -- out at the first question.
+         COALESCE(SUM(ended_at IS NULL), 0)                     AS unfinished,
          COALESCE(SUM(ended_at IS NOT NULL
                       AND abandoned_at_state IS NULL), 0)      AS completed
        FROM conversations WHERE started_at >= ?`,
@@ -87,6 +109,7 @@ export async function overview(db: D1Database, from: number): Promise<Overview> 
     briefs: briefs?.n ?? 0,
     completed: conv?.completed ?? 0,
     abandoned: conv?.abandoned ?? 0,
+    unfinished: conv?.unfinished ?? 0,
     totalCostUsd: conv?.total_cost_usd ?? 0,
     tokensIn: conv?.tokens_in ?? 0,
     tokensOut: conv?.tokens_out ?? 0,
@@ -109,7 +132,16 @@ export async function funnel(db: D1Database, from: number): Promise<FunnelRow[]>
   const { results } = await db
     .prepare(
       `SELECT
-         COALESCE(abandoned_at_state, '(not abandoned)') AS state,
+         -- Three cases, in order: explicitly abandoned; still open (bucket by
+         -- the state it is sitting in, which is where the visitor actually
+         -- stopped); otherwise genuinely finished. Bucketing on
+         -- abandoned_at_state alone put every unfinished conversation into one
+         -- "(not abandoned)" row at 100%, hiding the real drop-off entirely.
+         COALESCE(
+           abandoned_at_state,
+           CASE WHEN ended_at IS NULL THEN state END,
+           '(completed)'
+         ) AS state,
          COUNT(*)                                        AS conversations,
          COALESCE(ROUND(
            100.0 * COUNT(*) / NULLIF(
@@ -117,7 +149,11 @@ export async function funnel(db: D1Database, from: number): Promise<FunnelRow[]>
          COALESCE(ROUND(AVG(turn_count), 1), 0)          AS avg_turns
        FROM conversations
        WHERE started_at >= ?1
-       GROUP BY COALESCE(abandoned_at_state, '(not abandoned)')
+       GROUP BY COALESCE(
+         abandoned_at_state,
+         CASE WHEN ended_at IS NULL THEN state END,
+         '(completed)'
+       )
        ORDER BY conversations DESC`,
     )
     .bind(from)
@@ -139,14 +175,19 @@ export interface DailyRow {
   tokensOut: number
 }
 
-/** Daily spend series. `unixepoch` is SQLite's; D1 supports it, and doing the
- *  bucketing in SQL avoids shipping every conversation row to the Worker just
- *  to group it. */
+/**
+ * Daily spend series.
+ *
+ * `started_at` is MILLISECONDS, so it must be divided before `unixepoch`, which
+ * expects seconds. Without the divide SQLite is handed a year ~58000 and
+ * returns NULL for every row — the chart was not merely mislabelled, it was
+ * empty, with every bucket keyed `null`.
+ */
 export async function daily(db: D1Database, from: number): Promise<DailyRow[]> {
   const { results } = await db
     .prepare(
       `SELECT
-         date(started_at, 'unixepoch')     AS day,
+         date(started_at / 1000, 'unixepoch') AS day,
          COUNT(*)                          AS conversations,
          COALESCE(SUM(cost_usd), 0)        AS cost_usd,
          COALESCE(SUM(tokens_in), 0)       AS tokens_in,
