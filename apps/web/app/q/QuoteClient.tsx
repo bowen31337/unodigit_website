@@ -7,11 +7,7 @@ import GradientMesh from '@/components/GradientMesh';
 import Button from '@/components/Button';
 import Logo from '@/components/Logo';
 
-/** Baked in at build time — the site is a static export, so there is no
- * runtime config. Matches the discipline in useBaBot.ts: when the origin is
- * absent, this page cannot verify anything, so it fails to the same "not
- * valid" state rather than pointing at a dead endpoint. */
-const BOT_API = process.env.NEXT_PUBLIC_BA_BOT_URL;
+import { BOT_API } from '@/lib/botApi';
 
 // ---------------------------------------------------------------------------
 // A minimal, safe renderer for the exact subset of Markdown our own Worker
@@ -272,7 +268,11 @@ export default function QuoteClient() {
   useEffect(() => {
     // A missing id or sig is refused locally — never sent to the Worker as an
     // empty or undefined signature. Same failure state as a 403.
-    if (!id || !sig || !BOT_API) {
+    //
+    // Deliberately NOT guarded on `!BOT_API`: an empty string is the correct
+    // production value (same-origin, via the Pages proxy), so that check
+    // failed every real link. See lib/botApi.
+    if (!id || !sig) {
       setStatus('failed');
       return;
     }

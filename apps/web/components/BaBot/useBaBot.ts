@@ -8,25 +8,16 @@ import type {
   GenerateResponse,
   StateId,
 } from '@unodigit/ba-bot-contract';
+import { BOT_API } from '@/lib/botApi';
 
 /**
- * Prefix for every bot call.
+ * Prefix for every bot call. Re-exported so existing importers keep working;
+ * the definition, and the reason an empty string is the correct PRODUCTION
+ * value rather than a missing one, both live in one place now.
  *
- * **Empty string is the production value and means same-origin.**
- * `public/_worker.js` proxies `/api/*` to the bot Worker from the edge, so the
- * browser only ever talks to the site's own hostname: no CORS, no preflight,
- * and the Worker's address never reaches the client bundle.
- *
- * The variable survives as the escape hatch for `pnpm dev`, where there is no
- * Pages Function to do the proxying and `/api/chat` on :3000 is simply a 404 —
- * so .env.development still points at an absolute origin.
- *
- * Baked in at build time: the site is a static export and has no runtime
- * config. It no longer gates whether the widget renders — the proxy ships in
- * the same deployment as the page, so there is no longer a configuration under
- * which the endpoint is absent.
+ * @see lib/botApi
  */
-export const BOT_API = process.env.NEXT_PUBLIC_BA_BOT_URL ?? '';
+export { BOT_API };
 
 export interface Turn {
   role: 'user' | 'assistant';

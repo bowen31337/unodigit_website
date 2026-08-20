@@ -1,4 +1,4 @@
-import type { Hono } from 'hono'
+import type { Hono, MiddlewareHandler } from 'hono'
 import type { Env } from '../env'
 import { readAccessToken, verifyAccessJwt } from '../guards/access'
 import { dashboardCsp, dashboardHtml } from '../admin/dashboard'
@@ -35,7 +35,22 @@ declare module 'hono' {
  *     the edge silently stops enforcing.
  */
 export function registerAdminRoutes(app: Hono<{ Bindings: Env }>): void {
-  app.use('/admin/*', async (c, next) => {
+  /**
+   * Every path the admin surface owns, and the exact set both middlewares below
+   * are mounted on. The dashboard lives at `/` — `admin.claw-forge.net/admin`
+   * read as a stutter, and the `/admin` prefix stopped being the security
+   * boundary the moment the surface moved onto its own hostname.
+   *
+   * `/` is the reason this is a list rather than a string. It is a path on
+   * every hostname this Worker answers, including `api.claw-forge.net` and
+   * `*.workers.dev`, and neither has Access in front of it. Mounting the gate
+   * on `/admin/*` alone — as it was when the page lived there — would leave the
+   * page ungated the day it moved. Add a path to the admin surface, add it
+   * here; there is no wildcard that covers both without also covering `/api/*`.
+   */
+  const ADMIN_PATHS = ['/', '/admin/*'] as const
+
+  const gate: MiddlewareHandler<{ Bindings: Env }> = async (c, next) => {
     const configured = c.env.ADMIN_HOSTNAME
     // Unset means "no admin surface on this deployment". Failing closed keeps
     // a half-configured deploy from publishing the dashboard.
@@ -60,24 +75,32 @@ export function registerAdminRoutes(app: Hono<{ Bindings: Env }>): void {
 
     c.set('adminEmail', identity.email)
     await next()
-  })
+  }
 
-  // Nothing under /admin may be cached. These responses carry leads' names,
-  // emails and companies, and a shared cache or a browser's back-forward cache
-  // holding them is a second copy of personal information that the deletion
-  // path in delete-lead.sh cannot reach.
-  app.use('/admin/*', async (c, next) => {
+  // No admin response may be cached. These carry leads' names, emails and
+  // companies, and a shared cache or a browser's back-forward cache holding
+  // them is a second copy of personal information that the deletion path in
+  // delete-lead.sh cannot reach.
+  const noStore: MiddlewareHandler<{ Bindings: Env }> = async (c, next) => {
     await next()
     c.header('Cache-Control', 'no-store, max-age=0')
     c.header('Referrer-Policy', 'no-referrer')
     c.header('X-Content-Type-Options', 'nosniff')
     c.header('X-Frame-Options', 'DENY')
-  })
+  }
 
-  app.get('/admin', (c) => {
+  for (const path of ADMIN_PATHS) app.use(path, gate)
+  for (const path of ADMIN_PATHS) app.use(path, noStore)
+
+  app.get('/', (c) => {
     c.header('Content-Security-Policy', dashboardCsp())
     return c.html(dashboardHtml())
   })
+
+  /** The page's old address. 302 rather than 301: a permanent redirect is
+   *  cached by the browser indefinitely, so reverting this move would leave
+   *  every operator who had visited once bounced off a URL that works again. */
+  app.get('/admin', (c) => c.redirect('/', 302))
 
   /** Query window in days. Rejects junk rather than silently reading it as
    *  all-time: a typo'd `?days=3O` quietly returning every row since launch is

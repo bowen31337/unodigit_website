@@ -33,11 +33,20 @@ async function token(overrides: Record<string, unknown> = {}) {
   return `${header}.${payload}.${b64url(new Uint8Array(sig))}`
 }
 
-/** Calls the Worker exactly as the edge would: a real hostname in the URL. */
+/**
+ * Calls the Worker exactly as the edge would: a real hostname in the URL.
+ *
+ * `redirect: 'manual'` so a status assertion means what it says. The runtime
+ * follows redirects by default, which would report the *destination's* 200 for
+ * a request that was actually redirected — and silently turn the /admin → /
+ * assertion into a test of the dashboard route it already covers.
+ */
 async function call(path: string, opts: { host?: string; jwt?: string } = {}) {
   const headers: Record<string, string> = {}
   if (opts.jwt) headers['Cf-Access-Jwt-Assertion'] = opts.jwt
-  return await exports.default.fetch(`https://${opts.host ?? HOST}${path}`, { headers })
+  return await exports.default.fetch(
+    new Request(`https://${opts.host ?? HOST}${path}`, { headers, redirect: 'manual' }),
+  )
 }
 
 beforeEach(async () => {
@@ -78,6 +87,22 @@ describe('gate 1 — hostname', () => {
     expect((await call('/admin', { jwt: await token() })).status).toBe(404)
   })
 
+  it('404s on the root path on workers.dev, where the dashboard now lives', async () => {
+    // Moving the page from /admin to / moves it onto a path that exists on
+    // every hostname this Worker answers. If the gate were left mounted on
+    // /admin/* alone, this is the request that would serve the dashboard to
+    // anyone.
+    const res = await call('/', { host: 'unodigit-ba-bot.unodigit.workers.dev', jwt: await token() })
+    expect(res.status).toBe(404)
+    expect(await res.text()).not.toContain('BA bot · metrics')
+  })
+
+  it('404s on the root path on the public API hostname', async () => {
+    const res = await call('/', { host: 'api.claw-forge.net', jwt: await token() })
+    expect(res.status).toBe(404)
+    expect(await res.text()).not.toContain('BA bot · metrics')
+  })
+
   it('404s rather than 403s, so probing cannot confirm the surface exists', async () => {
     const res = await call('/admin/api/summary', { host: 'api.claw-forge.net', jwt: await token() })
     expect(res.status).toBe(404)
@@ -88,6 +113,10 @@ describe('gate 1 — hostname', () => {
 describe('gate 2 — Access JWT', () => {
   it('401s on the admin hostname with no token', async () => {
     expect((await call('/admin')).status).toBe(401)
+  })
+
+  it('401s on the root path with no token', async () => {
+    expect((await call('/')).status).toBe(401)
   })
 
   it('401s for a token minted for another application in the same team', async () => {
@@ -106,11 +135,19 @@ describe('gate 2 — Access JWT', () => {
 })
 
 describe('the dashboard and its data', () => {
-  it('serves the page to a verified operator', async () => {
-    const res = await call('/admin', { jwt: await token() })
+  it('serves the page at the root to a verified operator', async () => {
+    const res = await call('/', { jwt: await token() })
     expect(res.status).toBe(200)
     expect(res.headers.get('Content-Type')).toContain('text/html')
     expect(await res.text()).toContain('BA bot · metrics')
+  })
+
+  it('redirects the legacy /admin path to the root', async () => {
+    // 302, not 301: a permanent redirect is cached by the browser, and
+    // reverting this change would leave operators bounced off a URL that works.
+    const res = await call('/admin', { jwt: await token() })
+    expect(res.status).toBe(302)
+    expect(res.headers.get('Location')).toBe('/')
   })
 
   it('never lets a response carrying leads be cached', async () => {
@@ -120,7 +157,7 @@ describe('the dashboard and its data', () => {
   })
 
   it('sets a CSP with no external origin on the page', async () => {
-    const csp = (await call('/admin', { jwt: await token() })).headers.get('Content-Security-Policy')
+    const csp = (await call('/', { jwt: await token() })).headers.get('Content-Security-Policy')
     expect(csp).toContain("default-src 'none'")
     expect(csp).toContain("connect-src 'self'")
     expect(csp).toContain("frame-ancestors 'none'")
