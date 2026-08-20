@@ -99,6 +99,11 @@ export function useBaBot() {
   const [{ conversationId, messages, state, finished, headline, quoteUrl }, setData] =
     useState<Persisted>(EMPTY);
   const [pending, setPending] = useState(false);
+  /** True while POST /api/generate is in flight. That call runs the heavy
+   *  estimator and was measured at 44-118s live, during which the visitor
+   *  otherwise saw a finished-looking panel with no button and no hint that
+   *  anything was still happening. */
+  const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** The raw code behind `error`. The widget needs it to tell a spent
    *  challenge (re-earn one, then the retry can work) from every other
@@ -120,6 +125,7 @@ export function useBaBot() {
    * unset — the widget falls back to its static copy.
    */
   const generate = useCallback(async (convId: string) => {
+    setGenerating(true);
     try {
       const res = await fetch(`${BOT_API}/api/generate`, {
         method: 'POST',
@@ -133,6 +139,10 @@ export function useBaBot() {
       setData((d) => ({ ...d, state: body.state, headline: body.headline, quoteUrl: body.quoteUrl }));
     } catch {
       /* network failure — silent, see comment above */
+    } finally {
+      // In `finally`, not after the happy path: an early `return` on a non-OK
+      // body would otherwise leave the widget spinning forever.
+      setGenerating(false);
     }
   }, []);
 
@@ -297,6 +307,7 @@ export function useBaBot() {
     state,
     finished,
     pending,
+    generating,
     error,
     errorCode,
     hydrated,

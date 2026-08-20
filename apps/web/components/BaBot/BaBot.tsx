@@ -325,6 +325,30 @@ export default function BaBot() {
 
                 {done && (
                   <div className="space-y-s3 px-s2">
+                    {/* The estimator is the slowest call in the product (44-118s
+                        measured). Without this the panel looks finished and
+                        broken: static thanks copy, no button, no explanation.
+                        Reuses the transcript's own thinking dots so the wait
+                        reads as the same kind of work, not a new UI. */}
+                    {bot.generating && (
+                      <div className="flex items-center gap-s2" aria-live="polite">
+                        <span className="inline-flex gap-1" aria-hidden="true">
+                          {[0, 1, 2].map((d) => (
+                            <motion.span
+                              key={d}
+                              className="inline-block h-1.5 w-1.5 rounded-full"
+                              style={{ background: 'var(--accent)' }}
+                              animate={reduceMotion ? undefined : { opacity: [0.3, 1, 0.3] }}
+                              transition={{ duration: 1.2, repeat: Infinity, delay: d * 0.15 }}
+                            />
+                          ))}
+                        </span>
+                        <span className="type-footnote" style={{ color: 'var(--label-secondary)' }}>
+                          Writing your brief and working out an estimate…
+                        </span>
+                      </div>
+                    )}
+                    {!bot.generating && (
                     <p className="type-footnote" style={{ color: 'var(--label-secondary)' }}>
                       {/* The Worker's headline (US-011) replaces this once POST
                           /api/generate resolves — it names the real outcome
@@ -333,6 +357,7 @@ export default function BaBot() {
                           was decommissioned, so this copy never promises one. */}
                       {bot.headline ?? 'Thanks — that is everything we need.'}
                     </p>
+                    )}
                     {/* Only ever rendered once the Worker hands back a real
                         signed link — never a broken or empty href. */}
                     {bot.quoteUrl && (
