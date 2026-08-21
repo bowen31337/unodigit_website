@@ -56,6 +56,10 @@ export const STATES: Record<StateId, StateDef> = {
         project_name: z.string().optional(),
         audience: z.string().optional(),
         problem: z.string().optional(),
+        // Inferred, never asked, and deliberately NOT in the exit gate: it is
+        // reporting metadata, and holding the interview open for it would cost
+        // the visitor a question asked purely for our benefit.
+        industry: z.string().optional(),
       })
       .strict(),
     exitGate: (s) => !!str(s, 'project_name') && !!str(s, 'audience') && !!str(s, 'problem'),

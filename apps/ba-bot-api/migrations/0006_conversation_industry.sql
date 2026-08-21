@@ -1,0 +1,12 @@
+-- The sector the project is for, so the leads table can say at a glance what a
+-- client wants built.
+--
+-- On `conversations`, not on `leads`: it is something the interview learns, and
+-- a conversation can exist long before (or without) a lead. Nullable — it is
+-- inferred, never required, and gating the interview on it would add a question
+-- for the visitor to answer purely for our own reporting.
+--
+-- A column rather than a key inside briefs.sections_json: this is queried and
+-- displayed per row, and json_extract in the leads join is both slower and
+-- unindexable.
+ALTER TABLE conversations ADD COLUMN industry TEXT;

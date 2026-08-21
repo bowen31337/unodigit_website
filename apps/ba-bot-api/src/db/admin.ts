@@ -298,6 +298,9 @@ export interface LeadRow {
    *  Source column cannot tell a visitor who typed the URL from one who
    *  arrived on an untagged social post — both read "direct". */
   referrer: string | null
+  /** Sector the project serves, inferred during PROJECT_IDENTITY. Null for any
+   *  conversation that predates migration 0006. */
+  industry: string | null
   consent: boolean
   phone: string | null
   /** Needed by the dashboard to open the transcript and the quote artifact.
@@ -333,6 +336,7 @@ export async function leads(
          l.utm_source, l.utm_medium, l.utm_campaign, l.referrer,
          l.consent_marketing, l.phone,
          MAX(c.id)                     AS conversation_id,
+         MAX(c.industry)               AS industry,
          MAX(qt.id)                    AS quote_id,
          COUNT(qt.id)                  AS quotes,
          COALESCE(SUM(qt.low_aud), 0)  AS low_aud,
@@ -361,6 +365,7 @@ export async function leads(
       utm_medium: string | null
       utm_campaign: string | null
       referrer: string | null
+      industry: string | null
       consent_marketing: number
       phone: string | null
       conversation_id: string | null
@@ -382,6 +387,7 @@ export async function leads(
     utmMedium: r.utm_medium,
     utmCampaign: r.utm_campaign,
     referrer: r.referrer,
+    industry: r.industry,
     consent: r.consent_marketing === 1,
     phone: r.phone,
     conversationId: r.conversation_id,

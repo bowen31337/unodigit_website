@@ -50,8 +50,14 @@ Slot fields: none. Set ready_to_advance to true after your first reply.`,
 
   PROJECT_IDENTITY: `Current topic: project identity.
 Find out what the product is, who it is for, and what problem it solves.
-Slot fields: project_name (string), audience (string), problem (string).
-Set ready_to_advance to true only once all three are known.`,
+Slot fields: project_name (string), audience (string), problem (string), industry (string).
+ALWAYS include industry in slots on your FIRST reply in this topic, and never
+ask about it — infer it from what the visitor has already said. Two or three
+words naming the sector the product serves: "construction", "dental and allied
+health", "warehousing and logistics", "legal services", "e-commerce retail".
+Only omit it if their description truly implies no sector at all.
+Set ready_to_advance to true only once project_name, audience and problem are
+known — industry is not required for that.`,
 
   SOLUTION_SHAPE: `Current topic: the solution.
 Find out what the product actually does and what makes it different from what exists today.

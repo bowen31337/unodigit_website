@@ -239,6 +239,18 @@ export function registerChatRoutes(
       await recordEvent(c.env.DB, convId, 'forced_advance', { state: session.state })
     }
 
+    // Copied out of the session onto the durable row the turn it is learned.
+    // Slots live only in KV and expire; the leads table needs this months
+    // later. Written at most once — the guard means a later turn restating the
+    // same fact costs nothing, and an early guess is not overwritten by a
+    // vaguer one.
+    if (typeof slots.industry === 'string' && slots.industry.trim()) {
+      await c.env.DB
+        .prepare("UPDATE conversations SET industry = ? WHERE id = ? AND (industry IS NULL OR industry = '')")
+        .bind(slots.industry.trim().slice(0, 80), convId)
+        .run()
+    }
+
     await persistSession(c.env, convId, result.next)
 
     await c.env.DB

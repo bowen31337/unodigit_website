@@ -458,7 +458,8 @@ export function dashboardHtml(): string {
   function renderLeads(d) {
     document.getElementById('leads').replaceChildren(table(
       [{ label: 'When' }, { label: 'Email' }, { label: 'Name' }, { label: 'Company' },
-       { label: 'Mobile' }, { label: 'Source' }, { label: 'Came from' }, { label: 'Consent' },
+       { label: 'Industry' }, { label: 'Mobile' }, { label: 'Source' },
+       { label: 'Came from' }, { label: 'Consent' },
        { label: 'Quote' }, { label: 'Chat' },
        { label: 'Value', numeric: true }, { label: '' }],
       d.leads,
@@ -468,6 +469,9 @@ export function dashboardHtml(): string {
         tr.appendChild(el('td', r.email, 'mono'));
         tr.appendChild(el('td', r.name || '—'));
         tr.appendChild(el('td', r.company || '—'));
+        // What the client wants built, in a couple of words. Inferred during
+        // the interview, so null for anything before migration 0006.
+        tr.appendChild(el('td', r.industry || '—'));
         tr.appendChild(el('td', r.phone || '—', 'mono'));
         // Source is the UTM tag; "direct" there only means untagged.
         var src = el('td', r.utmSource || 'direct', 'mono');

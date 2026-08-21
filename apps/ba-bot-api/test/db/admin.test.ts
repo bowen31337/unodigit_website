@@ -246,3 +246,34 @@ describe('lead attribution surfaced to the dashboard', () => {
     expect(row!.referrer).toBeNull()
   })
 })
+
+describe('industry on the lead row', () => {
+  it('surfaces the sector recorded against the conversation', async () => {
+    for (const t of ['quotes', 'briefs', 'messages', 'conversations', 'leads']) {
+      await env.DB.prepare(`DELETE FROM ${t}`).run()
+    }
+    const leadId = newId('lead')
+    const convId = newId('conv')
+    await insertLead(env.DB, {
+      id: leadId, createdAt: NOW - DAY, name: null, email: 'builder@example.com',
+      company: null, role: null, phone: null, ipHash: 'h', country: null, asn: null,
+      userAgent: null, utmSource: null, utmMedium: null, utmCampaign: null,
+      referrer: null, landingPage: null, consentMarketing: true, consentTs: NOW - DAY,
+    })
+    await createConversation(env.DB, convId, NOW - DAY)
+    await env.DB
+      .prepare('UPDATE conversations SET lead_id = ?, industry = ? WHERE id = ?')
+      .bind(leadId, 'construction', convId).run()
+
+    const [row] = await leads(env.DB, 10, undefined, since(0, NOW))
+    expect(row!.industry).toBe('construction')
+  })
+
+  // Every conversation from before migration 0006 has none, and the column
+  // must read as absent rather than break the row.
+  it('reports null for a conversation that never recorded one', async () => {
+    await env.DB.prepare('UPDATE conversations SET industry = NULL').run()
+    const [row] = await leads(env.DB, 10, undefined, since(0, NOW))
+    expect(row!.industry).toBeNull()
+  })
+})
