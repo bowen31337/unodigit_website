@@ -184,9 +184,17 @@ rejecting a real number on a lead-capture form costs more than storing an odd on
 ### `POST /api/generate`
 
 Writes the brief, runs the estimator, prices the quote, returns the signed link.
-**Idempotent** — a refresh or double-click returns the existing artefacts rather than
-minting new ones, and the idempotency check runs *before* the state gate so a visitor
-whose brief exists gets it back rather than a 409.
+**Idempotent for a completed generate** — a refresh or double-click returns the
+existing artefacts rather than minting new ones, and the check runs *before* the state
+gate so a visitor whose brief exists gets it back rather than a 409.
+
+A brief **without** a quote is a different case and is retried. The estimate was
+skipped (rate limit) or failed, and returning early regardless turned a transient
+condition into a permanent one — observed on a real lead whose network had already
+spent the day's quote allowance: it completed a 31-turn interview, wrote its brief,
+and could never be priced again. The retry skips the state and slot gates (the brief
+proves the interview completed; its session reads `DONE` and its slots may have
+expired from KV) and reuses the same brief rather than orphaning it.
 
 ```jsonc
 { "conversationId": "conv_…" }
@@ -201,7 +209,8 @@ session lapsed and the durable row cannot supply `project_name` + `problem` (wit
 those the brief would render "not captured" throughout and be priced from nothing).
 
 Three no-quote exits, each returning a brief and a truthful headline rather than an
-error: rate limited (one quote per IP per day), estimator failed, or below floor.
+error: rate limited (`MAX_QUOTES_PER_IP_PER_DAY`), estimator failed, or below floor.
+Only the third is terminal — the first two are retried on a later call.
 
 **Latency: 45–120 s.** It is the slowest call in the product. The widget shows a
 progress indicator for the whole window (§5.3).
@@ -542,12 +551,18 @@ Vars in `wrangler.toml`; secrets via `wrangler secret` (synced from 1Password by
 | `PROGRAM_MODE_THRESHOLD` | `300` | Tasks above which a subsystem split is requested |
 | `QUOTE_VALID_DAYS` | `30` | Quote validity |
 | `MAX_TOTAL_TURNS` | `40` | Per conversation |
-| `MAX_TURNS_PER_IP_PER_DAY` | `120` | Abuse cap |
+| `MAX_TURNS_PER_IP_PER_DAY` | `120` | Chat-turn abuse cap |
+| `MAX_QUOTES_PER_IP_PER_DAY` | `3` | Quotes per IP per day — see note below |
 | `PUBLIC_SITE_URL` | `https://www.unodigit.com.au` | Base for signed quote links |
 | `ADMIN_HOSTNAME` | `admin.claw-forge.net` | Dashboard host gate |
 
 Secrets: `LLM_API_KEY`, `TURNSTILE_SECRET`, `IP_HASH_SALT`,
 `QUOTE_LINK_SIGNING_KEY`.
+
+> **Per-IP is per-network.** An office, VPN or mobile carrier egress is a single
+> `ip_hash`, so every visitor behind it shares one bucket. The quote cap was 1, which
+> made the second genuine enquiry from a company indistinguishable from abuse — and
+> did exactly that to a real lead. Raise it rather than lower it if enquiries cluster.
 
 ---
 
