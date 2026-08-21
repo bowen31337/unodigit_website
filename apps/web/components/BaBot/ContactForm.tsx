@@ -79,15 +79,25 @@ export default function ContactForm({ pending, onSubmit }: ContactFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-s4 p-s5">
-      <p className="type-footnote" style={{ color: 'var(--label-secondary)' }}>
-        Where should we send your scope and estimate?
-      </p>
+      <div className="space-y-s1">
+        <p className="type-footnote" style={{ color: 'var(--label)' }}>
+          Where should we send your scope and estimate?
+        </p>
+        {/* One statement instead of tagging four of five fields "(optional)".
+            Company, role and mobile are all optional server-side; only three
+            carried the suffix, so Company read as required purely by omission.
+            Saying the rule once is both accurate and quieter. */}
+        <p className="type-caption" style={{ color: 'var(--label-secondary)' }}>
+          Only your email address is required.
+        </p>
+      </div>
 
       <div className="grid grid-cols-2 gap-s3">
         <input
           type="text"
           className="field"
           placeholder="Name"
+          aria-label="Name"
           autoComplete="name"
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -96,6 +106,7 @@ export default function ContactForm({ pending, onSubmit }: ContactFormProps) {
           type="text"
           className="field"
           placeholder="Company"
+          aria-label="Company (optional)"
           autoComplete="organization"
           value={company}
           onChange={(e) => setCompany(e.target.value)}
@@ -107,6 +118,7 @@ export default function ContactForm({ pending, onSubmit }: ContactFormProps) {
         required
         className="field"
         placeholder="Email address"
+        aria-label="Email address (required)"
         autoComplete="email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
@@ -115,7 +127,8 @@ export default function ContactForm({ pending, onSubmit }: ContactFormProps) {
       <input
         type="text"
         className="field"
-        placeholder="Your role (optional)"
+        placeholder="Your role"
+        aria-label="Your role (optional)"
         autoComplete="organization-title"
         value={role}
         onChange={(e) => setRole(e.target.value)}
@@ -128,19 +141,20 @@ export default function ContactForm({ pending, onSubmit }: ContactFormProps) {
       <input
         type="tel"
         className="field"
-        placeholder="Mobile (optional)"
+        placeholder="Mobile"
+        aria-label="Mobile number (optional)"
         autoComplete="tel"
         inputMode="tel"
         value={phone}
         onChange={(e) => setPhone(e.target.value)}
       />
 
-      <label className="type-footnote flex cursor-pointer items-start gap-s3">
+      <label className="type-footnote flex min-h-[44px] cursor-pointer items-center gap-s3">
         <input
           type="checkbox"
           checked={consent}
           onChange={(e) => setConsent(e.target.checked)}
-          className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--accent-solid)]"
+          className="h-5 w-5 shrink-0 accent-[var(--accent-solid)]"
         />
         <span style={{ color: 'var(--label-secondary)' }}>
           I agree to Uno Digit contacting me about this enquiry.
@@ -152,6 +166,15 @@ export default function ContactForm({ pending, onSubmit }: ContactFormProps) {
       <button type="submit" className="btn btn-filled w-full" disabled={!ready}>
         {pending ? 'Sending…' : 'Send it through'}
       </button>
+
+      {/* The one genuinely opaque state: every field filled, consent ticked,
+          and the button still dead because the challenge has not returned a
+          token yet (measured at ~5s). Without this the form looks broken. */}
+      {!token && !pending && Boolean(email.trim()) && consent && (
+        <p className="type-caption text-center" aria-live="polite" style={{ color: 'var(--label-secondary)' }}>
+          Just finishing a quick browser check…
+        </p>
+      )}
     </form>
   );
 }
