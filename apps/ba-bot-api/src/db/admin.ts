@@ -6,10 +6,14 @@
  * question that disagree is worse than one answer in one place. The scripts
  * stay; this is the same data over HTTP for the hostname behind Access.
  *
- * Every function here issues SELECTs only. The destructive path
- * (`delete-lead.sh`) is deliberately NOT exposed over HTTP: it is irreversible,
- * it is rare, and its safety comes from a confirmation step that means nothing
- * once a browser can issue it.
+ * Every function here issues SELECTs only. Deletion lives in db/delete-lead.ts.
+ *
+ * That module used to not exist: the destructive path was deliberately kept out
+ * of HTTP because "its safety comes from a confirmation step that means nothing
+ * once a browser can issue it". The decision was reversed on request, and the
+ * safeguards were rebuilt for the new surface rather than dropped — POST only,
+ * a server-checked type-the-email confirmation, and a dry run driven by the
+ * same statement as the deletion. See that file.
  *
  * `days` is always bound as a parameter, never interpolated. A caller-supplied
  * value reaching SQL as text is the one mistake that turns a read-only surface

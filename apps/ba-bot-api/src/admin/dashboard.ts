@@ -102,6 +102,19 @@ export function dashboardHtml(): string {
   .linkbtn { background: none; border: 0; padding: 0; font: inherit; font-size: 12px;
              color: var(--accent); cursor: pointer; text-decoration: underline; }
   .muted { color: var(--ink-2); }
+  dialog#confirm-delete { width: min(560px, 92vw); padding: 0; border: 0;
+    border-radius: 12px; background: var(--panel); color: var(--ink); }
+  dialog#confirm-delete::backdrop { background: rgba(0,0,0,.6); }
+  dialog#confirm-delete header { display: flex; justify-content: space-between;
+    align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+  #del-body { padding: 16px 18px 20px; font-size: 13px; line-height: 1.55; }
+  #del-body ul { margin: 10px 0; padding-left: 18px; color: var(--ink-2); }
+  #del-body input { width: 100%; margin-top: 10px; padding: 9px 11px; font: inherit;
+    font-family: var(--mono); font-size: 12px; color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 8px; }
+  .danger { margin-top: 14px; width: 100%; padding: 10px; font: inherit; font-weight: 600;
+    color: #fff; background: var(--bad); border: 0; border-radius: 8px; cursor: pointer; }
+  .danger:disabled { opacity: .45; cursor: not-allowed; }
   dialog#transcript { width: min(720px, 92vw); max-height: 82vh; padding: 0; border: 0;
     border-radius: 12px; background: var(--panel); color: var(--ink); }
   dialog#transcript::backdrop { background: rgba(0,0,0,.6); }
@@ -164,6 +177,14 @@ export function dashboardHtml(): string {
 
 <!-- Native <dialog>: focus trapping, Escape-to-close and the backdrop come for
      free, and this page ships no framework to provide them. -->
+<dialog id="confirm-delete">
+  <header>
+    <strong>Delete this lead permanently</strong>
+    <button type="button" id="del-cancel" class="linkbtn">Cancel</button>
+  </header>
+  <div id="del-body"></div>
+</dialog>
+
 <dialog id="transcript">
   <header>
     <strong id="transcript-who"></strong>
@@ -328,12 +349,79 @@ export function dashboardHtml(): string {
     document.getElementById('transcript').close();
   });
 
+  document.getElementById('del-cancel').addEventListener('click', function () {
+    document.getElementById('confirm-delete').close();
+  });
+
+  // Shows the real per-table impact first, then requires the operator to type
+  // the lead's email. That is the browser translation of delete-lead.sh's
+  // "type the id, not y" — a habitual click is exactly how the wrong lead gets
+  // deleted, and an address is not something you type by reflex.
+  function confirmDelete(lead) {
+    var dlg = document.getElementById('confirm-delete');
+    var body = document.getElementById('del-body');
+    body.replaceChildren(el('p', 'Checking what would be deleted…', 'muted'));
+    dlg.showModal();
+
+    get('/admin/api/lead/impact?id=' + encodeURIComponent(lead.id)).then(function (r) {
+      var i = r.impact;
+      body.replaceChildren();
+      body.appendChild(el('p', 'This permanently deletes ' + lead.email +
+        ' and everything derived from it. There is no undo and no backup.'));
+
+      var ul = el('ul');
+      [['conversation', i.conversations], ['message', i.messages], ['brief', i.briefs],
+       ['quote', i.quotes], ['event', i.events]].forEach(function (pair) {
+        ul.appendChild(el('li', pair[1] + ' ' + pair[0] + (pair[1] === 1 ? '' : 's')));
+      });
+      body.appendChild(ul);
+      body.appendChild(el('p', 'Rate-limit counters are not touched — they hold salted ' +
+        'hashes, not personal information.', 'muted'));
+
+      var label = el('p', 'Type the email address to confirm:');
+      body.appendChild(label);
+      var input = el('input');
+      input.type = 'text';
+      input.setAttribute('aria-label', 'Type the email address to confirm deletion');
+      input.autocomplete = 'off';
+      body.appendChild(input);
+
+      var go = el('button', 'Delete permanently', 'danger');
+      go.type = 'button';
+      go.disabled = true;
+      input.addEventListener('input', function () {
+        go.disabled = input.value.trim().toLowerCase() !== lead.email.trim().toLowerCase();
+      });
+      go.addEventListener('click', function () {
+        go.disabled = true;
+        go.textContent = 'Deleting…';
+        fetch('/admin/api/lead/delete', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: lead.id, confirmEmail: input.value.trim() }),
+        }).then(function (res) {
+          if (!res.ok) throw new Error('delete failed (' + res.status + ')');
+          dlg.close();
+          loadAll();
+        }).catch(function (e) {
+          go.textContent = 'Delete permanently';
+          body.appendChild(el('p', e.message, 'muted'));
+        });
+      });
+      body.appendChild(go);
+      input.focus();
+    }).catch(function (e) {
+      if (e.message !== 'reauth') body.replaceChildren(el('p', 'Could not check: ' + e.message, 'muted'));
+    });
+  }
+
   function renderLeads(d) {
     document.getElementById('leads').replaceChildren(table(
       [{ label: 'When' }, { label: 'Email' }, { label: 'Name' }, { label: 'Company' },
        { label: 'Mobile' }, { label: 'Source' }, { label: 'Consent' },
        { label: 'Quote' }, { label: 'Chat' },
-       { label: 'Value', numeric: true }],
+       { label: 'Value', numeric: true }, { label: '' }],
       d.leads,
       function (r) {
         var tr = el('tr');
@@ -371,6 +459,17 @@ export function dashboardHtml(): string {
         tr.appendChild(t);
 
         tr.appendChild(el('td', r.quotes ? fmtAud.format(r.lowAud) + '–' + fmtAud.format(r.highAud) : '—', 'n'));
+
+        var del = el('td');
+        var db_ = el('button', 'Delete');
+        db_.type = 'button';
+        db_.className = 'linkbtn';
+        db_.style.color = 'var(--bad)';
+        db_.setAttribute('aria-label', 'Delete lead ' + r.email);
+        db_.addEventListener('click', function () { confirmDelete(r); });
+        del.appendChild(db_);
+        tr.appendChild(del);
+
         return tr;
       },
       leadsEmptyMessage(d)

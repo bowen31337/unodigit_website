@@ -3,6 +3,7 @@ import type { Env } from '../env'
 import { readAccessToken, verifyAccessJwt } from '../guards/access'
 import { dashboardCsp, dashboardHtml } from '../admin/dashboard'
 import { signId } from '../util/sign'
+import { deleteLeadCascade, leadDeletionImpact } from '../db/delete-lead'
 import {
   leadsOutsideWindow,
   transcript,
@@ -204,5 +205,49 @@ export function registerAdminRoutes(app: Hono<{ Bindings: Env }>): void {
 
   /** Who Access says you are. The dashboard shows it so an operator can tell at
    *  a glance which identity they are acting as. */
+  /** Dry run. Same statement that drives the deletion, so the operator is
+   *  shown the plan rather than a description of it. */
+  app.get('/admin/api/lead/impact', async (c) => {
+    const id = c.req.query('id') ?? ''
+    if (!id) return c.json({ error: 'missing_id' }, 400)
+    return c.json({ id, impact: await leadDeletionImpact(c.env.DB, id) })
+  })
+
+  /**
+   * Permanent deletion. POST, never GET — a destructive GET can be fired by a
+   * prefetch, a crawler or a mis-copied link.
+   *
+   * `confirmEmail` must match the lead's stored address. The shell script's
+   * safeguard is typing the lead id rather than pressing y; this is the same
+   * anti-reflex property translated to a surface where the operator can read
+   * the email off the row but still has to type it deliberately. It is checked
+   * server-side so it cannot be skipped by calling the endpoint directly.
+   */
+  app.post('/admin/api/lead/delete', async (c) => {
+    const body = await c.req.json().catch(() => null) as
+      { id?: unknown; confirmEmail?: unknown } | null
+    const id = typeof body?.id === 'string' ? body.id : ''
+    const confirmEmail = typeof body?.confirmEmail === 'string' ? body.confirmEmail : ''
+    if (!id || !confirmEmail) return c.json({ error: 'missing_id_or_confirmation' }, 400)
+
+    const row = await c.env.DB
+      .prepare('SELECT email FROM leads WHERE id = ?')
+      .bind(id)
+      .first<{ email: string }>()
+    if (!row) return c.json({ error: 'not_found' }, 404)
+
+    // Case-insensitive and trimmed: the operator is retyping an address, not a
+    // password, and rejecting "  Bob@x.com " for a stored "bob@x.com" would
+    // only train them to paste it — which defeats the point of typing it.
+    if (row.email.trim().toLowerCase() !== confirmEmail.trim().toLowerCase()) {
+      return c.json({ error: 'confirmation_mismatch' }, 400)
+    }
+
+    const deleted = await deleteLeadCascade(c.env.DB, id)
+    if (!deleted) return c.json({ error: 'not_found' }, 404)
+
+    return c.json({ deleted: true })
+  })
+
   app.get('/admin/api/whoami', (c) => c.json({ email: c.get('adminEmail') }))
 }
