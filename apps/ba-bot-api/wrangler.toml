@@ -87,7 +87,20 @@ MINIMUM_ENGAGEMENT_AUD = "2000"
 # between a 42-task tool and a 300-task platform — both read "roughly 1 week"
 # while their prices differ 7x. If a client is meant to read scale off the
 # timeline, this is the var that stops carrying that signal.
-TASKS_PER_WEEK = "500"
+# Harness throughput, measured across nine real claw-forge projects:
+#   220  fengshui (221 tasks / 7.0 days)      562  AFOS
+#   255  agent-trading-arena (363 / 10.0 d)   599  devShield
+#   336  meridian (273 / 5.7 d)               674  synapse
+#   740  Continuo                             990  AlphaStrike
+# The small projects inflate the rate — a 49-task plugin finished in 72 minutes
+# — so the LARGE ones, which are the ones we quote, are the honest reference and
+# they cluster at 220-336. 500 was the median across all sizes, which flatters
+# exactly the projects where being wrong costs most.
+#
+# CAVEAT: this is harness runtime, not calendar delivery. It excludes discovery,
+# review cycles, integration and UAT, so `weeks` in a quote is a FLOOR. Set this
+# from real end-to-end engagement data when you have it.
+TASKS_PER_WEEK = "220"
 PROGRAM_MODE_THRESHOLD = "300"
 QUOTE_VALID_DAYS = "30"
 MAX_TOTAL_TURNS = "40"

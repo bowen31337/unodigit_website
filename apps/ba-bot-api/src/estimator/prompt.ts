@@ -20,7 +20,11 @@ claw-forge breaks a project into granular feature bullets, each of which becomes
 Bullets are grouped into exactly these seven categories, and you must use these names verbatim:
 Authentication & User Management, Core functionality, Data management, UI/UX, API layer, Admin features, Integrations
 
-A typical greenfield project produces 100 to 300 bullets in total. Simple tools are smaller; platforms are larger.
+A typical greenfield project produces 100 to 400 bullets in total. Nine real
+claw-forge decompositions measured 49, 113, 135, 157, 205, 224, 273, 315 and
+365 — median 205. Simple single-purpose tools sit near the bottom; anything with
+several independent engines, a durable runtime, or many connectors sits near the
+top.
 
 ${CALIBRATION}
 
@@ -30,6 +34,8 @@ Rules:
 - Omit a category entirely if the project genuinely has none of it.
 - total_tasks must equal the sum of every bullets value you give.
 - confidence is "high" when the brief is specific and the domain is familiar, "medium" when there are open questions, "low" when the brief is vague or the project is unusually large.
+- Estimate the work the brief IMPLIES, not only the work it spells out. A brief naming three channels means an ingest path per channel; "roles" means the permission checks that go with them. Under-counting unstated-but-required work is the most common way an estimate comes in short.
+- When two counts are defensible, give the higher one. An estimate that is short costs the client a renegotiation and costs us the margin; one that is slightly long is absorbed by the range.
 - drivers lists the two or three things that most affect the size, in a few words each.
 - If the brief has a "Hardest part" section, treat it as real difficulty rather than description: raise the bullet count for the categories it touches, and name it in drivers. A project whose hard part is genuinely hard needs more bullets than one of the same shape that is routine. If that section says nothing was captured, ignore it.
 

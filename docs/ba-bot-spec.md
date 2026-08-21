@@ -567,8 +567,21 @@ Vars in `wrangler.toml`; secrets via `wrangler secret` (synced from 1Password by
 | `LLM_MODEL_HEAVY` | `deepseek-v4-pro` | Estimator |
 | `RATE_PER_TASK_AUD` | `10` | Pricing rate |
 | `MINIMUM_ENGAGEMENT_AUD` | `2000` | Below-floor threshold |
-| `TASKS_PER_WEEK` | `500` | Delivery velocity |
+| `TASKS_PER_WEEK` | `220` | Harness throughput — see note |
 | `PROGRAM_MODE_THRESHOLD` | `300` | Tasks above which a subsystem split is requested |
+
+> **Calibration is measured, not assumed.** `estimator/calibration.ts` anchors on
+> nine real claw-forge decompositions read from each project's
+> `.claw-forge/state.db`: 49, 113, 135, 157, 205, 224, 273, 315, 365 — median
+> 205, and three above 300. It previously offered one measured total (224) as
+> its largest anchor, and estimates were landing at 110–166 tasks for projects
+> whose real decompositions sit at 200–365.
+>
+> `TASKS_PER_WEEK` is **harness runtime**, measured the same way (220–990/week;
+> the large projects that we actually quote cluster at 220–336). It excludes
+> discovery, review, integration and UAT, so the `weeks` figure in a quote is a
+> **floor**, not a delivery estimate. Replace it with real end-to-end engagement
+> data when that exists.
 | `QUOTE_VALID_DAYS` | `30` | Quote validity |
 | `MAX_TOTAL_TURNS` | `40` | Per conversation |
 | `MAX_TURNS_PER_IP_PER_DAY` | `120` | Chat-turn abuse cap |
