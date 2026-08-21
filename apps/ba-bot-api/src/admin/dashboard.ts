@@ -43,6 +43,9 @@ export function dashboardCsp(): string {
 }
 
 export function dashboardHtml(): string {
+  // NOTE: everything below is one template literal. A backtick anywhere inside
+  // it — including in a comment — terminates the string and produces a wall of
+  // syntax errors far from the real edit. Write `code` as plain words here.
   return `<!doctype html>
 <html lang="en" data-theme="dark">
 <head>
@@ -126,6 +129,28 @@ export function dashboardHtml(): string {
   .turn-meta { font-family: var(--mono); font-size: 11px; color: var(--ink-2); margin-bottom: 3px; }
   .turn-user > div:last-child { color: var(--ink); }
   .turn-bot  > div:last-child { color: var(--ink-2); }
+
+  /* "Save as PDF" is window.print(), the same approach the public quote page
+     uses — no PDF library and no server round trip. A modal <dialog> lives in
+     the top layer, so printing it needs the rest of the page removed rather
+     than merely hidden behind it, and the dialog itself un-positioned so it
+     can paginate instead of being clipped to one viewport-sized box. */
+  @media print {
+    body > *:not(#transcript) { display: none !important; }
+    dialog#transcript {
+      display: block !important; position: static !important;
+      width: auto !important; max-height: none !important;
+      background: #fff !important; color: #000 !important;
+    }
+    dialog#transcript::backdrop { display: none; }
+    dialog#transcript header { position: static; border-bottom: 1px solid #ccc; }
+    #transcript-body { max-height: none !important; overflow: visible !important; }
+    /* Controls are not part of the document. */
+    #transcript-md, #transcript-print, #transcript-close { display: none !important; }
+    .turn { break-inside: avoid; }
+    .turn-meta { color: #555 !important; }
+    .turn-bot > div:last-child, .turn-user > div:last-child { color: #000 !important; }
+  }
   .pill.err { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
   .pill.ok  { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
   .empty { color: var(--ink-3); font-size: 13px; padding: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
@@ -188,7 +213,11 @@ export function dashboardHtml(): string {
 <dialog id="transcript">
   <header>
     <strong id="transcript-who"></strong>
-    <button type="button" id="transcript-close" class="linkbtn">Close</button>
+    <span class="row">
+      <a id="transcript-md" class="linkbtn" download>Download .md</a>
+      <button type="button" id="transcript-print" class="linkbtn">Save as PDF</button>
+      <button type="button" id="transcript-close" class="linkbtn">Close</button>
+    </span>
   </header>
   <div id="transcript-body"></div>
 </dialog>
@@ -326,6 +355,12 @@ export function dashboardHtml(): string {
     var dlg = document.getElementById('transcript');
     var body = document.getElementById('transcript-body');
     document.getElementById('transcript-who').textContent = label;
+    // A plain same-origin link to an endpoint that sets Content-Disposition —
+    // no blob: or data: URL, which this page's default-src 'none' would make
+    // awkward.
+    document.getElementById('transcript-md').href =
+      '/admin/api/conversation/export?id=' + encodeURIComponent(convId) +
+      '&label=' + encodeURIComponent(label);
     body.replaceChildren(el('p', 'Loading…', 'muted'));
     dlg.showModal();
 
@@ -347,6 +382,10 @@ export function dashboardHtml(): string {
 
   document.getElementById('transcript-close').addEventListener('click', function () {
     document.getElementById('transcript').close();
+  });
+
+  document.getElementById('transcript-print').addEventListener('click', function () {
+    window.print();
   });
 
   document.getElementById('del-cancel').addEventListener('click', function () {

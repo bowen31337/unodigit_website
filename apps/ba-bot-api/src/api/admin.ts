@@ -4,6 +4,7 @@ import { readAccessToken, verifyAccessJwt } from '../guards/access'
 import { dashboardCsp, dashboardHtml } from '../admin/dashboard'
 import { signId } from '../util/sign'
 import { deleteLeadCascade, leadDeletionImpact } from '../db/delete-lead'
+import { transcriptFilename, transcriptMarkdown } from '../admin/transcript-md'
 import {
   leadsOutsideWindow,
   transcript,
@@ -205,6 +206,39 @@ export function registerAdminRoutes(app: Hono<{ Bindings: Env }>): void {
 
   /** Who Access says you are. The dashboard shows it so an operator can tell at
    *  a glance which identity they are acting as. */
+  /**
+   * The transcript as a downloadable Markdown file.
+   *
+   * Rendered server-side so the dashboard needs only a plain same-origin link:
+   * building the file in the browser would mean a blob: or data: URL, and this
+   * page ships `default-src 'none'`.
+   *
+   * `label` is display-only (it titles the document and names the file) and is
+   * echoed into a header, so it is length-capped and stripped of anything that
+   * could terminate one. Content-Disposition carries a quoted ASCII filename
+   * built by transcriptFilename, which emits only [a-z0-9-].
+   */
+  app.get('/admin/api/conversation/export', async (c) => {
+    const id = c.req.query('id') ?? ''
+    if (!id) return c.json({ error: 'missing_id' }, 400)
+
+    const label = (c.req.query('label') ?? 'lead').replace(/[\r\n"]/g, ' ').slice(0, 120)
+    const turns = await transcript(c.env.DB, id)
+    const md = transcriptMarkdown(turns, { label, conversationId: id, exportedAt: Date.now() })
+
+    return new Response(md, {
+      headers: {
+        'content-type': 'text/markdown; charset=utf-8',
+        'content-disposition': `attachment; filename="${transcriptFilename(label, id)}"`,
+        // Same posture as every other admin response: this is personal
+        // information and must not be cached by an intermediary.
+        'cache-control': 'no-store',
+        'referrer-policy': 'no-referrer',
+        'x-content-type-options': 'nosniff',
+      },
+    })
+  })
+
   /** Dry run. Same statement that drives the deletion, so the operator is
    *  shown the plan rather than a description of it. */
   app.get('/admin/api/lead/impact', async (c) => {
