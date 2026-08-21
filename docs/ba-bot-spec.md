@@ -9,7 +9,7 @@ a design looks odd, the reason is usually a measured failure — those are calle
 because removing the oddity reintroduces the bug.
 
 - **Status:** live
-- **Last verified against the deployed system:** 21 Aug 2026
+- **Last verified against the deployed system:** 21 Aug 2026 (Worker `eb3795c8`)
 - **Audience:** whoever maintains this next
 
 ---
@@ -78,6 +78,14 @@ force-advances (except `CONTACT`).
 no lead row. A visitor who ignores the form stays there until `MAX_TOTAL_TURNS`, and
 is correctly recorded as `abandoned_at_state = 'CONTACT'`.
 
+Two slots are deliberately **outside** every gate. `industry` and
+`complexity_driver` are merged into all five elicitation states by
+`GLOBAL_SLOTS`, because a client volunteers them whenever they like — three real
+interviews named the hardest part in three different states, and a per-state
+declaration meant it landed in `differentiator` once and was folded into
+`problem` the next time. Neither gates advancement: holding an interview open
+for reporting metadata costs the visitor a question asked for our benefit.
+
 **The gates are the depth control, not `maxTurns`.** States exit at the gate, never
 near the cap — with the original gates, interviews finished in 7–8 turns against 36
 turns of available budget. Raising `maxTurns` alone changes nothing. Gates and the
@@ -102,7 +110,15 @@ Validation is **per key**, not per object: one malformed value must not discard 
 valid siblings. The all-or-nothing version stalled `PROJECT_IDENTITY` permanently.
 
 This is what keeps `lead_id` unforgeable — no state's schema declares it, so only
-`POST /api/contact` can put it in the session.
+`POST /api/contact` can put it in the session, and a test asserts no state
+anywhere accepts it.
+
+`SLOT_ALIASES` in `api/chat.ts` maps near-miss field names the model actually
+emitted (`core_features` → `features`, `hardest_data_type` → `complexity_driver`,
+`personas_indicated` → `personas`, …) onto canonical ones. Every entry is
+observed from a `slots_rejected` event, not imagined. An alias resolves and is
+then validated against the current state's shape exactly as any other key, so a
+slot that state does not declare is still dropped.
 
 ### 2.4 The closing turn
 
@@ -117,6 +133,37 @@ reply, so "the next financial year" mid-sentence survives.
 
 The `CONTACT` addendum in `prompts.ts` is therefore unreachable for a visible reply.
 It is kept (the `ADDENDA` map must be total over `StateId`) and annotated as such.
+
+### 2.5 Elicitation rules
+
+Four rules in `BASE_SYSTEM_PROMPT`, each from an observed failure in a real
+31-turn interview that produced seven friction signals in eight minutes:
+
+- **Never re-ask what was answered.** It asked about integrations two turns after
+  the client had described their integration approach.
+- **Accept a deflection.** On "I don't know" / "you tell me" / "I'm not
+  technical", record the slot as `not specified` and never ask that class again.
+  It asked a self-declared non-technical client for a tech stack *after* the
+  first refusal.
+- **Never ask a non-technical client** about data volumes, stacks or hosting.
+- **Stop on time pressure**, via `wrap_up` below.
+
+### 2.6 `wrap_up` — ending early
+
+`ready_to_advance` moves **one** state and the next gate blocks again. Measured: a
+visitor asked to finish four times, the model replied "Done." each turn, and the
+conversation sat in `SOLUTION_SHAPE` because that gate wanted a `differentiator`
+they were never going to give.
+
+So `TurnOutputSchema` carries a **fifth** key, `wrap_up`, and `chat.ts` jumps
+straight to `CONTACT` on it — guarded on `project_name` and `problem` being
+present, because without those `/api/generate` answers 409 and the jump would
+collect an email and produce nothing. A `wrapped_up_early` event records it.
+
+The trigger is deliberately narrow: only the client's own words ("running out of
+time", "just finish"). A looser first wording made the model wrap up at turn 4
+while the visitor was still supplying requirements — it was conflating "I have
+enough" (which is `ready_to_advance`) with "the client wants to stop".
 
 ---
 
@@ -160,7 +207,7 @@ Order of operations, each step load-bearing:
 3. Rate limit, recorded *before* the model call — recording after lets a burst all
    read the pre-increment count, and makes a provider outage a free retry loop.
 4. Read history, persist the visitor message, run the turn, validate slots, `step()`,
-   persist the reply.
+   apply `wrap_up` (§2.6), persist the reply.
 
 ### `POST /api/contact`
 
@@ -310,8 +357,13 @@ belowFloor = midpoint < MINIMUM_ENGAGEMENT_AUD     (A$2,000)
 the quote artefact where the weighting explains it; a rate in the chat invites
 negotiation about the decomposition rather than the outcome.
 
-**Below floor replaces the band, it does not accompany it.** Quoting a figure the
-business cannot service profitably attracts leads it must then reject.
+**Below floor, the band does not lead — but the figure is still shown.**
+Withholding it entirely left the reader a task count and no sense of scale, which
+is evasive on the page whose purpose is transparency. The starter-engagement
+framing comes first, then a paragraph explicitly labelled *"For reference only"*.
+The commercial intent is preserved by **order**, not omission: a test asserts the
+framing appears before the money, and the above-floor headline form
+(`**~N tasks · estimated …**`) is never used below the floor.
 
 `belowFloor` is stored on the quote row and read back, never recomputed — the env
 vars are documented placeholders that have changed before, and a re-read could
@@ -438,10 +490,13 @@ self-contained HTML string with `default-src 'none'` CSP; every node is built wi
 
 | Route | Purpose |
 |---|---|
-| `GET /admin/api/summary?days=` | Overview tiles, funnel, daily series, event counts |
+| `GET /` | The dashboard page itself (one self-contained HTML string) |
+| `GET /admin` | Redirect to `/` — the older path, kept working |
+| `GET /admin/api/summary?days=` | Overview tiles, funnel, daily series, event counts, per-model usage |
 | `GET /admin/api/leads?days=&limit=&q=` | Lead list with quote totals and signed quote URLs |
 | `GET /admin/api/events?days=&limit=&type=` | Recent events |
 | `GET /admin/api/conversation?id=` | Full transcript for one conversation |
+| `GET /admin/api/conversation/export?id=&label=` | That transcript as a Markdown download |
 | `GET /admin/api/lead/impact?id=` | Deletion dry run — per-table row counts |
 | `POST /admin/api/lead/delete` | Permanent deletion (§6.4) |
 | `GET /admin/api/whoami` | Verified Access identity |
@@ -464,6 +519,20 @@ question.
 
 `overview` reports `completed`, `abandoned` and `unfinished` — the third exists
 because the first two were both 0 against 30 conversations.
+
+**LLM usage is per model and per call.** `conversations.tokens_in/out` sums every
+call into one pair of counters, which can answer neither "what is the estimator
+costing" nor "is the prefix cache working". `llm_usage` (migration `0007`) holds
+one row per provider call with model, purpose, prompt, cached and completion
+tokens, and the dashboard renders it as its own table. Cache hit is
+`cached/prompt` — `cached_tokens` is a **subset** of `prompt_tokens`, not an
+addition, and a test pins that invariant. Live traffic measured a **74%**
+prefix-cache hit rate, which is the frozen system prompt paying for itself.
+
+The old "LLM spend" tile showed USD. `cost_usd` is read in three places and
+written by nothing, so that figure was structurally always `0.00`; the tile now
+reports tokens split in/out, and the dollar line returns when there is a rate
+table behind it.
 
 Empty states name the real cause: a filter is active, leads exist outside the window
 (with the count), or there are genuinely none yet. A single generic "Nothing in this
@@ -503,12 +572,14 @@ records.
 
 ## 7. Data model
 
-D1 database `ba_bot`. Migrations `0001`–`0005`.
+D1 database `ba_bot`. Migrations `0001`–`0007`.
 
 ```
 leads ──< conversations ──< messages
                         ├─< events
                         └─< briefs ──< quotes
+
+llm_usage          (model, purpose, prompt/cached/completion tokens)
 
 rate_limit         (ip_hash, day, quote_count)     — quotes per IP per day
 rate_limit_turns   (ip_hash, day, turns)           — chat turns per IP per day
@@ -522,6 +593,10 @@ rate_limit_turns   (ip_hash, day, turns)           — chat turns per IP per day
 | `briefs` | Markdown + structured sections |
 | `quotes` | Markdown is the canonical artefact; `below_floor` added in `0003` |
 | `events` | Every failure signal; `conversation_id` nullable for deletion audits |
+| `llm_usage` | One row per provider call (`0007`). Model, purpose, and cached tokens — none of which the conversation counters can hold |
+
+`conversations.industry` (`0006`) is the sector, inferred during the interview
+and shown in the leads table. `leads.phone` (`0005`) is the optional mobile.
 
 KV `SESSIONS` holds the live `ConversationState` (slots included) for 24 h.
 `loadSession` falls back to the durable D1 row when the key is gone — KV is a cache,
@@ -545,9 +620,12 @@ under the token ceiling. Dose-dependent in the number of prose assistant turns:
 | 2 | prose | 13/16 |
 | 2 | **envelope** | **0/10** |
 
-`llm/history.ts` rebuilds assistant turns as the four-key JSON envelope. That is why
-`ready_to_advance` is stored: it is one of the four keys, and it cannot be faked as a
-constant because `step()` advances only on `exitGate(slots) && readyToAdvance`.
+`llm/history.ts` rebuilds assistant turns as the JSON envelope — five keys since
+`wrap_up` (§2.6). That is why `ready_to_advance` is stored: it is one of them, and
+it cannot be faked as a constant because `step()` advances only on
+`exitGate(slots) && readyToAdvance`. `wrap_up` always replays as `false`: a turn
+that wrapped up is the last one, so no later turn can replay a true, and doing so
+would tell the model the interview had already ended.
 
 Reasoning is now **off** for chat turns (~2.8 s/turn against ~6.9 s) and **on** for
 the estimator, the one genuinely analytical call — whose repair path adds an
@@ -626,3 +704,5 @@ Two lessons worth keeping:
 | `apps/web` has no tests | UI regressions are caught by eye |
 | Minimum engagement may be miscalibrated | 200 weighted tasks to clear the floor against a 100–300 bullet typical project (§4.2) |
 | Worker deploys are manual | Only Pages is in CI. A schema migration must be applied *before* the Worker that depends on it |
+| `weeks` is harness runtime, not calendar delivery | `TASKS_PER_WEEK` is measured from `started_at`/`completed_at`, so it excludes discovery, review, integration and UAT. A quote saying "2 weeks" to a client planning three months needs a calendar multiplier nobody has data for yet |
+| `cost_usd` is never written | Read in three places, written by none. The spend tile reports tokens instead until per-model rates exist |
