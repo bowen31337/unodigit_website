@@ -419,7 +419,7 @@ export function dashboardHtml(): string {
   function renderLeads(d) {
     document.getElementById('leads').replaceChildren(table(
       [{ label: 'When' }, { label: 'Email' }, { label: 'Name' }, { label: 'Company' },
-       { label: 'Mobile' }, { label: 'Source' }, { label: 'Consent' },
+       { label: 'Mobile' }, { label: 'Source' }, { label: 'Came from' }, { label: 'Consent' },
        { label: 'Quote' }, { label: 'Chat' },
        { label: 'Value', numeric: true }, { label: '' }],
       d.leads,
@@ -430,7 +430,25 @@ export function dashboardHtml(): string {
         tr.appendChild(el('td', r.name || '—'));
         tr.appendChild(el('td', r.company || '—'));
         tr.appendChild(el('td', r.phone || '—', 'mono'));
-        tr.appendChild(el('td', r.utmSource || 'direct', 'mono'));
+        // Source is the UTM tag; "direct" there only means untagged.
+        var src = el('td', r.utmSource || 'direct', 'mono');
+        if (r.utmSource && (r.utmMedium || r.utmCampaign)) {
+          src.title = [r.utmMedium, r.utmCampaign].filter(Boolean).join(' / ');
+        }
+        tr.appendChild(src);
+
+        // ...so the referrer sits beside it. An untagged LinkedIn click and a
+        // typed URL both read "direct" in Source; only this tells them apart.
+        // Shown as the host alone — the full URL is long, and the host is the
+        // part an operator reads.
+        var ref = el('td', '—', 'mono');
+        if (r.referrer) {
+          var host = r.referrer;
+          try { host = new URL(r.referrer).host.replace(/^www\./, ''); } catch (e) { /* keep raw */ }
+          ref.textContent = host;
+          ref.title = r.referrer;
+        }
+        tr.appendChild(ref);
         var c = el('td');
         c.appendChild(el('span', r.consent ? 'yes' : 'no', 'pill ' + (r.consent ? 'ok' : 'err')));
         tr.appendChild(c);

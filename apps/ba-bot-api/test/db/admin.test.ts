@@ -207,3 +207,42 @@ describe('leads window', () => {
     expect(await leadsOutsideWindow(env.DB, since(0, NOW))).toBe(0)
   })
 })
+
+describe('lead attribution surfaced to the dashboard', () => {
+  // "direct" in the Source column only means "no UTM tags". Without the
+  // referrer beside it, a typed URL and an untagged LinkedIn click are
+  // indistinguishable — which is the whole reason social traffic looked like
+  // direct traffic.
+  it('returns the referrer and all three UTM fields, not just the source', async () => {
+    await env.DB.prepare('DELETE FROM leads').run()
+    await insertLead(env.DB, {
+      id: newId('lead'), createdAt: NOW - DAY, name: null, email: 'social@example.com',
+      company: null, role: null, phone: null, ipHash: 'h', country: null, asn: null,
+      userAgent: null, utmSource: 'linkedin', utmMedium: 'social', utmCampaign: 'launch',
+      referrer: 'https://www.linkedin.com/feed/', landingPage: 'https://www.unodigit.com.au/',
+      consentMarketing: true, consentTs: NOW - DAY,
+    })
+
+    const [row] = await leads(env.DB, 10, undefined, since(0, NOW))
+
+    expect(row!.utmSource).toBe('linkedin')
+    expect(row!.utmMedium).toBe('social')
+    expect(row!.utmCampaign).toBe('launch')
+    expect(row!.referrer).toBe('https://www.linkedin.com/feed/')
+  })
+
+  it('reports a null referrer for a genuinely direct lead', async () => {
+    await env.DB.prepare('DELETE FROM leads').run()
+    await insertLead(env.DB, {
+      id: newId('lead'), createdAt: NOW - DAY, name: null, email: 'typed@example.com',
+      company: null, role: null, phone: null, ipHash: 'h', country: null, asn: null,
+      userAgent: null, utmSource: null, utmMedium: null, utmCampaign: null,
+      referrer: null, landingPage: 'https://www.unodigit.com.au/',
+      consentMarketing: true, consentTs: NOW - DAY,
+    })
+
+    const [row] = await leads(env.DB, 10, undefined, since(0, NOW))
+    expect(row!.utmSource).toBeNull()
+    expect(row!.referrer).toBeNull()
+  })
+})

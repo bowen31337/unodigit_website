@@ -3,30 +3,23 @@
 import { useState } from 'react';
 import type { ContactRequest } from '@unodigit/ba-bot-contract';
 import Turnstile, { TURNSTILE_SITE_KEY } from './Turnstile';
+import { readAttribution } from '@/lib/attribution';
 
 interface ContactFormProps {
   pending: boolean;
   onSubmit: (input: Omit<ContactRequest, 'conversationId'>) => Promise<boolean>;
 }
 
-/** Read at submit time rather than on mount: the widget floats on every page,
- * so a visitor can land on one page, browse to another, and finish the
- * interview there. The page they actually converted on is the useful one. */
-function attribution() {
-  if (typeof window === 'undefined') return {};
-  const p = new URLSearchParams(window.location.search);
-  const utm = {
-    source: p.get('utm_source') ?? undefined,
-    medium: p.get('utm_medium') ?? undefined,
-    campaign: p.get('utm_campaign') ?? undefined,
-  };
-  const hasUtm = Boolean(utm.source || utm.medium || utm.campaign);
-  return {
-    utm: hasUtm ? utm : undefined,
-    referrer: document.referrer ? document.referrer.slice(0, 500) : undefined,
-    landingPage: window.location.href.slice(0, 500),
-  };
-}
+/**
+ * Attribution comes from lib/attribution, captured at LANDING.
+ *
+ * This used to read window.location.search here, at submit time. Client-side
+ * navigation drops the query string, so a visitor who landed on
+ * `/?utm_source=linkedin` and browsed to `/work/` before finishing was
+ * recorded as Source: direct — the campaign lost entirely. Measured, not
+ * theorised: after clicking an in-site nav link, location.search is empty.
+ */
+const attribution = readAttribution;
 
 /**
  * Shown in place of the message input once the graph reaches CONTACT. The API

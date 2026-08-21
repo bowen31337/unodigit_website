@@ -292,6 +292,12 @@ export interface LeadRow {
   role: string | null
   country: string | null
   utmSource: string | null
+  utmMedium: string | null
+  utmCampaign: string | null
+  /** Where the click came from when no UTM tags were present. Without it the
+   *  Source column cannot tell a visitor who typed the URL from one who
+   *  arrived on an untagged social post — both read "direct". */
+  referrer: string | null
   consent: boolean
   phone: string | null
   /** Needed by the dashboard to open the transcript and the quote artifact.
@@ -324,7 +330,8 @@ export async function leads(
     .prepare(
       `SELECT
          l.id, l.created_at, l.name, l.email, l.company, l.role, l.country,
-         l.utm_source, l.consent_marketing, l.phone,
+         l.utm_source, l.utm_medium, l.utm_campaign, l.referrer,
+         l.consent_marketing, l.phone,
          MAX(c.id)                     AS conversation_id,
          MAX(qt.id)                    AS quote_id,
          COUNT(qt.id)                  AS quotes,
@@ -351,6 +358,9 @@ export async function leads(
       role: string | null
       country: string | null
       utm_source: string | null
+      utm_medium: string | null
+      utm_campaign: string | null
+      referrer: string | null
       consent_marketing: number
       phone: string | null
       conversation_id: string | null
@@ -369,6 +379,9 @@ export async function leads(
     role: r.role,
     country: r.country,
     utmSource: r.utm_source,
+    utmMedium: r.utm_medium,
+    utmCampaign: r.utm_campaign,
+    referrer: r.referrer,
     consent: r.consent_marketing === 1,
     phone: r.phone,
     conversationId: r.conversation_id,

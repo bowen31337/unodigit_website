@@ -7,6 +7,8 @@ import { cn } from '@/lib/utils';
 import { OPENING_LINE, TURNSTILE_ERRORS, useBaBot } from './useBaBot';
 import ContactForm from './ContactForm';
 import Turnstile, { TURNSTILE_SITE_KEY } from './Turnstile';
+import { usePathname } from 'next/navigation';
+import { captureAttribution } from '@/lib/attribution';
 
 /** Apple's sheet spring (damping 0.8 / response 0.3). Panels are grabbed and
  * dismissed, so they get a touch of bounce; the launcher does not. */
@@ -41,6 +43,17 @@ export default function BaBot() {
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Attribution is captured on LANDING, not at submit: client-side navigation
+  // drops the query string, so reading it at submit lost every campaign where
+  // the visitor browsed first. This component is mounted once in
+  // app/layout.tsx, so it sees every page — and `pathname` in the deps re-runs
+  // it after each client-side navigation, which is when a fresh tagged URL can
+  // arrive without a full page load.
+  const pathname = usePathname();
+  useEffect(() => {
+    captureAttribution();
+  }, [pathname]);
 
   const onContact = bot.state === 'CONTACT' && !bot.finished;
   const done = bot.finished && bot.state !== 'CONTACT';
