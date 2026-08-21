@@ -217,63 +217,79 @@ export function registerGenerateRoutes(
     // Idempotency is checked BEFORE the state gate, not after. A generate that
     // succeeded left the session at DONE, so a refresh or a double-click would
     // otherwise be answered 409 — and the visitor whose brief already exists
-    // must get it back, not an error. A second estimate is never run.
+    // must get it back, not an error.
+    //
+    // A brief WITH a quote is finished and returns here. A brief WITHOUT one is
+    // not: it means the estimate was skipped (rate limit) or failed, and this
+    // used to return early regardless — "a second estimate is never run". That
+    // turned a transient failure into a permanent one. Observed on a real
+    // lead: the daily quote allowance for its IP had already been spent, so the
+    // interview completed, wrote its brief, and could never produce a quote
+    // again even after the limit reset. It now falls through and retries.
     const existing = await getBriefByConversation(c.env.DB, conversationId)
-    if (existing) {
-      const row = await quoteRowForBrief(c.env.DB, existing.id)
-      const quote = row ? quoteFromRow(row) : null
-      const headline = quote
-        ? headlineFor(quote)
-        : (await quotesToday(c.env.DB, ipHash, utcDay(now))) >= 1
-          ? RATE_LIMITED_HEADLINE
-          : ESTIMATOR_FAILED_HEADLINE
+    const existingQuote = existing ? await quoteRowForBrief(c.env.DB, existing.id) : null
 
+    if (existing && existingQuote) {
       // The link is rebuilt, not stored: the signature is a deterministic
       // HMAC over the quote id, so a refresh returns the identical URL. A
       // visitor who closed the widget and came back must still be able to open
       // their quote — with email gone this response is their only copy of it.
       return c.json({
         briefId: existing.id,
-        quoteId: row?.id ?? null,
-        quote,
-        quoteUrl: row ? await quoteLink(c.env, conversationId, row.id) : null,
-        headline,
+        quoteId: existingQuote.id,
+        quote: quoteFromRow(existingQuote),
+        quoteUrl: await quoteLink(c.env, conversationId, existingQuote.id),
+        headline: headlineFor(quoteFromRow(existingQuote)),
         state: session.state,
       })
     }
 
-    // CONTACT cannot force-advance, so a session that reached GENERATE has a
-    // lead row behind it. Any other state means the interview is unfinished.
-    if (session.state !== 'GENERATE') {
-      return c.json({ error: 'wrong_state', state: session.state }, 409)
+    // Gates below apply to a FIRST pass only. A retry already has the brief,
+    // which is proof the interview completed — its session will read DONE, and
+    // its slots may have expired out of KV entirely.
+    if (!existing) {
+      // CONTACT cannot force-advance, so a session that reached GENERATE has a
+      // lead row behind it. Any other state means the interview is unfinished.
+      if (session.state !== 'GENERATE') {
+        return c.json({ error: 'wrong_state', state: session.state }, 409)
+      }
+
+      if (!hasEnoughToQuote(session.slots)) {
+        await recordEvent(c.env.DB, conversationId, 'generate_session_expired', {
+          state: session.state,
+        })
+        // 409, not 404 and not 500. The conversation exists and the request is
+        // well-formed; what is missing is the visitor's interview state, which
+        // makes this a wrong-state condition. A 500 would also mislead: nothing
+        // failed, and there is nothing to retry.
+        return c.json({ error: 'session_expired' }, 409)
+      }
     }
 
     const slots = session.slots
-    if (!hasEnoughToQuote(slots)) {
-      await recordEvent(c.env.DB, conversationId, 'generate_session_expired', {
-        state: session.state,
+
+    // On a retry the brief already exists and must be reused — writing a second
+    // one would leave the first orphaned and break quotes.brief_id's meaning.
+    // The project name comes from the stored markdown's H1 rather than slots,
+    // which may have expired out of KV since the brief was written.
+    const projectName = existing
+      ? (/^#\s+(.+?)\s+—\s+Project Brief/m.exec(existing.markdown)?.[1] ?? projectNameOf(slots))
+      : projectNameOf(slots)
+    const briefMarkdown = existing ? existing.markdown : renderBrief(buildBriefSections(slots), projectName)
+    const briefId = existing ? existing.id : newId('brief')
+
+    if (!existing) {
+      // The brief lands first, unconditionally: it is the artifact the
+      // interview actually earned, and quotes.brief_id is a foreign key onto it.
+      const sections = buildBriefSections(slots)
+      await insertBrief(c.env.DB, {
+        id: briefId,
+        conversationId,
+        markdown: briefMarkdown,
+        sectionsJson: JSON.stringify(sections),
+        createdAt: now,
       })
-      // 409, not 404 and not 500. The conversation exists and the request is
-      // well-formed; what is missing is the visitor's interview state, which
-      // makes this a wrong-state condition. A 500 would also mislead: nothing
-      // failed, and there is nothing to retry.
-      return c.json({ error: 'session_expired' }, 409)
     }
-
-    const projectName = projectNameOf(slots)
-    const sections = buildBriefSections(slots)
-    const briefMarkdown = renderBrief(sections, projectName)
-    const briefId = newId('brief')
-
-    // The brief lands first, unconditionally: it is the artifact the interview
-    // actually earned, and quotes.brief_id is a foreign key onto it.
-    await insertBrief(c.env.DB, {
-      id: briefId,
-      conversationId,
-      markdown: briefMarkdown,
-      sectionsJson: JSON.stringify(sections),
-      createdAt: now,
-    })
 
     /** Everything after the brief shares one exit: advance the session, close
      *  the conversation row, answer.
@@ -291,11 +307,16 @@ export function registerGenerateRoutes(
       return c.json({ briefId, quoteId, quote, quoteUrl, headline, state: result.next.state })
     }
 
-    // Spec §10: one quote per IP per day, gating the artifact rather than the
-    // conversation. Skipping the estimate outright is the point — it is the
+    // Spec §10: a few quotes per IP per day, gating the artifact rather than
+    // the conversation. Skipping the estimate outright is the point — it is the
     // expensive call, and running it only to discard the result would spend
     // exactly what the limit exists to protect.
-    if ((await quotesToday(c.env.DB, ipHash, utcDay(now))) >= 1) {
+    //
+    // The cap is configurable and no longer 1. One-per-IP is one PER NETWORK:
+    // an office or NAT address is a single ip_hash, so the first person to
+    // finish an interview silently consumed the allowance for everyone behind
+    // it. That is exactly how a real lead came to have a brief and no quote.
+    if ((await quotesToday(c.env.DB, ipHash, utcDay(now))) >= Number(c.env.MAX_QUOTES_PER_IP_PER_DAY)) {
       await recordEvent(c.env.DB, conversationId, 'quote_rate_limited', { briefId })
       return await finish(null, null, RATE_LIMITED_HEADLINE)
     }

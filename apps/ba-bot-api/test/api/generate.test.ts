@@ -299,10 +299,45 @@ describe('POST /api/generate', () => {
     expect(quotes!.n).toBe(1)
   })
 
+  // A brief with no quote used to be permanent: the idempotency check returned
+  // before the estimator, so a conversation rate-limited today could never
+  // produce a quote, even after the allowance reset. Seen on a real lead.
+  it('retries the estimate when a brief exists but no quote does', async () => {
+    const cap = Number(env.MAX_QUOTES_PER_IP_PER_DAY)
+    for (let i = 0; i < cap; i += 1) {
+      await recordQuote(env.DB, await hashIp(ip, env.IP_HASH_SALT), utcDay(Date.now()))
+    }
+    const conversationId = await seed()
+
+    // First pass: rate limited, so a brief lands with no quote.
+    forbidLlm()
+    const first = await (await postGenerate({ conversationId })).json<Body>()
+    expect(first.quoteId).toBeNull()
+    expect(first.briefId).toBeTruthy()
+
+    // Allowance resets; the same conversation must now be able to get priced.
+    await env.DB.prepare('DELETE FROM rate_limit').run()
+    mockEstimator(shape)
+    const second = await (await postGenerate({ conversationId })).json<Body>()
+
+    expect(second.quoteId).toBeTruthy()
+    expect(second.quoteUrl).toContain('/q/?id=')
+    // The SAME brief is reused — a second one would orphan the first and break
+    // what quotes.brief_id means.
+    expect(second.briefId).toBe(first.briefId)
+  })
+
   it('returns the brief with no quote and makes no LLM call when rate limited', async () => {
     const spy = forbidLlm()
     const conversationId = await seed()
-    await recordQuote(env.DB, await hashIp(ip, env.IP_HASH_SALT), utcDay(Date.now()))
+    // Fill the allowance rather than assuming it is 1 — the cap is configurable
+    // (MAX_QUOTES_PER_IP_PER_DAY) precisely because one-per-IP is one per
+    // NETWORK, and a hardcoded 1 here would silently stop testing the limit the
+    // day that value changes.
+    const cap = Number(env.MAX_QUOTES_PER_IP_PER_DAY)
+    for (let i = 0; i < cap; i += 1) {
+      await recordQuote(env.DB, await hashIp(ip, env.IP_HASH_SALT), utcDay(Date.now()))
+    }
 
     const res = await postGenerate({ conversationId })
     expect(res.status).toBe(200)

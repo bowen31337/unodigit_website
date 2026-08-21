@@ -26,6 +26,7 @@ export interface Env {
   // many sessions one address can open in a day, which is the only thing that
   // actually meters DeepSeek spend.
   MAX_TURNS_PER_IP_PER_DAY: string
+  MAX_QUOTES_PER_IP_PER_DAY: string
   ALLOWED_ORIGIN: string
   // Origin the signed quote link points at (POST /api/generate returns it as
   // `quoteUrl`). Deliberately NOT derived from the first entry of

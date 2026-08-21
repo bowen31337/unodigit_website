@@ -255,7 +255,14 @@ describe('POST /api/generate — the signed quote link', () => {
   it('returns quoteUrl null when the request is rate limited', async () => {
     const spy = forbidLlm()
     const conversationId = await seed()
-    await recordQuote(env.DB, await hashIp(ip, env.IP_HASH_SALT), utcDay(Date.now()))
+    // Fill the allowance rather than assuming it is 1 — the cap is configurable
+    // (MAX_QUOTES_PER_IP_PER_DAY) precisely because one-per-IP is one per
+    // NETWORK, and a hardcoded 1 here would silently stop testing the limit the
+    // day that value changes.
+    const cap = Number(env.MAX_QUOTES_PER_IP_PER_DAY)
+    for (let i = 0; i < cap; i += 1) {
+      await recordQuote(env.DB, await hashIp(ip, env.IP_HASH_SALT), utcDay(Date.now()))
+    }
 
     const res = await postGenerate(conversationId)
     expect(res.status).toBe(200)

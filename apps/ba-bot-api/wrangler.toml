@@ -96,6 +96,10 @@ MAX_TOTAL_TURNS = "40"
 # conversations, each spending up to 40 DeepSeek turns. 120 is three full
 # 40-turn interviews from one address per day, which no genuine visitor reaches.
 MAX_TURNS_PER_IP_PER_DAY = "120"
+# Quotes per IP per day. Was hardcoded to 1, which is one PER NETWORK: an
+# office or NAT address is a single ip_hash, so the first person to finish an
+# interview consumed the allowance for everyone behind it that day.
+MAX_QUOTES_PER_IP_PER_DAY = "3"
 # Comma-separated allowlist, split in src/index.ts. The site is unodigit.com.AU —
 # the old value (`https://unodigit.com`) was a different domain entirely and would
 # have failed every browser call with an opaque CORS error. The apex is listed for
