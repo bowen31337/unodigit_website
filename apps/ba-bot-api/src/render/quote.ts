@@ -56,12 +56,23 @@ export function renderQuote(input: {
   const out: string[] = [`# ${projectName} — Indicative Quote`, '']
 
   if (q.belowFloor) {
-    // Quoting a figure the business cannot service profitably attracts leads it
-    // must then reject — worse for the brand than not quoting.
+    // The starter-engagement framing leads, and the band does NOT headline —
+    // quoting a figure the business cannot service profitably attracts leads it
+    // must then reject.
+    //
+    // The figure is still shown, explicitly as a reference. Withholding it
+    // entirely left the reader with a task count and no sense of scale, which
+    // reads as evasive on the one page that exists to be transparent. Framed as
+    // the same calculation applied to larger projects, and named as not an
+    // offer, it informs without committing.
     out.push(
       `This looks like a **smaller piece of work than our usual engagements** — around **${q.totalTasks} tasks**, roughly **${q.weeks} week${q.weeks === 1 ? '' : 's'}**.`,
       '',
       'Rather than quote a figure that would not serve you well, let us talk about a fixed-price starter engagement that fits the scope.',
+      '',
+      `**For reference only:** the same task-based calculation we use for larger projects gives **${aud(q.lowAud)}–${aud(q.highAud)}**. It is shown for transparency, not as an offer — this sits below our usual minimum engagement, and a fixed-price starter is the better structure for both of us.`,
+      '',
+      `Confidence: ${q.confidence}.`,
       '',
     )
   } else {
@@ -92,7 +103,9 @@ export function renderQuote(input: {
     out.push('## What drives the size', '', ...shape.drivers.map((d) => `- ${d}`), '')
   }
 
-  if (rateShown && !q.belowFloor) {
+  // Shown below floor too, now that a figure is. A number the reader cannot
+  // account for is worse than no number.
+  if (rateShown) {
     out.push(
       '## How this is calculated',
       '',

@@ -137,17 +137,34 @@ describe('renderQuote', () => {
     expect(md).toContain('2026')
   })
 
-  it('flags a project below the engagement floor rather than quoting it', () => {
+  // Below the floor the figure IS shown, but only as a reference. It used to be
+  // withheld entirely, which left the reader a task count and no sense of scale
+  // — evasive on the one page that exists to be transparent. What must not
+  // happen is the band LEADING, which would read as an offer the business
+  // cannot service profitably.
+  it('shows a below-floor figure as reference, with the starter framing leading', () => {
     const md = renderQuote({ ...base, quote: { ...quote, belowFloor: true }, rateShown: true })
-    expect(md.toLowerCase()).toMatch(/smaller than|minimum|starter/)
 
-    // The criterion is that belowFloor REPLACES the band, not that it adds a
-    // message beside it. Asserting only the message's presence would pass on a
-    // renderer that printed both — which is the commercially harmful case this
-    // whole branch exists to prevent. Assert the numbers are absent.
-    expect(md).not.toContain('601')
-    expect(md).not.toContain('1,247')
-    expect(md).not.toContain('per task')
+    expect(md.toLowerCase()).toMatch(/smaller than|minimum|starter/)
+    expect(md).toContain('For reference only')
+    expect(md).toContain('601')
+    expect(md).toContain('1,247')
+    // The figure is explained, or it is just an unaccountable number.
+    expect(md).toContain('per task')
+
+    // Order is the commercial requirement: the starter-engagement framing must
+    // reach the reader before the money does.
+    expect(md.indexOf('smaller piece of work')).toBeLessThan(md.indexOf('601'))
+
+    // And it must never use the above-floor headline form, which states the
+    // band as the quote rather than as a reference.
+    expect(md).not.toMatch(/\*\*~\d+ tasks · estimated/)
+  })
+
+  it('leads with the band when the project clears the floor', () => {
+    const md = renderQuote({ ...base, quote: { ...quote, belowFloor: false }, rateShown: true })
+    expect(md).toMatch(/\*\*~\d+ tasks · estimated/)
+    expect(md).not.toContain('For reference only')
   })
 
   it('orders phases by dependency, not declaration order', () => {
