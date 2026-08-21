@@ -1,16 +1,37 @@
 import type { Metadata } from 'next';
 import AboutClient from './AboutClient';
+import JsonLd from '@/components/JsonLd';
+import { pageSchema } from '@/lib/schema';
+
+const TITLE = 'About Us';
+const DESCRIPTION =
+  'Learn about Uno Digit, a Sydney-based AI consultancy. Meet our team of experts dedicated to democratizing AI technology for enterprises.';
 
 export const metadata: Metadata = {
-  title: 'About Us',
-  description: 'Learn about Uno Digit, a Sydney-based AI consultancy. Meet our team of experts dedicated to democratizing AI technology for enterprises.',
+  alternates: { canonical: '/about' },
+  title: TITLE,
+  description: DESCRIPTION,
   openGraph: {
     title: 'About Uno Digit | AI Consultancy Sydney',
-    description: 'Learn about Uno Digit, a Sydney-based AI consultancy helping enterprises harness the power of artificial intelligence.',
+    description:
+      'Learn about Uno Digit, a Sydney-based AI consultancy helping enterprises harness the power of artificial intelligence.',
+    url: '/about',
   },
 };
 
 export default function AboutPage() {
-  return <AboutClient />;
+  return (
+    <>
+      <JsonLd
+        data={pageSchema({
+          path: '/about',
+          title: TITLE,
+          description: DESCRIPTION,
+          pageType: 'AboutPage',
+          breadcrumbs: [{ name: 'About', path: '/about' }],
+        })}
+      />
+      <AboutClient />
+    </>
+  );
 }
-

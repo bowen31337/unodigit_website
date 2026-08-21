@@ -7,6 +7,8 @@ import GradientMesh from '@/components/GradientMesh';
 import GlassCard from '@/components/GlassCard';
 import Button from '@/components/Button';
 import ScrollReveal, { staggerParent, staggerChild } from '@/components/ScrollReveal';
+import FAQ from '@/components/FAQ';
+import { HOME_FAQS } from '@/data/faqs';
 
 const valueProps = [
   { icon: Zap, title: 'Lightning fast', desc: 'Rapid deployment with agile methodologies.' },
@@ -254,6 +256,26 @@ export default function HomeClient() {
               </li>
             ))}
           </ul>
+        </div>
+      </section>
+
+      {/* ── FAQ ─────────────────────────────────────────────────────────
+          Sits directly above the CTA on purpose: it answers the objections a
+          visitor forms while reading the page, immediately before being asked
+          to act. It is also the page's FAQPage structured data — the same
+          strings, from data/faqs.ts, so the visible copy and the JSON-LD can
+          never disagree. */}
+      <section className="py-s12" style={{ background: 'var(--bg-secondary)' }} aria-labelledby="faq-heading">
+        <div className="container">
+          <ScrollReveal className="mx-auto mb-s10 max-w-2xl text-center">
+            <span className="type-eyebrow">Questions</span>
+            <h2 id="faq-heading" className="type-title-1">
+              What people ask before they start
+            </h2>
+          </ScrollReveal>
+          <ScrollReveal className="mx-auto max-w-3xl">
+            <FAQ faqs={HOME_FAQS} />
+          </ScrollReveal>
         </div>
       </section>
 
