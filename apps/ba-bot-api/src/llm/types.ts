@@ -22,6 +22,10 @@ export interface ChatRequest {
    * model answer with whitespace — read that file before changing either.
    */
   reasoning?: boolean
+  /** Sampling temperature. Omitted means the provider default, which for an
+   *  analytical task is too high: the estimator measured a ±25% spread on
+   *  identical input, so the same brief could price at 78 or 128 tasks. */
+  temperature?: number
 }
 
 export interface ChatResponse {

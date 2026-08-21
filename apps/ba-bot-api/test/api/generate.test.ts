@@ -10,6 +10,7 @@ import { recordQuote, utcDay } from '../../src/guards/ratelimit'
 import { sessionKey } from '../../src/session'
 import { hashIp } from '../../src/util/hash'
 import { newId } from '../../src/util/ids'
+import { ESTIMATE_SAMPLES } from '../../src/estimator/estimate'
 
 /** A lead field that must never leave the leads table during generation. */
 const CANARY_PHONE = '+61 400 111 222'
@@ -187,11 +188,14 @@ describe('POST /api/generate', () => {
     // The heavy model is the most expensive call in the app; its spend must
     // land in the same columns that track the cheap one.
     const conv = await convRow(conversationId)
-    expect(conv!.tokens_in).toBe(900)
-    expect(conv!.tokens_out).toBe(400)
+    // Every draw is paid for, so the counters sum all of them — see
+    // ESTIMATE_SAMPLES in estimator/estimate.
+    expect(conv!.tokens_in).toBe(900 * ESTIMATE_SAMPLES)
+    expect(conv!.tokens_out).toBe(400 * ESTIMATE_SAMPLES)
 
-    // Exactly one estimate: no repair retry, no program pass at 137 tasks.
-    expect(spy).toHaveBeenCalledTimes(1)
+    // One estimate PASS, drawn ESTIMATE_SAMPLES times and reduced to the
+    // median — no repair retry and no program pass at 137 tasks.
+    expect(spy).toHaveBeenCalledTimes(ESTIMATE_SAMPLES)
   })
 
   it('never puts the per-task rate in the headline', async () => {
@@ -277,7 +281,7 @@ describe('POST /api/generate', () => {
     const conversationId = await seed()
 
     const first = await (await postGenerate({ conversationId }, PRICING_ENV)).json<Body>()
-    expect(spy).toHaveBeenCalledTimes(1)
+    expect(spy).toHaveBeenCalledTimes(ESTIMATE_SAMPLES)
 
     const second = await postGenerate({ conversationId }, PRICING_ENV)
     expect(second.status).toBe(200)
@@ -289,7 +293,7 @@ describe('POST /api/generate', () => {
 
     // Count the calls. Matching responses would also hold on an implementation
     // that re-ran the estimate and happened to get the same stub back.
-    expect(spy).toHaveBeenCalledTimes(1)
+    expect(spy).toHaveBeenCalledTimes(ESTIMATE_SAMPLES)
 
     const briefs = await env.DB.prepare('SELECT COUNT(*) AS n FROM briefs WHERE conversation_id = ?')
       .bind(conversationId).first<{ n: number }>()
@@ -515,7 +519,7 @@ describe('POST /api/generate', () => {
     const json = await res.json<Body>()
     expect(GenerateResponseSchema.safeParse(json).success).toBe(true)
     expect(json.quote!.totalTasks).toBe(137)
-    expect(spy).toHaveBeenCalledTimes(1)
+    expect(spy).toHaveBeenCalledTimes(ESTIMATE_SAMPLES)
     expect((await briefRow(conversationId))!.markdown).toContain('PawBook')
   })
 

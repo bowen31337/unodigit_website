@@ -96,6 +96,37 @@ const MAX_TOKENS_PROGRAM = 16_000
  *  This used to be 2 with truncation and blanks both returning immediately. */
 const MAX_ATTEMPTS = 3
 
+/**
+ * Sampling temperature for sizing.
+ *
+ * Measured on one brief, 9 runs per arm, counting total_tasks:
+ *
+ *   provider default   mean 110   sd 21.4   cv 19%   range 87-148
+ *   temperature 0.2    mean 118   sd 14.7   cv 12%   range 86-142
+ *   temperature 0.4    mean 126   sd 12.6   cv 10%   range 104-142
+ *
+ * 0.2 rather than 0: temperature 0 measured WORSE than the default (spread 50%
+ * of mean over 6 runs), which is the opposite of the intuition. A reasoning
+ * model at 0 appears to lock onto a single reasoning path that is not
+ * necessarily a central one.
+ */
+const TEMPERATURE = 0.2
+
+/**
+ * Independent estimates to draw before pricing.
+ *
+ * Temperature alone leaves ±12%, so the same brief could still price at 86 or
+ * 142 tasks — a client who regenerates gets a different number for the same
+ * project, which is indefensible on a document titled "Indicative Quote".
+ * Drawing three and taking the median discards the outlier that any single
+ * draw might have been.
+ *
+ * Run concurrently, so this costs tokens rather than latency. The median SHAPE
+ * is kept whole rather than averaging the three: `totalsAgree` requires the
+ * category counts to sum to total_tasks, and an averaged breakdown would not.
+ */
+export const ESTIMATE_SAMPLES = 3
+
 async function askOnce(
   client: LlmClient,
   model: string,
@@ -115,6 +146,7 @@ async function askOnce(
         messages,
         jsonMode: true,
         maxTokens,
+        temperature: TEMPERATURE,
         // Explicit rather than inherited. This is the one genuinely analytical
         // call in the app -- it decomposes a project and must produce category
         // counts that sum exactly to total_tasks, which `totalsAgree` enforces.
@@ -164,14 +196,45 @@ async function askOnce(
 
 export async function runEstimate(
   client: LlmClient,
-  args: { model: string; briefText: string; programThreshold: number },
+  args: {
+    model: string
+    briefText: string
+    programThreshold: number
+    /** Independent draws to take before choosing the median. Injectable so a
+     *  unit test can exercise the retry and ceiling logic with a single draw
+     *  and a deterministic stub, rather than three concurrent ones racing for
+     *  the same scripted responses. */
+    samples?: number
+  },
 ): Promise<EstimateResult> {
-  const first = await askOnce(client, args.model, [
+  const samples = Math.max(1, args.samples ?? ESTIMATE_SAMPLES)
+  const messages: ChatMessage[] = [
     { role: 'system', content: ESTIMATOR_SYSTEM_PROMPT },
     { role: 'user', content: args.briefText },
-  ], MAX_TOKENS_SINGLE)
+  ]
 
-  if (!first.ok) return first
+  // Concurrent, so three samples cost tokens rather than wall clock.
+  const draws = await Promise.all(
+    Array.from({ length: samples }, () =>
+      askOnce(client, args.model, messages, MAX_TOKENS_SINGLE)),
+  )
+
+  const ok = draws.filter((d): d is Extract<EstimateResult, { ok: true }> => d.ok)
+  // Every draw failed for the same reason; report the first so the caller sees
+  // a real cause rather than a synthesised one.
+  if (ok.length === 0) return draws[0] ?? { ok: false, reason: 'provider' }
+
+  // Median by total_tasks, keeping that draw's shape intact.
+  const sorted = [...ok].sort((a, b) => a.shape.total_tasks - b.shape.total_tasks)
+  const median = sorted[Math.floor(sorted.length / 2)]!
+
+  // Tokens from every draw, not just the chosen one — all of them were paid for.
+  const first: Extract<EstimateResult, { ok: true }> = {
+    ...median,
+    promptTokens: ok.reduce((n, d) => n + d.promptTokens, 0),
+    completionTokens: ok.reduce((n, d) => n + d.completionTokens, 0),
+    cachedTokens: ok.reduce((n, d) => n + d.cachedTokens, 0),
+  }
   if (first.shape.total_tasks <= args.programThreshold) return first
 
   // Over the threshold: one claw-forge spec targets 100-300 bullets, so ask for

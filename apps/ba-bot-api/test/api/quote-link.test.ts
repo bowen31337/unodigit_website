@@ -8,6 +8,7 @@ import { sessionKey } from '../../src/session'
 import { hashIp } from '../../src/util/hash'
 import { newId } from '../../src/util/ids'
 import { verifyId } from '../../src/util/sign'
+import { ESTIMATE_SAMPLES } from '../../src/estimator/estimate'
 
 /** A lead field that must never leave the leads table during generation. */
 const CANARY_PHONE = '+61 400 111 222'
@@ -245,7 +246,7 @@ describe('POST /api/generate — the signed quote link', () => {
     )).toBe(true)
 
     // No second estimate: the link is rebuilt, the quote is not.
-    expect(spy).toHaveBeenCalledTimes(1)
+    expect(spy).toHaveBeenCalledTimes(ESTIMATE_SAMPLES)
   })
 
   // There is no quote behind a rate-limited request, so there is nothing to
@@ -353,7 +354,7 @@ describe('POST /api/generate — the signed quote link', () => {
     )).toBe(true)
 
     // Exactly one outbound call, and it is the estimate.
-    expect(calls).toHaveLength(1)
+    expect(calls).toHaveLength(ESTIMATE_SAMPLES)
   })
 
   /**
@@ -380,9 +381,10 @@ describe('POST /api/generate — the signed quote link', () => {
 
     const json = await (await postGenerate(conversationId)).json<Body>()
 
-    // Exactly one outbound call — the estimate. There is no second destination
-    // a lead field could have been sent to.
-    expect(calls).toHaveLength(1)
+    // Only the estimate goes out — ESTIMATE_SAMPLES draws of it, and nothing
+    // else. There is no second DESTINATION a lead field could reach, which is
+    // what this canary is really asserting.
+    expect(calls).toHaveLength(ESTIMATE_SAMPLES)
     const llmBody = String(calls[0]!.init.body)
     expect(llmBody).not.toContain(CANARY)
     expect(llmBody).not.toContain(CANARY_NAME)

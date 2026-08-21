@@ -37,6 +37,9 @@ export function createOpenAiCompatClient(opts: { baseUrl: string; apiKey: string
           // the provider's default (reasoning on) rather than pinning it, so a
           // caller that says nothing keeps the behaviour it has today.
           ...(req.reasoning === false ? { thinking: { type: 'disabled' } } : {}),
+          // Sent only when the caller pins it, so chat turns keep whatever the
+          // provider does today and only the estimator changes.
+          ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
         }),
       })
 

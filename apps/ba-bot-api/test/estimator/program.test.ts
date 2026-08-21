@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { runEstimate } from '../../src/estimator/estimate'
 import { ESTIMATOR_SYSTEM_PROMPT, PROGRAM_MODE_ADDENDUM } from '../../src/estimator/prompt'
 import type { LlmClient, ChatResponse } from '../../src/llm/types'
+import { ESTIMATE_SAMPLES } from '../../src/estimator/estimate'
 
 function stub(responses: Array<Partial<ChatResponse>>) {
   let i = 0
@@ -63,7 +64,7 @@ const args = { model: 'test-heavy', briefText: 'A huge platform.', programThresh
 describe('runEstimate program mode', () => {
   it('re-asks in program mode when the first pass exceeds the threshold', async () => {
     const client = stub([{ content: bigSingle }, { content: program }])
-    const r = await runEstimate(client, args)
+    const r = await runEstimate(client, { ...args, samples: 1 })
 
     expect(r.ok).toBe(true)
     if (!r.ok) return
@@ -73,7 +74,7 @@ describe('runEstimate program mode', () => {
 
   it('does not re-ask when the first pass is under the threshold', async () => {
     const client = stub([{ content: smallSingle }])
-    const r = await runEstimate(client, args)
+    const r = await runEstimate(client, { ...args, samples: 1 })
 
     expect(r.ok).toBe(true)
     if (!r.ok) return
@@ -83,7 +84,7 @@ describe('runEstimate program mode', () => {
 
   it('keeps the oversized single result if the program pass fails', async () => {
     const client = stub([{ content: bigSingle }, { content: 'garbage' }, { content: 'garbage' }])
-    const r = await runEstimate(client, args)
+    const r = await runEstimate(client, { ...args, samples: 1 })
 
     // A large but valid estimate beats no estimate at all.
     expect(r.ok).toBe(true)
@@ -116,7 +117,7 @@ describe('runEstimate program mode', () => {
         }
       },
     }
-    const r = await runEstimate(client as unknown as LlmClient, args)
+    const r = await runEstimate(client as unknown as LlmClient, { ...args, samples: 1 })
 
     // Guard against a vacuous pass: without a successful second pass there is
     // no program-pass message list to assert on at all.
@@ -137,7 +138,7 @@ describe('runEstimate program mode', () => {
 
   it('sums token usage across both passes', async () => {
     const client = stub([{ content: bigSingle }, { content: program }])
-    const r = await runEstimate(client, args)
+    const r = await runEstimate(client, { ...args, samples: 1 })
 
     expect(r.ok).toBe(true)
     if (!r.ok) return
@@ -186,7 +187,7 @@ describe('US-004a: oversized first pass reaches program mode', () => {
         }
       },
     }
-    const r = await runEstimate(client as unknown as LlmClient, args)
+    const r = await runEstimate(client as unknown as LlmClient, { ...args, samples: 1 })
 
     expect(r.ok).toBe(true)
     if (!r.ok) return
@@ -203,7 +204,7 @@ describe('US-004a: oversized first pass reaches program mode', () => {
       drivers: ['absurd scope'],
     })
     const client = stub([{ content: absurdSingle }, { content: absurdSingle }])
-    const r = await runEstimate(client, args)
+    const r = await runEstimate(client, { ...args, samples: 1 })
 
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.reason).toBe('parse')
@@ -229,7 +230,7 @@ describe('US-004a: oversized first pass reaches program mode', () => {
       { content: oversizedSubsystemProgram },
       { content: oversizedSubsystemProgram },
     ])
-    const r = await runEstimate(client, args)
+    const r = await runEstimate(client, { ...args, samples: 1 })
 
     // The program pass is rejected (subsystem total_tasks 900 > max 400), so
     // runEstimate falls back to the valid oversized single result rather than
@@ -267,7 +268,7 @@ describe('US-004a: oversized first pass reaches program mode', () => {
       { content: inconsistentSubsystem },
       { content: inconsistentSubsystem },
     ])
-    const r = await runEstimate(client, args)
+    const r = await runEstimate(client, { ...args, samples: 1 })
 
     expect(r.ok).toBe(true)
     if (!r.ok) return

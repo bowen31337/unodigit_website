@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { runEstimate } from '../../src/estimator/estimate'
 import { ESTIMATOR_SYSTEM_PROMPT } from '../../src/estimator/prompt'
 import type { LlmClient, ChatResponse } from '../../src/llm/types'
+import { ESTIMATE_SAMPLES } from '../../src/estimator/estimate'
 
 function stub(responses: Array<Partial<ChatResponse>>): LlmClient & { calls: number; lastMessages: unknown } {
   let i = 0
@@ -64,7 +65,7 @@ const args = { model: 'test-heavy', briefText: 'A booking system for dog groomer
 describe('runEstimate', () => {
   it('returns a validated single-mode shape', async () => {
     const client = stub([{ content: validSingle }])
-    const r = await runEstimate(client, args)
+    const r = await runEstimate(client, { ...args, samples: 1 })
 
     expect(r.ok).toBe(true)
     if (!r.ok) return
@@ -75,7 +76,7 @@ describe('runEstimate', () => {
 
   it('sends the frozen prompt as the first message, unmodified', async () => {
     const client = stub([{ content: validSingle }])
-    await runEstimate(client, args)
+    await runEstimate(client, { ...args, samples: 1 })
 
     const msgs = client.lastMessages as Array<{ role: string; content: string }>
     expect(msgs[0]!.role).toBe('system')
@@ -85,7 +86,7 @@ describe('runEstimate', () => {
   it('rejects unknown keys (strict schema)', async () => {
     const bad = JSON.stringify({ ...JSON.parse(validSingle), injected: true })
     const client = stub([{ content: bad }, { content: bad }])
-    const r = await runEstimate(client, args)
+    const r = await runEstimate(client, { ...args, samples: 1 })
 
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.reason).toBe('parse')
@@ -93,7 +94,7 @@ describe('runEstimate', () => {
 
   it('retries exactly once on malformed JSON, then succeeds', async () => {
     const client = stub([{ content: 'not json' }, { content: validSingle }])
-    const r = await runEstimate(client, args)
+    const r = await runEstimate(client, { ...args, samples: 1 })
 
     expect(r.ok).toBe(true)
     expect(client.calls).toBe(2)
@@ -101,7 +102,7 @@ describe('runEstimate', () => {
 
   it('gives up after three attempts on malformed output', async () => {
     const client = stub([{ content: 'nope' }, { content: 'still nope' }])
-    const r = await runEstimate(client, args)
+    const r = await runEstimate(client, { ...args, samples: 1 })
 
     expect(r.ok).toBe(false)
     expect(client.calls).toBe(3)
@@ -113,7 +114,7 @@ describe('runEstimate', () => {
   // written, so no signed link ever reached the visitor.
   it('retries a truncated pass instead of giving up', async () => {
     const client = stub([{ content: '{"mode":"sing', finishReason: 'length' }])
-    const r = await runEstimate(client, args)
+    const r = await runEstimate(client, { ...args, samples: 1 })
 
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.reason).toBe('truncated')
@@ -125,14 +126,14 @@ describe('runEstimate', () => {
       { content: '{"mode":"sing', finishReason: 'length' },
       { content: validSingle },
     ])
-    const r = await runEstimate(client, args)
+    const r = await runEstimate(client, { ...args, samples: 1 })
 
     expect(r.ok).toBe(true)
   })
 
   it('recovers when a pass comes back blank and then answers', async () => {
     const client = stub([{ content: '   ' }, { content: validSingle }])
-    const r = await runEstimate(client, args)
+    const r = await runEstimate(client, { ...args, samples: 1 })
 
     expect(r.ok).toBe(true)
   })
@@ -149,7 +150,7 @@ describe('runEstimate', () => {
         return { content: validSingle, finishReason: 'stop', promptTokens: 1, completionTokens: 1 , cachedTokens: 0, model: 'test-model'}
       },
     }
-    await runEstimate(client, args)
+    await runEstimate(client, { ...args, samples: 1 })
 
     // Five successful single-mode runs measured 2429-4618 completion tokens.
     expect(seen[0]).toBeGreaterThanOrEqual(8000)
@@ -171,7 +172,7 @@ describe('runEstimate', () => {
         }
       },
     }
-    const r = await runEstimate(client, args)
+    const r = await runEstimate(client, { ...args, samples: 1 })
 
     expect(r.ok).toBe(true)
     expect(seen).toHaveLength(2)
@@ -181,7 +182,7 @@ describe('runEstimate', () => {
 
   it('reports provider failure when the client throws', async () => {
     const client: LlmClient = { async chat() { throw new Error('502') } }
-    const r = await runEstimate(client, args)
+    const r = await runEstimate(client, { ...args, samples: 1 })
 
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.reason).toBe('provider')
@@ -196,9 +197,87 @@ describe('runEstimate', () => {
       drivers: [],
     })
     const client = stub([{ content: inconsistent }, { content: inconsistent }])
-    const r = await runEstimate(client, args)
+    const r = await runEstimate(client, { ...args, samples: 1 })
 
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.reason).toBe('parse')
+  })
+})
+
+describe('sampling', () => {
+  // A single draw measured cv 12-19% on identical input: the same brief could
+  // price at 86 or 142 tasks. A client who regenerates getting a different
+  // number is indefensible on a document titled "Indicative Quote".
+  function shapeWith(total: number): string {
+    return JSON.stringify({
+      mode: 'single',
+      categories: [{ name: 'Core functionality', bullets: total, sample: 'User can do a thing (returns 201)' }],
+      total_tasks: total,
+      confidence: 'medium',
+      drivers: [],
+    })
+  }
+
+  /** One independent scripted response per concurrent draw. */
+  function perDrawClient(totals: number[]): LlmClient & { calls: number } {
+    let i = 0
+    const c = {
+      calls: 0,
+      async chat(): Promise<ChatResponse> {
+        const total = totals[Math.min(i++, totals.length - 1)]!
+        c.calls += 1
+        return {
+          content: shapeWith(total), finishReason: 'stop',
+          promptTokens: 100, completionTokens: 50, cachedTokens: 10, model: 'test-model',
+        }
+      },
+    }
+    return c
+  }
+
+  it('takes the median of the draws, discarding the outliers', async () => {
+    const client = perDrawClient([80, 120, 400])
+    const r = await runEstimate(client, args)
+
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.shape.total_tasks).toBe(120)
+    expect(client.calls).toBe(3)
+  })
+
+  // The chosen SHAPE is kept whole rather than averaged: totalsAgree requires
+  // the category counts to sum to total_tasks, which an averaged breakdown
+  // would not.
+  it('keeps the median draw intact rather than averaging', async () => {
+    const r = await runEstimate(perDrawClient([80, 120, 400]), args)
+    if (!r.ok) throw new Error('expected ok')
+    const summed = r.shape.mode === 'single'
+      ? r.shape.categories.reduce((n, c) => n + c.bullets, 0)
+      : 0
+    expect(summed).toBe(r.shape.total_tasks)
+  })
+
+  it('counts the tokens every draw spent, not just the chosen one', async () => {
+    const r = await runEstimate(perDrawClient([80, 120, 400]), args)
+    if (!r.ok) throw new Error('expected ok')
+    expect(r.promptTokens).toBe(300)
+    expect(r.completionTokens).toBe(150)
+    expect(r.cachedTokens).toBe(30)
+  })
+
+  it('still succeeds when some draws fail', async () => {
+    let i = 0
+    const client: LlmClient = {
+      async chat(): Promise<ChatResponse> {
+        i += 1
+        if (i <= 2) throw new Error('502')
+        return {
+          content: shapeWith(111), finishReason: 'stop',
+          promptTokens: 1, completionTokens: 1, cachedTokens: 0, model: 'test-model',
+        }
+      },
+    }
+    const r = await runEstimate(client, args)
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.shape.total_tasks).toBe(111)
   })
 })

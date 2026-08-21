@@ -212,8 +212,9 @@ Three no-quote exits, each returning a brief and a truthful headline rather than
 error: rate limited (`MAX_QUOTES_PER_IP_PER_DAY`), estimator failed, or below floor.
 Only the third is terminal — the first two are retried on a later call.
 
-**Latency: 45–120 s.** It is the slowest call in the product. The widget shows a
-progress indicator for the whole window (§5.3).
+**Latency: 60–105 s.** The slowest call in the product, and the tail is now set
+by the slowest of three concurrent draws (§4.1) rather than a single one. The
+widget shows a progress indicator for the whole window (§5.3).
 
 ### `GET /api/quote/:id?sig=…`
 
@@ -261,6 +262,25 @@ in production from launch until 20 Aug 2026.
 
 A truncated *program* pass is the quiet one: `runEstimate` falls back to the single
 estimate, so a quote still appears and only the better phased artefact vanishes.
+
+**Sizing is sampled, not single-shot.** One draw measured `cv 19%` on identical
+input — the same brief priced at 87 or 148 tasks, so a client who regenerated
+got a different number for the same project. Two changes, both measured:
+
+| configuration | cv | range |
+|---|---|---|
+| single draw, provider default temperature | 19% | 87–148 |
+| single draw, temperature 0.2 | 12% | 86–142 |
+| **3 concurrent draws at 0.2, median** | **7%** | **120–152** |
+
+Temperature **0.2**, not 0: at 0 the spread measured *worse* than the default
+(50% of mean over 6 runs), which is the opposite of the intuition — a reasoning
+model at 0 appears to lock onto one path that is not necessarily central.
+
+The median *shape* is kept whole rather than averaged, because `totalsAgree`
+requires the category counts to sum to `total_tasks` and an averaged breakdown
+would not. Tokens from every draw are counted, since all were paid for. Only
+the single pass is sampled; the program pass already costs 16k tokens.
 
 `totalsAgree` rejects a shape whose category counts do not sum to `total_tasks`, and
 in program mode each subsystem must also agree with itself — checking only the
