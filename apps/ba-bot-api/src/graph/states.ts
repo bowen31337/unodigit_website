@@ -39,6 +39,29 @@ const str = (s: Slots, k: string): string =>
 
 const arr = (s: Slots, k: string): unknown[] => (Array.isArray(s[k]) ? (s[k] as unknown[]) : [])
 
+/**
+ * Slots that are not owned by any one topic.
+ *
+ * A client volunteers these whenever they feel like it, and a strict per-state
+ * schema silently discards anything the CURRENT state does not declare. Both
+ * were learned the hard way:
+ *
+ *  - `complexity_driver` — three real interviews named the hardest part in
+ *    three different states (PROJECT_IDENTITY, SOLUTION_SHAPE, FEATURE_MAP).
+ *    Declaring it on one meant the single most estimate-relevant sentence in
+ *    the conversation was folded into `problem`, or thrown away entirely.
+ *  - `industry` — inferred as soon as the sector is apparent, which is usually
+ *    the first message but need not be.
+ *
+ * Merged into every ELICITATION state, and deliberately not into CONTACT,
+ * GENERATE or DONE: those declare no slots at all, and keeping them empty is
+ * part of what makes `lead_id` unforgeable.
+ */
+const GLOBAL_SLOTS = {
+  industry: z.string().optional(),
+  complexity_driver: z.string().optional(),
+}
+
 export const STATES: Record<StateId, StateDef> = {
   GREETING: {
     id: 'GREETING',
@@ -56,10 +79,7 @@ export const STATES: Record<StateId, StateDef> = {
         project_name: z.string().optional(),
         audience: z.string().optional(),
         problem: z.string().optional(),
-        // Inferred, never asked, and deliberately NOT in the exit gate: it is
-        // reporting metadata, and holding the interview open for it would cost
-        // the visitor a question asked purely for our benefit.
-        industry: z.string().optional(),
+        ...GLOBAL_SLOTS,
       })
       .strict(),
     exitGate: (s) => !!str(s, 'project_name') && !!str(s, 'audience') && !!str(s, 'problem'),
@@ -73,6 +93,7 @@ export const STATES: Record<StateId, StateDef> = {
       .object({
         solution_summary: z.string().optional(),
         differentiator: z.string().optional(),
+        ...GLOBAL_SLOTS,
       })
       .strict(),
     // `differentiator` was a declared slot the gate never asked for, so the
@@ -91,6 +112,7 @@ export const STATES: Record<StateId, StateDef> = {
         personas: z.array(z.string()).optional(),
         mvp_must: z.array(z.string()).optional(),
         mvp_wont: z.array(z.string()).optional(),
+        ...GLOBAL_SLOTS,
       })
       .strict(),
     // Was personas >= 1 && mvp_must >= 1, which one sentence satisfies. A
@@ -111,6 +133,7 @@ export const STATES: Record<StateId, StateDef> = {
       .object({
         covered_categories: z.array(z.string()).optional(),
         features: z.array(z.string()).optional(),
+        ...GLOBAL_SLOTS,
       })
       .strict(),
     // 3 of 7 meant four whole areas — UI/UX, API layer, Admin, Integrations —
@@ -130,6 +153,7 @@ export const STATES: Record<StateId, StateDef> = {
         timeline: z.string().optional(),
         budget_band: z.string().optional(),
         integrations: z.array(z.string()).optional(),
+        ...GLOBAL_SLOTS,
       })
       .strict(),
     // Was timeline OR budget_band. Timeline is now required — it is the one

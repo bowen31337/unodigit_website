@@ -12,6 +12,13 @@ export interface BriefSections {
    *  interview but not the estimate — 84 tasks against 87 — because the extra
    *  answers had nowhere to go. */
   features: string
+  /** The one thing that makes this project hard.
+   *
+   *  Its own section rather than a line in the solution, because the estimator
+   *  reads this brief and difficulty is the dimension it is otherwise blind to:
+   *  it sizes by task COUNT times a static per-category weight, so an unusually
+   *  hard piece of core functionality prices identically to a routine one. */
+  complexity: string
   scope: string
   constraints: string
 }
@@ -67,6 +74,7 @@ export function buildBriefSections(slots: Slots): BriefSections {
     solution: para([solution, differentiator && `Differentiator: ${differentiator}`].filter(Boolean).join('\n\n')),
     users: bullets(list(slots, 'personas')),
     features: featureSection(slots),
+    complexity: para(str(slots, 'complexity_driver')),
     scope: [
       '**Must have**',
       bullets(list(slots, 'mvp_must')),
@@ -103,6 +111,9 @@ export function renderBrief(sections: BriefSections, projectName: string): strin
     '',
     '## Feature map',
     sections.features,
+    '',
+    '## Hardest part',
+    sections.complexity,
     '',
     '## MVP scope',
     sections.scope,

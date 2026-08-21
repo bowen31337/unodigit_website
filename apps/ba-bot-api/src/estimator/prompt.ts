@@ -31,6 +31,7 @@ Rules:
 - total_tasks must equal the sum of every bullets value you give.
 - confidence is "high" when the brief is specific and the domain is familiar, "medium" when there are open questions, "low" when the brief is vague or the project is unusually large.
 - drivers lists the two or three things that most affect the size, in a few words each.
+- If the brief has a "Hardest part" section, treat it as real difficulty rather than description: raise the bullet count for the categories it touches, and name it in drivers. A project whose hard part is genuinely hard needs more bullets than one of the same shape that is routine. If that section says nothing was captured, ignore it.
 
 Reply with a single json object and nothing else. No markdown fences.
 

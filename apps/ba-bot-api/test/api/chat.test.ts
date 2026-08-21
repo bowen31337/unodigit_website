@@ -81,6 +81,53 @@ beforeEach(() => {
   ip = `192.0.2.${ipCounter}`
 })
 
+describe('slot aliases', () => {
+  // Every alias is observed, not imagined: taken from slots_rejected events on
+  // a real interview where the model wrote core_features for features and
+  // hardest_data_type for the hard part. Each rejection was a fact the visitor
+  // said out loud and the schema discarded.
+  async function seedFeatureMap(): Promise<string> {
+    const id = newId('conv')
+    await createConversation(env.DB, id, Date.now())
+    await updateConversationState(env.DB, id, 'FEATURE_MAP', 8)
+    await env.SESSIONS.put(sessionKey(id), JSON.stringify({
+      state: 'FEATURE_MAP', slots: {}, turnsInState: 1, totalTurns: 8, forcedAdvances: [],
+    }))
+    return id
+  }
+
+  it('accepts a near-miss field name instead of discarding it', async () => {
+    mockLlm({
+      reply: 'Noted.',
+      slots: { core_features: ['barcode scan'], hardest_data_type: 'linking sources with no shared id' },
+      ready_to_advance: false, off_topic: false, wrap_up: false,
+    })
+    const conversationId = await seedFeatureMap()
+    await post({ conversationId, message: 'the hard bit is linking records' })
+
+    const raw = await env.SESSIONS.get(sessionKey(conversationId))
+    const slots = (JSON.parse(raw!) as { slots: Record<string, unknown> }).slots
+    expect(slots['features']).toEqual(['barcode scan'])
+    expect(slots['complexity_driver']).toBe('linking sources with no shared id')
+  })
+
+  // The alias resolves to a canonical name and is then validated against the
+  // CURRENT state's shape, so this must not become a cross-state write.
+  it('still drops a canonical key the state does not declare', async () => {
+    mockLlm({
+      reply: 'Noted.',
+      slots: { mvp_wont_indicated: ['reporting'] },   // belongs to USERS_AND_SCOPE
+      ready_to_advance: false, off_topic: false, wrap_up: false,
+    })
+    const conversationId = await seedFeatureMap()
+    await post({ conversationId, message: 'no reporting' })
+
+    const raw = await env.SESSIONS.get(sessionKey(conversationId))
+    const slots = (JSON.parse(raw!) as { slots: Record<string, unknown> }).slots
+    expect(slots['mvp_wont']).toBeUndefined()
+  })
+})
+
 describe('wrap_up', () => {
   // ready_to_advance moves ONE state and the next gate blocks again. Observed
   // live: a visitor said they were out of time four times, the model replied

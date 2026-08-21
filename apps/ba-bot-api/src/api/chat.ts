@@ -36,9 +36,38 @@ const FALLBACK_REPLY =
  *
  * Rejection is per KEY, not per object — see the fallback below for why the
  * all-or-nothing version stalled the graph. */
+/**
+ * Near-miss field names the model actually emitted, mapped to the real ones.
+ *
+ * Every entry is observed, not imagined — taken from `slots_rejected` events on
+ * a real interview, where the model wrote `core_features` for `features` and
+ * `hardest_data_type` for what is now `complexity_driver`. Each rejection is a
+ * fact the visitor said out loud and the schema silently discarded.
+ *
+ * This does NOT loosen the security property. An alias resolves to a canonical
+ * name and is then validated against the CURRENT state's shape exactly as any
+ * other key is, so a slot that state does not declare is still dropped, and
+ * `lead_id` — declared by no state — remains unforgeable.
+ */
+const SLOT_ALIASES: Record<string, string> = {
+  core_features: 'features',
+  covered_categories_so_far: 'covered_categories',
+  personas_indicated: 'personas',
+  mvp_must_indicated: 'mvp_must',
+  mvp_wont_indicated: 'mvp_wont',
+  hardest_data_type: 'complexity_driver',
+  core_difficulty: 'complexity_driver',
+}
+
 function validateSlots(state: StateId, raw: Slots): { slots: Slots; rejected: string[] } {
   const schema = STATES[state].slotSchema
-  const parsed = schema.safeParse(raw)
+
+  // Canonicalise before the fast path, or a single aliased key drops every
+  // slot in the turn into the per-key fallback below.
+  const canonical: Slots = {}
+  for (const [k, v] of Object.entries(raw)) canonical[SLOT_ALIASES[k] ?? k] = v
+
+  const parsed = schema.safeParse(canonical)
   if (parsed.success) return { slots: parsed.data as Slots, rejected: [] }
 
   // The whole-object parse failed. It used to end here, returning NO slots and
@@ -58,7 +87,7 @@ function validateSlots(state: StateId, raw: Slots): { slots: Slots; rejected: st
 
   const slots: Slots = {}
   const rejected: string[] = []
-  for (const [key, value] of Object.entries(raw)) {
+  for (const [key, value] of Object.entries(canonical)) {
     const field = shape[key]
     if (!field) {
       rejected.push(key)

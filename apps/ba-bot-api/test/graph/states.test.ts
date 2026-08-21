@@ -79,3 +79,34 @@ describe('state registry', () => {
     expect(FEATURE_CATEGORIES).toContain('Integrations')
   })
 })
+
+describe('cross-cutting slots', () => {
+  // A client names the hardest part whenever they feel like it — three real
+  // interviews did so in three different states. A slot declared on one state
+  // means the most estimate-relevant sentence in the conversation is folded
+  // into `problem` or discarded outright.
+  const ELICITATION = [
+    'PROJECT_IDENTITY', 'SOLUTION_SHAPE', 'USERS_AND_SCOPE', 'FEATURE_MAP', 'CONSTRAINTS',
+  ] as const
+
+  it.each(ELICITATION)('%s accepts complexity_driver and industry', (state) => {
+    const parsed = STATES[state].slotSchema.safeParse({
+      complexity_driver: 'linking records with no shared id',
+      industry: 'construction',
+    })
+    expect(parsed.success).toBe(true)
+  })
+
+  // CONTACT, GENERATE and DONE declare no slots at all, and keeping them empty
+  // is part of what makes lead_id unforgeable.
+  it.each(['CONTACT', 'GENERATE', 'DONE'] as const)('%s stays closed', (state) => {
+    expect(STATES[state].slotSchema.safeParse({ complexity_driver: 'x' }).success).toBe(false)
+    expect(STATES[state].slotSchema.safeParse({ lead_id: 'lead_x' }).success).toBe(false)
+  })
+
+  it('no state anywhere accepts lead_id', () => {
+    for (const def of Object.values(STATES)) {
+      expect(def.slotSchema.safeParse({ lead_id: 'lead_forged' }).success).toBe(false)
+    }
+  })
+})

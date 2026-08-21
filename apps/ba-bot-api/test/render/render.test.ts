@@ -224,3 +224,24 @@ describe('renderQuote', () => {
     expect(md).toMatch(/Phase 1/)
   })
 })
+
+describe('brief — hardest part', () => {
+  // The estimator sizes by task COUNT times a static per-category weight, so
+  // difficulty is the dimension it is otherwise blind to. A hard piece of core
+  // functionality priced identically to a routine one until this section
+  // existed.
+  it('renders the complexity driver as its own section', () => {
+    const md = renderBrief(buildBriefSections({
+      complexity_driver: 'linking WhatsApp threads to emailed artefacts with no shared identifier',
+    }), 'DataHub')
+
+    expect(md).toContain('## Hardest part')
+    expect(md).toContain('no shared identifier')
+  })
+
+  it('marks the section missing rather than omitting it', () => {
+    const md = renderBrief(buildBriefSections({ project_name: 'X' }), 'X')
+    expect(md).toContain('## Hardest part')
+    expect(md).toMatch(/## Hardest part\n_Not captured during the interview._/)
+  })
+})
