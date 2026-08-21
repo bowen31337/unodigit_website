@@ -2,7 +2,9 @@ import type { Hono, MiddlewareHandler } from 'hono'
 import type { Env } from '../env'
 import { readAccessToken, verifyAccessJwt } from '../guards/access'
 import { dashboardCsp, dashboardHtml } from '../admin/dashboard'
+import { signId } from '../util/sign'
 import {
+  transcript,
   daily, eventTypes, funnel, leads, overview, recentEvents, since,
 } from '../db/admin'
 
@@ -148,7 +150,39 @@ export function registerAdminRoutes(app: Hono<{ Bindings: Env }>): void {
   app.get('/admin/api/leads', async (c) => {
     const limit = rowLimit(c.req.query('limit'), 25, 200)
     if (limit === null) return c.json({ error: 'invalid_limit' }, 400)
-    return c.json({ leads: await leads(c.env.DB, limit, c.req.query('q')) })
+
+    const rows = await leads(c.env.DB, limit, c.req.query('q'))
+
+    // The quote link is SIGNED here rather than stored, exactly as the generate
+    // path does it: the signature is a deterministic HMAC over the quote id, so
+    // rebuilding it costs nothing and there is no second copy to fall out of
+    // sync. It points at the public /q/ page, which already renders the quote
+    // and carries its own Download PDF control — the dashboard does not need a
+    // second renderer.
+    const base = c.env.PUBLIC_SITE_URL.replace(/\/$/, '')
+    const withLinks = await Promise.all(
+      rows.map(async (r) => ({
+        ...r,
+        quoteUrl: r.quoteId
+          ? `${base}/q/?id=${r.quoteId}&sig=${await signId(r.quoteId, c.env.QUOTE_LINK_SIGNING_KEY)}`
+          : null,
+      })),
+    )
+
+    return c.json({ leads: withLinks })
+  })
+
+  /**
+   * The conversation behind a lead, for a human reviewing it.
+   *
+   * Read-only and id-scoped. `conversationId` is bound as a parameter and only
+   * ever reaches a SELECT; an unknown id returns an empty array rather than a
+   * 404, so this cannot be used to probe which ids exist.
+   */
+  app.get('/admin/api/conversation', async (c) => {
+    const id = c.req.query('id') ?? ''
+    if (!id) return c.json({ error: 'missing_id' }, 400)
+    return c.json({ conversationId: id, turns: await transcript(c.env.DB, id) })
   })
 
   app.get('/admin/api/events', async (c) => {

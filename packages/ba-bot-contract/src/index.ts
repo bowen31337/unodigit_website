@@ -67,6 +67,11 @@ export const ContactRequestSchema = z.object({
   email: z.string().email().max(200),
   company: z.string().max(160).optional(),
   role: z.string().max(120).optional(),
+  /** Optional mobile. Deliberately NOT pattern-validated: international
+   *  formats vary far more than a regex can capture, and rejecting a real
+   *  number on a lead-capture form costs more than storing an odd one. The
+   *  length cap is the only constraint. */
+  phone: z.string().max(40).optional(),
   // Literal `true` (not `z.boolean()`): an absent or `false` consent field
   // must fail validation, never be treated as a default. Under the
   // Australian Privacy Act, implied consent is not consent — the API can

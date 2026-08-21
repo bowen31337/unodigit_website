@@ -99,6 +99,20 @@ export function dashboardHtml(): string {
   td.mono { font-family: var(--mono); font-size: 12px; color: var(--ink-2); }
   .bar { height: 5px; background: var(--accent); border-radius: 3px; min-width: 2px; }
   .pill { display: inline-block; padding: 1px 7px; border-radius: 20px; font-size: 11px; font-family: var(--mono); }
+  .linkbtn { background: none; border: 0; padding: 0; font: inherit; font-size: 12px;
+             color: var(--accent); cursor: pointer; text-decoration: underline; }
+  .muted { color: var(--ink-2); }
+  dialog#transcript { width: min(720px, 92vw); max-height: 82vh; padding: 0; border: 0;
+    border-radius: 12px; background: var(--panel); color: var(--ink); }
+  dialog#transcript::backdrop { background: rgba(0,0,0,.6); }
+  dialog#transcript header { display: flex; justify-content: space-between; align-items: center;
+    gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); position: sticky; top: 0;
+    background: var(--panel); }
+  #transcript-body { padding: 14px 18px 20px; overflow-y: auto; max-height: calc(82vh - 56px); }
+  .turn { margin-bottom: 14px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
+  .turn-meta { font-family: var(--mono); font-size: 11px; color: var(--ink-2); margin-bottom: 3px; }
+  .turn-user > div:last-child { color: var(--ink); }
+  .turn-bot  > div:last-child { color: var(--ink-2); }
   .pill.err { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
   .pill.ok  { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
   .empty { color: var(--ink-3); font-size: 13px; padding: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
@@ -147,6 +161,16 @@ export function dashboardHtml(): string {
     <div id="leads"></div>
   </section>
 </main>
+
+<!-- Native <dialog>: focus trapping, Escape-to-close and the backdrop come for
+     free, and this page ships no framework to provide them. -->
+<dialog id="transcript">
+  <header>
+    <strong id="transcript-who"></strong>
+    <button type="button" id="transcript-close" class="linkbtn">Close</button>
+  </header>
+  <div id="transcript-body"></div>
+</dialog>
 
 <script>
 (function () {
@@ -270,10 +294,42 @@ export function dashboardHtml(): string {
     ));
   }
 
+  // Opens the conversation behind a lead. Built with textContent only, like
+  // every other node here — a transcript is visitor-typed text and must never
+  // reach innerHTML.
+  function showTranscript(convId, label) {
+    var dlg = document.getElementById('transcript');
+    var body = document.getElementById('transcript-body');
+    document.getElementById('transcript-who').textContent = label;
+    body.replaceChildren(el('p', 'Loading…', 'muted'));
+    dlg.showModal();
+
+    fetch('/admin/api/conversation?id=' + encodeURIComponent(convId), { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var turns = (d && d.turns) || [];
+        if (!turns.length) { body.replaceChildren(el('p', 'No messages recorded.', 'muted')); return; }
+        body.replaceChildren.apply(body, turns.map(function (t) {
+          var wrap = el('div', null, 'turn ' + (t.role === 'user' ? 'turn-user' : 'turn-bot'));
+          wrap.appendChild(el('div', (t.role === 'user' ? 'Visitor' : 'Mary') +
+            ' · ' + new Date(t.createdAt).toLocaleString('en-AU'), 'turn-meta'));
+          wrap.appendChild(el('div', t.content));
+          return wrap;
+        }));
+      })
+      .catch(function () { body.replaceChildren(el('p', 'Could not load the transcript.', 'muted')); });
+  }
+
+  document.getElementById('transcript-close').addEventListener('click', function () {
+    document.getElementById('transcript').close();
+  });
+
   function renderLeads(d) {
     document.getElementById('leads').replaceChildren(table(
       [{ label: 'When' }, { label: 'Email' }, { label: 'Name' }, { label: 'Company' },
-       { label: 'Source' }, { label: 'Consent' }, { label: 'Quotes', numeric: true }, { label: 'Value', numeric: true }],
+       { label: 'Mobile' }, { label: 'Source' }, { label: 'Consent' },
+       { label: 'Quote' }, { label: 'Chat' },
+       { label: 'Value', numeric: true }],
       d.leads,
       function (r) {
         var tr = el('tr');
@@ -281,11 +337,35 @@ export function dashboardHtml(): string {
         tr.appendChild(el('td', r.email, 'mono'));
         tr.appendChild(el('td', r.name || '—'));
         tr.appendChild(el('td', r.company || '—'));
+        tr.appendChild(el('td', r.phone || '—', 'mono'));
         tr.appendChild(el('td', r.utmSource || 'direct', 'mono'));
         var c = el('td');
         c.appendChild(el('span', r.consent ? 'yes' : 'no', 'pill ' + (r.consent ? 'ok' : 'err')));
         tr.appendChild(c);
-        tr.appendChild(el('td', r.quotes, 'n'));
+
+        // The signed /q/ page already renders the quote and carries its own
+        // Download PDF control, so this links there rather than duplicating a
+        // renderer inside the dashboard.
+        var q = el('td');
+        if (r.quoteUrl) {
+          var a = el('a', 'PDF');
+          a.href = r.quoteUrl; a.target = '_blank'; a.rel = 'noopener noreferrer';
+          a.className = 'linkbtn';
+          q.appendChild(a);
+        } else { q.textContent = '—'; }
+        tr.appendChild(q);
+
+        var t = el('td');
+        if (r.conversationId) {
+          var b = el('button', 'View');
+          b.type = 'button'; b.className = 'linkbtn';
+          b.addEventListener('click', function () {
+            showTranscript(r.conversationId, r.name ? r.name + ' · ' + r.email : r.email);
+          });
+          t.appendChild(b);
+        } else { t.textContent = '—'; }
+        tr.appendChild(t);
+
         tr.appendChild(el('td', r.quotes ? fmtAud.format(r.lowAud) + '–' + fmtAud.format(r.highAud) : '—', 'n'));
         return tr;
       }

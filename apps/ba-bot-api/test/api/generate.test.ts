@@ -11,6 +11,9 @@ import { sessionKey } from '../../src/session'
 import { hashIp } from '../../src/util/hash'
 import { newId } from '../../src/util/ids'
 
+/** A lead field that must never leave the leads table during generation. */
+const CANARY_PHONE = '+61 400 111 222'
+
 // The `rate_limit` ledger is keyed on (ip_hash, day) and D1 persists across
 // tests in this file, so a shared IP would leave every test after the first
 // happy path rate-limited — silently turning the rest of the suite into
@@ -222,7 +225,7 @@ describe('POST /api/generate', () => {
     const leadId = newId('lead')
     await insertLead(env.DB, {
       id: leadId, createdAt: Date.now(), name: 'Jane Doe', email: 'jane@acme.com',
-      company: 'Acme', role: null, ipHash: 'x', country: null, asn: null, userAgent: null,
+      company: 'Acme', role: null, phone: CANARY_PHONE, ipHash: 'x', country: null, asn: null, userAgent: null,
       utmSource: null, utmMedium: null, utmCampaign: null, referrer: null, landingPage: null,
       consentMarketing: true, consentTs: Date.now(),
     })

@@ -38,6 +38,7 @@ export default function ContactForm({ pending, onSubmit }: ContactFormProps) {
   const [email, setEmail] = useState('');
   const [company, setCompany] = useState('');
   const [role, setRole] = useState('');
+  const [phone, setPhone] = useState('');
   const [consent, setConsent] = useState(false);
   const [token, setToken] = useState<string | null>(null);
 
@@ -55,6 +56,9 @@ export default function ContactForm({ pending, onSubmit }: ContactFormProps) {
       email: email.trim(),
       company: company.trim() || undefined,
       role: role.trim() || undefined,
+      // Omitted entirely when blank rather than sent as '' — the contract
+      // marks it optional, and an empty string is not a phone number.
+      phone: phone.trim() || undefined,
       consent: true,
       turnstileToken: token,
       ...attribution(),
@@ -115,6 +119,20 @@ export default function ContactForm({ pending, onSubmit }: ContactFormProps) {
         autoComplete="organization-title"
         value={role}
         onChange={(e) => setRole(e.target.value)}
+      />
+
+      {/* type="tel" for the numeric keypad on mobile, with no `required` and no
+          pattern: international formats vary more than a regex can capture, and
+          rejecting a real number on a lead-capture form costs more than storing
+          an odd one. Validation is a length cap in the contract only. */}
+      <input
+        type="tel"
+        className="field"
+        placeholder="Mobile (optional)"
+        autoComplete="tel"
+        inputMode="tel"
+        value={phone}
+        onChange={(e) => setPhone(e.target.value)}
       />
 
       <label className="type-footnote flex cursor-pointer items-start gap-s3">

@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers'
 import { describe, it, expect, beforeAll } from 'vitest'
-import { since, overview, funnel, daily, leads } from '../../src/db/admin'
-import { createConversation, insertLead } from '../../src/db/queries'
+import { since, overview, funnel, daily, leads, transcript } from '../../src/db/admin'
+import { appendMessageAtNextSeq, createConversation, insertLead } from '../../src/db/queries'
 import { newId } from '../../src/util/ids'
 
 const DAY = 86_400_000
@@ -119,7 +119,7 @@ describe('leads listing', () => {
     const id = newId('lead')
     await insertLead(env.DB, {
       id, createdAt: NOW - DAY, name: 'Test Person', email: 'lead@example.com',
-      company: 'Acme', role: 'CTO', ipHash: 'h', country: 'AU', asn: null,
+      company: 'Acme', role: 'CTO', phone: '+61 400 000 000', ipHash: 'h', country: 'AU', asn: null,
       userAgent: null, utmSource: null, utmMedium: null, utmCampaign: null,
       referrer: null, landingPage: null, consentMarketing: true, consentTs: NOW - DAY,
     })
@@ -129,5 +129,34 @@ describe('leads listing', () => {
     expect(rows[0]!.email).toBe('lead@example.com')
     expect(rows[0]!.consent).toBe(true)
     expect(rows[0]!.quotes).toBe(0)
+  })
+})
+
+describe('transcript', () => {
+  it('returns the conversation in sequence order, as the visitor saw it', async () => {
+    const id = newId('conv')
+    await createConversation(env.DB, id, NOW)
+    await appendMessageAtNextSeq(env.DB, {
+      id: newId('msg'), conversationId: id, role: 'user',
+      content: 'We need stock tracking', slotsJson: null, offTopic: false, createdAt: NOW,
+    })
+    await appendMessageAtNextSeq(env.DB, {
+      id: newId('msg'), conversationId: id, role: 'assistant',
+      content: 'Who will use it day to day?', slotsJson: '{}', offTopic: false,
+      readyToAdvance: true, createdAt: NOW,
+    })
+
+    const turns = await transcript(env.DB, id)
+
+    expect(turns.map((t) => t.role)).toEqual(['user', 'assistant'])
+    // The visitor-facing reply, not the JSON envelope the model emitted.
+    expect(turns[1]!.content).toBe('Who will use it day to day?')
+    expect(turns[0]!.seq).toBeLessThan(turns[1]!.seq)
+  })
+
+  // An unknown id must not be distinguishable from a real one with no messages:
+  // the endpoint would otherwise confirm which conversation ids exist.
+  it('returns an empty array for an unknown conversation', async () => {
+    expect(await transcript(env.DB, 'conv_does_not_exist')).toEqual([])
   })
 })

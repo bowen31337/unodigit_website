@@ -9,6 +9,9 @@ import { hashIp } from '../../src/util/hash'
 import { newId } from '../../src/util/ids'
 import { verifyId } from '../../src/util/sign'
 
+/** A lead field that must never leave the leads table during generation. */
+const CANARY_PHONE = '+61 400 111 222'
+
 /**
  * The signed download link is now the ONLY delivery mechanism.
  *
@@ -116,7 +119,7 @@ async function seed(leadEmail: string | null = null, leadName: string | null = n
     const leadId = newId('lead')
     await insertLead(env.DB, {
       id: leadId, createdAt: Date.now(), name: leadName, email: leadEmail,
-      company: 'Acme', role: null, ipHash: 'x', country: null, asn: null, userAgent: null,
+      company: 'Acme', role: null, phone: CANARY_PHONE, ipHash: 'x', country: null, asn: null, userAgent: null,
       utmSource: null, utmMedium: null, utmCampaign: null, referrer: null, landingPage: null,
       consentMarketing: true, consentTs: Date.now(),
     })
@@ -377,12 +380,15 @@ describe('POST /api/generate — the signed quote link', () => {
     expect(llmBody).not.toContain(CANARY)
     expect(llmBody).not.toContain(CANARY_NAME)
     expect(llmBody).not.toContain('canary-pii')
+    // phone is PII on the same row (migration 0005) and must not leak either.
+    expect(llmBody).not.toContain(CANARY_PHONE)
 
     const brief = await briefRow(conversationId)
     const quote = await quoteRowFor(brief!.id)
     for (const stored of [brief!.markdown, quote!.markdown, JSON.stringify(json)]) {
       expect(stored).not.toContain(CANARY)
       expect(stored).not.toContain(CANARY_NAME)
+      expect(stored).not.toContain(CANARY_PHONE)
       expect(stored).not.toMatch(/@/)
     }
 

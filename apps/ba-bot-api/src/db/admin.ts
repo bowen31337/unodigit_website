@@ -289,6 +289,11 @@ export interface LeadRow {
   country: string | null
   utmSource: string | null
   consent: boolean
+  phone: string | null
+  /** Needed by the dashboard to open the transcript and the quote artifact.
+   *  Null when the lead never reached a brief. */
+  conversationId: string | null
+  quoteId: string | null
   quotes: number
   lowAud: number
   highAud: number
@@ -302,7 +307,9 @@ export async function leads(db: D1Database, limit: number, q?: string): Promise<
     .prepare(
       `SELECT
          l.id, l.created_at, l.name, l.email, l.company, l.role, l.country,
-         l.utm_source, l.consent_marketing,
+         l.utm_source, l.consent_marketing, l.phone,
+         MAX(c.id)                     AS conversation_id,
+         MAX(qt.id)                    AS quote_id,
          COUNT(qt.id)                  AS quotes,
          COALESCE(SUM(qt.low_aud), 0)  AS low_aud,
          COALESCE(SUM(qt.high_aud), 0) AS high_aud
@@ -327,6 +334,9 @@ export async function leads(db: D1Database, limit: number, q?: string): Promise<
       country: string | null
       utm_source: string | null
       consent_marketing: number
+      phone: string | null
+      conversation_id: string | null
+      quote_id: string | null
       quotes: number
       low_aud: number
       high_aud: number
@@ -342,8 +352,47 @@ export async function leads(db: D1Database, limit: number, q?: string): Promise<
     country: r.country,
     utmSource: r.utm_source,
     consent: r.consent_marketing === 1,
+    phone: r.phone,
+    conversationId: r.conversation_id,
+    quoteId: r.quote_id,
     quotes: r.quotes,
     lowAud: r.low_aud,
     highAud: r.high_aud,
+  }))
+}
+
+export interface TranscriptTurn {
+  seq: number
+  role: string
+  content: string
+  createdAt: number
+  offTopic: boolean
+}
+
+/**
+ * The conversation as the visitor saw it.
+ *
+ * `messages.content` holds the visitor-facing text — the assistant's `reply`,
+ * not the JSON envelope the model emitted (see llm/history for why those are
+ * different). That is exactly what a human reviewing a lead wants to read.
+ *
+ * Carries whatever the visitor typed, so it is personal information: the route
+ * exposing it sets no-store and sits behind Access, like the leads endpoint.
+ */
+export async function transcript(db: D1Database, conversationId: string): Promise<TranscriptTurn[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT seq, role, content, created_at, off_topic
+       FROM messages WHERE conversation_id = ? ORDER BY seq ASC`,
+    )
+    .bind(conversationId)
+    .all<{ seq: number; role: string; content: string; created_at: number; off_topic: number }>()
+
+  return results.map((r) => ({
+    seq: r.seq,
+    role: r.role,
+    content: r.content,
+    createdAt: r.created_at,
+    offTopic: r.off_topic === 1,
   }))
 }

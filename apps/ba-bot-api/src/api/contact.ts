@@ -51,6 +51,9 @@ export function registerContactRoutes(app: Hono<{ Bindings: Env }>): void {
       email: b.email,
       company: b.company ?? null,
       role: b.role ?? null,
+      // Trimmed, and an all-whitespace entry becomes null rather than a blank
+      // string — "gave no number" and "gave a space" are the same fact.
+      phone: b.phone?.trim() ? b.phone.trim() : null,
       ipHash: await hashIp(ip ?? 'unknown', c.env.IP_HASH_SALT),
       country: (cf?.country as string | undefined) ?? null,
       asn: cf?.asn ? String(cf.asn) : null,
