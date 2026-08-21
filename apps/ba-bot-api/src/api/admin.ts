@@ -4,6 +4,7 @@ import { readAccessToken, verifyAccessJwt } from '../guards/access'
 import { dashboardCsp, dashboardHtml } from '../admin/dashboard'
 import { signId } from '../util/sign'
 import {
+  leadsOutsideWindow,
   transcript,
   daily, eventTypes, funnel, leads, overview, recentEvents, since,
 } from '../db/admin'
@@ -150,8 +151,11 @@ export function registerAdminRoutes(app: Hono<{ Bindings: Env }>): void {
   app.get('/admin/api/leads', async (c) => {
     const limit = rowLimit(c.req.query('limit'), 25, 200)
     if (limit === null) return c.json({ error: 'invalid_limit' }, 400)
+    const days = windowDays(c)
+    if (days === null) return c.json({ error: 'invalid_days' }, 400)
 
-    const rows = await leads(c.env.DB, limit, c.req.query('q'))
+    const from = since(days)
+    const rows = await leads(c.env.DB, limit, c.req.query('q'), from)
 
     // The quote link is SIGNED here rather than stored, exactly as the generate
     // path does it: the signature is a deterministic HMAC over the quote id, so
@@ -169,7 +173,12 @@ export function registerAdminRoutes(app: Hono<{ Bindings: Env }>): void {
       })),
     )
 
-    return c.json({ leads: withLinks })
+    return c.json({
+      leads: withLinks,
+      // Lets the empty state distinguish "none in this window" from "none
+      // ever" — the distinction the operator actually needs.
+      olderThanWindow: await leadsOutsideWindow(c.env.DB, from),
+    })
   })
 
   /**

@@ -217,8 +217,12 @@ export function dashboardHtml(): string {
     return t;
   }
 
-  function table(cols, rows, build) {
-    if (!rows.length) return el('div', 'Nothing in this window.', 'empty');
+  // emptyMsg is per-caller because a single generic string lied. The leads
+  // table used to say "Nothing in this window" while running no window at all,
+  // which sent operators to widen a filter that changed nothing and made a
+  // working portal look broken.
+  function table(cols, rows, build, emptyMsg) {
+    if (!rows.length) return el('div', emptyMsg || 'Nothing in this window.', 'empty');
     var t = el('table'), thead = el('thead'), tr = el('tr');
     cols.forEach(function (c) {
       var th = el('th', c.label, c.numeric ? 'n' : '');
@@ -368,14 +372,28 @@ export function dashboardHtml(): string {
 
         tr.appendChild(el('td', r.quotes ? fmtAud.format(r.lowAud) + '–' + fmtAud.format(r.highAud) : '—', 'n'));
         return tr;
-      }
+      },
+      leadsEmptyMessage(d)
     ));
   }
 
   var leadTimer;
+  function leadsEmptyMessage(d) {
+    var q = document.getElementById('q').value.trim();
+    if (q) return 'No leads match “' + q + '”. Clear the filter to see all leads.';
+    var older = d.olderThanWindow || 0;
+    if (older > 0) {
+      return 'No leads in this window — ' + older + ' older. Choose All to see them.';
+    }
+    return 'No leads yet. A lead is created when a visitor completes the interview '
+         + 'and submits the contact form.';
+  }
+
   function loadLeads() {
     var q = document.getElementById('q').value.trim();
-    get('/admin/api/leads?limit=100' + (q ? '&q=' + encodeURIComponent(q) : ''))
+    // Carries the window so the table agrees with its own tile — the tile has
+    // always been windowed and the table was not.
+    get('/admin/api/leads?limit=100&days=' + days + (q ? '&q=' + encodeURIComponent(q) : ''))
       .then(renderLeads).catch(function (e) { if (e.message !== 'reauth') fail(e.message); });
   }
 

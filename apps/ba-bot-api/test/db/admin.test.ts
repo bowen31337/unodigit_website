@@ -1,6 +1,8 @@
 import { env } from 'cloudflare:workers'
 import { describe, it, expect, beforeAll } from 'vitest'
-import { since, overview, funnel, daily, leads, transcript } from '../../src/db/admin'
+import {
+  since, overview, funnel, daily, leads, transcript, leadsOutsideWindow,
+} from '../../src/db/admin'
 import { appendMessageAtNextSeq, createConversation, insertLead } from '../../src/db/queries'
 import { newId } from '../../src/util/ids'
 
@@ -158,5 +160,50 @@ describe('transcript', () => {
   // the endpoint would otherwise confirm which conversation ids exist.
   it('returns an empty array for an unknown conversation', async () => {
     expect(await transcript(env.DB, 'conv_does_not_exist')).toEqual([])
+  })
+})
+
+describe('leads window', () => {
+  // The tile has always been windowed and the table was not, so a lead older
+  // than the selected range was counted 0 in the tile while still listed in
+  // the table — under an empty-state that read "Nothing in this window",
+  // naming a filter that was not being applied.
+  async function seedLead(id: string, createdAt: number, email: string) {
+    await insertLead(env.DB, {
+      id, createdAt, name: null, email, company: null, role: null, phone: null,
+      ipHash: 'h', country: null, asn: null, userAgent: null, utmSource: null,
+      utmMedium: null, utmCampaign: null, referrer: null, landingPage: null,
+      consentMarketing: true, consentTs: createdAt,
+    })
+  }
+
+  beforeAll(async () => {
+    await env.DB.prepare('DELETE FROM leads').run()
+    await seedLead(newId('lead'), NOW - 2 * DAY, 'recent@example.com')
+    await seedLead(newId('lead'), NOW - 45 * DAY, 'ancient@example.com')
+  })
+
+  it('excludes a lead older than the window', async () => {
+    const rows = await leads(env.DB, 50, undefined, since(7, NOW))
+    expect(rows.map((r) => r.email)).toEqual(['recent@example.com'])
+  })
+
+  it('includes everything when the window is all time', async () => {
+    const rows = await leads(env.DB, 50, undefined, since(0, NOW))
+    expect(rows).toHaveLength(2)
+  })
+
+  it('agrees with the overview tile for the same window', async () => {
+    const from = since(7, NOW)
+    const rows = await leads(env.DB, 50, undefined, from)
+    const o = await overview(env.DB, from)
+    expect(rows).toHaveLength(o.leads)
+  })
+
+  // The number that makes an empty table honest: "none in this window, N
+  // older" rather than a bare "none", which reads as "none ever".
+  it('counts the leads that fall outside the window', async () => {
+    expect(await leadsOutsideWindow(env.DB, since(7, NOW))).toBe(1)
+    expect(await leadsOutsideWindow(env.DB, since(0, NOW))).toBe(0)
   })
 })

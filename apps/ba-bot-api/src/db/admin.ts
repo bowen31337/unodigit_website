@@ -299,9 +299,22 @@ export interface LeadRow {
   highAud: number
 }
 
-/** Recent leads with their quote totals. Carries personal information — see
- *  the note in api/admin.ts about why this endpoint sets no-store. */
-export async function leads(db: D1Database, limit: number, q?: string): Promise<LeadRow[]> {
+/**
+ * Recent leads with their quote totals.
+ *
+ * Honours the dashboard's time window, which it previously ignored. That gap
+ * was not cosmetic: the `overview.leads` TILE has always been windowed, so a
+ * lead older than the selected window was counted 0 in the tile while still
+ * listed in the table — and the table's empty state read "Nothing in this
+ * window", naming a filter that was not being applied. An operator seeing no
+ * leads was told to widen a window that would change nothing.
+ *
+ * Carries personal information — see the note in api/admin.ts about why this
+ * endpoint sets no-store.
+ */
+export async function leads(
+  db: D1Database, limit: number, q?: string, from = 0,
+): Promise<LeadRow[]> {
   const like = q && q.length > 0 ? `%${q}%` : null
   const { results } = await db
     .prepare(
@@ -317,13 +330,14 @@ export async function leads(db: D1Database, limit: number, q?: string): Promise<
        LEFT JOIN conversations c ON c.lead_id = l.id
        LEFT JOIN briefs b        ON b.conversation_id = c.id
        LEFT JOIN quotes qt       ON qt.brief_id = b.id
-       WHERE ?1 IS NULL
-          OR l.email LIKE ?1 OR l.name LIKE ?1 OR l.company LIKE ?1
+       WHERE l.created_at >= ?3
+         AND (?1 IS NULL
+              OR l.email LIKE ?1 OR l.name LIKE ?1 OR l.company LIKE ?1)
        GROUP BY l.id
        ORDER BY l.created_at DESC
        LIMIT ?2`,
     )
-    .bind(like, limit)
+    .bind(like, limit, from)
     .all<{
       id: string
       created_at: number
@@ -395,4 +409,20 @@ export async function transcript(db: D1Database, conversationId: string): Promis
     createdAt: r.created_at,
     offTopic: r.off_topic === 1,
   }))
+}
+
+/**
+ * Leads that exist but fall outside the current window.
+ *
+ * The number that makes an empty table honest. Without it the dashboard can
+ * only say "none", which is indistinguishable from "none ever" — the ambiguity
+ * that had this portal reported as broken when it was working.
+ */
+export async function leadsOutsideWindow(db: D1Database, from: number): Promise<number> {
+  if (from <= 0) return 0
+  const row = await db
+    .prepare('SELECT COUNT(*) AS n FROM leads WHERE created_at < ?')
+    .bind(from)
+    .first<{ n: number }>()
+  return row?.n ?? 0
 }
