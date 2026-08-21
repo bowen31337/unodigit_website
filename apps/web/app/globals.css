@@ -581,6 +581,22 @@
   }
   .btn:active { transform: scale(0.97); }    /* never scale(0) */
 
+  /* A disabled control must LOOK disabled. There was no :disabled rule at all,
+     so `<button disabled>` rendered at full opacity, full accent fill and
+     cursor:pointer — the contact form's primary action looked tappable and
+     silently did nothing until email, consent and the Turnstile token were all
+     present. Caught by inspecting the rendered form, not the markup.
+
+     The hover/active overrides are :disabled-qualified so they outrank
+     `.btn-filled:hover` (0,3,0 vs 0,2,0) — otherwise a dead button still
+     brightens under the pointer and springs on press. */
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .btn:disabled:hover,
+  .btn:disabled:active { filter: none; transform: none; }
+
   .btn-filled { background: var(--accent-solid); color: var(--on-accent); }
   .btn-filled:hover  { filter: brightness(1.08); }
   .btn-filled:active { filter: brightness(0.94); }
