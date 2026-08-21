@@ -167,7 +167,7 @@ describe('the dashboard and its data', () => {
     const res = await call('/admin/api/summary?days=30', { jwt: await token() })
     expect(res.status).toBe(200)
     const body = (await res.json()) as Record<string, unknown>
-    expect(Object.keys(body).sort()).toEqual(['daily', 'days', 'events', 'funnel', 'overview'])
+    expect(Object.keys(body).sort()).toEqual(['daily', 'days', 'events', 'funnel', 'models', 'overview'])
   })
 
   it('reports who Access says you are', async () => {

@@ -15,6 +15,8 @@ function stub(responses: Array<Partial<ChatResponse>>) {
         finishReason: r.finishReason ?? 'stop',
         promptTokens: 500,
         completionTokens: 200,
+        cachedTokens: 0,
+        model: 'test-model',
       }
     },
   }
@@ -107,6 +109,8 @@ describe('runEstimate program mode', () => {
         return {
           content: sent.length === 1 ? bigSingle : program,
           finishReason: 'stop',
+          cachedTokens: 0,
+          model: 'test-model',
           promptTokens: 500,
           completionTokens: 200,
         }

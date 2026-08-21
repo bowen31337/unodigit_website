@@ -15,7 +15,14 @@ export const TurnOutputSchema = z
 export type TurnOutput = z.infer<typeof TurnOutputSchema>
 
 export type TurnResult =
-  | { ok: true; value: TurnOutput; promptTokens: number; completionTokens: number }
+  | {
+      ok: true
+      value: TurnOutput
+      promptTokens: number
+      completionTokens: number
+      cachedTokens: number
+      model: string
+    }
   | { ok: false; reason: 'parse' | 'empty' | 'truncated' | 'provider' }
 
 const REPAIR_INSTRUCTION =
@@ -117,6 +124,8 @@ export async function runTurn(
         value: parsed,
         promptTokens: res.promptTokens,
         completionTokens: res.completionTokens,
+        cachedTokens: res.cachedTokens,
+        model: res.model,
       }
     }
 

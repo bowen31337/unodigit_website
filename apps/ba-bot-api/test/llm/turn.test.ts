@@ -12,6 +12,7 @@ function stubClient(responses: Partial<ChatResponse>[]): LlmClient & { calls: nu
       return {
         content: r.content ?? '', finishReason: r.finishReason ?? 'stop',
         promptTokens: r.promptTokens ?? 10, completionTokens: r.completionTokens ?? 5,
+        cachedTokens: r.cachedTokens ?? 0, model: r.model ?? 'test-model',
       }
     },
   }
@@ -53,7 +54,7 @@ describe('runTurn', () => {
     const client: LlmClient = {
       async chat(req) {
         seen.push(req.messages.length)
-        return { content: 'nope', finishReason: 'stop', promptTokens: 1, completionTokens: 1 }
+        return { content: 'nope', finishReason: 'stop', promptTokens: 1, completionTokens: 1 , cachedTokens: 0, model: 'test-model'}
       },
     }
     const r = await runTurn(client, args)
@@ -106,7 +107,7 @@ describe('runTurn', () => {
         i += 1
         return {
           content: i === 1 ? '   ' : good,
-          finishReason: 'stop', promptTokens: 10, completionTokens: 5,
+          finishReason: 'stop', promptTokens: 10, completionTokens: 5, cachedTokens: 0, model: 'test-model',
         }
       },
     }
@@ -153,7 +154,7 @@ describe('runTurn', () => {
     const client: LlmClient = {
       async chat(req) {
         seen = req.reasoning
-        return { content: good, finishReason: 'stop', promptTokens: 1, completionTokens: 1 }
+        return { content: good, finishReason: 'stop', promptTokens: 1, completionTokens: 1 , cachedTokens: 0, model: 'test-model'}
       },
     }
     await runTurn(client, args)
@@ -165,7 +166,7 @@ describe('runTurn', () => {
     const client: LlmClient = {
       async chat(req) {
         seen = req.reasoning
-        return { content: good, finishReason: 'stop', promptTokens: 1, completionTokens: 1 }
+        return { content: good, finishReason: 'stop', promptTokens: 1, completionTokens: 1 , cachedTokens: 0, model: 'test-model'}
       },
     }
     await runTurn(client, { ...args, reasoning: false })
@@ -188,7 +189,7 @@ describe('runTurn', () => {
       async chat() {
         calls += 1
         if (calls === 1) throw new Error('502')
-        return { content: good, finishReason: 'stop', promptTokens: 1, completionTokens: 1 }
+        return { content: good, finishReason: 'stop', promptTokens: 1, completionTokens: 1 , cachedTokens: 0, model: 'test-model'}
       },
     }
     const r = await runTurn(client, args)

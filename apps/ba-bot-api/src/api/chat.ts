@@ -11,7 +11,7 @@ import { STATES, type Slots, type StateId } from '../graph/states'
 import { contactHandoffReply } from '../graph/handoff'
 import {
   appendMessageAtNextSeq, createConversation, getConversation, listMessages,
-  recordEvent,
+  recordEvent, recordLlmUsage,
 } from '../db/queries'
 import { recordTurn, turnsToday, utcDay } from '../guards/ratelimit'
 import { verifyTurnstile } from '../guards/turnstile'
@@ -257,6 +257,17 @@ export function registerChatRoutes(
       .prepare('UPDATE conversations SET tokens_in = tokens_in + ?, tokens_out = tokens_out + ? WHERE id = ?')
       .bind(turn.promptTokens, turn.completionTokens, convId)
       .run()
+
+    // Per-call detail the conversation counters cannot hold: which model, and
+    // how much of the prompt the provider served from its prefix cache.
+    await recordLlmUsage(c.env.DB, {
+      conversationId: convId,
+      model: turn.model,
+      purpose: 'chat',
+      promptTokens: turn.promptTokens,
+      cachedTokens: turn.cachedTokens,
+      completionTokens: turn.completionTokens,
+    })
 
     return c.json({
       conversationId: convId,

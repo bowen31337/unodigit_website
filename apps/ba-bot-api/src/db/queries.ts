@@ -275,3 +275,38 @@ export async function getBriefByConversation(
  * src/estimator/, the renderers, or any event payload during generation. If a
  * future story genuinely needs it, add it back deliberately — do not widen an
  * existing lead query to smuggle it. */
+
+export interface LlmUsageInsert {
+  conversationId: string | null
+  model: string
+  purpose: 'chat' | 'estimate'
+  promptTokens: number
+  cachedTokens: number
+  completionTokens: number
+}
+
+/**
+ * One row per provider call.
+ *
+ * Never allowed to fail a request: usage is telemetry, and losing a row is a
+ * gap in a chart, whereas throwing here would turn a completed interview turn
+ * into a 500 the visitor sees.
+ */
+export async function recordLlmUsage(db: D1Database, row: LlmUsageInsert): Promise<void> {
+  try {
+    await db
+      .prepare(
+        `INSERT INTO llm_usage
+           (id, conversation_id, model, purpose, prompt_tokens, cached_tokens, completion_tokens, created_at)
+         VALUES (?,?,?,?,?,?,?,?)`,
+      )
+      .bind(
+        `usg_${crypto.randomUUID().replace(/-/g, '')}`,
+        row.conversationId, row.model, row.purpose,
+        row.promptTokens, row.cachedTokens, row.completionTokens, Date.now(),
+      )
+      .run()
+  } catch {
+    /* telemetry only — see above */
+  }
+}

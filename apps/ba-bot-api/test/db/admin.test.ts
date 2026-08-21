@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers'
 import { describe, it, expect, beforeAll } from 'vitest'
 import {
-  since, overview, funnel, daily, leads, transcript, leadsOutsideWindow,
+  since, overview, funnel, daily, leads, transcript, leadsOutsideWindow, modelUsage,
 } from '../../src/db/admin'
 import { appendMessageAtNextSeq, createConversation, insertLead } from '../../src/db/queries'
 import { newId } from '../../src/util/ids'
@@ -275,5 +275,57 @@ describe('industry on the lead row', () => {
     await env.DB.prepare('UPDATE conversations SET industry = NULL').run()
     const [row] = await leads(env.DB, 10, undefined, since(0, NOW))
     expect(row!.industry).toBeNull()
+  })
+})
+
+describe('modelUsage', () => {
+  // conversations.tokens_in/out sums every call into one pair of counters, so
+  // it can answer neither "what is the estimator costing" nor "is the prefix
+  // cache working". This is why the table exists.
+  beforeAll(async () => {
+    await env.DB.prepare('DELETE FROM llm_usage').run()
+    const rows: Array<[string, string, number, number, number, number]> = [
+      ['deepseek-v4-flash', 'chat', 1000, 800, 120, NOW - DAY],
+      ['deepseek-v4-flash', 'chat', 1200, 900, 140, NOW - DAY],
+      ['deepseek-v4-pro', 'estimate', 900, 0, 4200, NOW - DAY],
+      ['deepseek-v4-flash', 'chat', 500, 400, 60, NOW - 60 * DAY], // outside 7d
+    ]
+    for (const [model, purpose, p, cached, comp, at] of rows) {
+      await env.DB
+        .prepare(`INSERT INTO llm_usage
+          (id, conversation_id, model, purpose, prompt_tokens, cached_tokens, completion_tokens, created_at)
+          VALUES (?, NULL, ?, ?, ?, ?, ?, ?)`)
+        .bind(newId('usg'), model, purpose, p, cached, comp, at)
+        .run()
+    }
+  })
+
+  it('splits usage by model and purpose', async () => {
+    const rows = await modelUsage(env.DB, since(7, NOW))
+    const chat = rows.find((r) => r.purpose === 'chat')!
+    const est = rows.find((r) => r.purpose === 'estimate')!
+
+    expect(chat.model).toBe('deepseek-v4-flash')
+    expect(chat.calls).toBe(2)
+    expect(chat.promptTokens).toBe(2200)
+    expect(chat.cachedTokens).toBe(1700)
+    expect(est.model).toBe('deepseek-v4-pro')
+    expect(est.completionTokens).toBe(4200)
+  })
+
+  it('honours the window', async () => {
+    const week = await modelUsage(env.DB, since(7, NOW))
+    const all = await modelUsage(env.DB, since(0, NOW))
+    expect(week.find((r) => r.purpose === 'chat')!.calls).toBe(2)
+    expect(all.find((r) => r.purpose === 'chat')!.calls).toBe(3)
+  })
+
+  // cached_tokens is a SUBSET of prompt_tokens, so a hit rate is
+  // cached/prompt. Asserting the invariant keeps the dashboard's percentage
+  // honest if the provider mapping ever changes.
+  it('keeps cached tokens within prompt tokens', async () => {
+    for (const r of await modelUsage(env.DB, since(0, NOW))) {
+      expect(r.cachedTokens).toBeLessThanOrEqual(r.promptTokens)
+    }
   })
 })

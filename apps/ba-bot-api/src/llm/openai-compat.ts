@@ -6,7 +6,15 @@ interface RawChoice {
 }
 interface RawResponse {
   choices?: RawChoice[]
-  usage?: { prompt_tokens?: number; completion_tokens?: number }
+  model?: string
+  usage?: {
+    prompt_tokens?: number
+    completion_tokens?: number
+    // DeepSeek reports the cache hit two ways; OpenAI-compatible providers use
+    // the nested form. Read both so neither provider silently reports zero.
+    prompt_cache_hit_tokens?: number
+    prompt_tokens_details?: { cached_tokens?: number }
+  }
 }
 
 export function createOpenAiCompatClient(opts: { baseUrl: string; apiKey: string }): LlmClient {
@@ -44,6 +52,11 @@ export function createOpenAiCompatClient(opts: { baseUrl: string; apiKey: string
         finishReason: choice?.finish_reason ?? 'stop',
         promptTokens: raw.usage?.prompt_tokens ?? 0,
         completionTokens: raw.usage?.completion_tokens ?? 0,
+        cachedTokens:
+          raw.usage?.prompt_cache_hit_tokens ??
+          raw.usage?.prompt_tokens_details?.cached_tokens ??
+          0,
+        model: raw.model ?? req.model,
       }
     },
   }

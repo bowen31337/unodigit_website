@@ -8,7 +8,7 @@ import { transcriptFilename, transcriptMarkdown } from '../admin/transcript-md'
 import {
   leadsOutsideWindow,
   transcript,
-  daily, eventTypes, funnel, leads, overview, recentEvents, since,
+  daily, eventTypes, funnel, leads, modelUsage, overview, recentEvents, since,
 } from '../db/admin'
 
 /** Lets the gate hand the verified identity to handlers without re-verifying,
@@ -147,7 +147,10 @@ export function registerAdminRoutes(app: Hono<{ Bindings: Env }>): void {
       eventTypes(c.env.DB, from),
     ])
 
-    return c.json({ days, overview: summary, funnel: funnelRows, daily: dailyRows, events })
+    return c.json({
+      days, overview: summary, funnel: funnelRows, daily: dailyRows, events,
+      models: await modelUsage(c.env.DB, since(days)),
+    })
   })
 
   app.get('/admin/api/leads', async (c) => {

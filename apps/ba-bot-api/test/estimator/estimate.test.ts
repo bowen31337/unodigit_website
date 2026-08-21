@@ -16,6 +16,8 @@ function stub(responses: Array<Partial<ChatResponse>>): LlmClient & { calls: num
         content: r.content ?? '',
         finishReason: r.finishReason ?? 'stop',
         promptTokens: r.promptTokens ?? 500,
+        cachedTokens: 0,
+        model: 'test-model',
         completionTokens: r.completionTokens ?? 200,
       }
     },
@@ -144,7 +146,7 @@ describe('runEstimate', () => {
       async chat(req) {
         seen.push(req.maxTokens ?? 0)
         seenReasoning = req.reasoning
-        return { content: validSingle, finishReason: 'stop', promptTokens: 1, completionTokens: 1 }
+        return { content: validSingle, finishReason: 'stop', promptTokens: 1, completionTokens: 1 , cachedTokens: 0, model: 'test-model'}
       },
     }
     await runEstimate(client, args)
@@ -165,7 +167,7 @@ describe('runEstimate', () => {
         // First pass must exceed programThreshold to reach the program pass.
         return {
           content: seen.length === 1 ? oversizedSingle : validProgram,
-          finishReason: 'stop', promptTokens: 1, completionTokens: 1,
+          finishReason: 'stop', promptTokens: 1, completionTokens: 1, cachedTokens: 0, model: 'test-model',
         }
       },
     }

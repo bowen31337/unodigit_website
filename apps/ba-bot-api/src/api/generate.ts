@@ -10,7 +10,7 @@ import { buildBriefSections, renderBrief } from '../render/brief'
 import { renderQuote } from '../render/quote'
 import {
   getBriefByConversation, getConversation, insertBrief,
-  insertQuote, recordEvent, type QuoteRow,
+  insertQuote, recordEvent, recordLlmUsage, type QuoteRow,
 } from '../db/queries'
 import { signId } from '../util/sign'
 import { quotesToday, recordQuote, utcDay } from '../guards/ratelimit'
@@ -374,6 +374,17 @@ export function registerGenerateRoutes(
       .prepare('UPDATE conversations SET tokens_in = tokens_in + ?, tokens_out = tokens_out + ? WHERE id = ?')
       .bind(estimate.promptTokens, estimate.completionTokens, conversationId)
       .run()
+
+    // The heavy model is the most expensive call in the app; attributing it
+    // separately is the whole point of the usage table.
+    await recordLlmUsage(c.env.DB, {
+      conversationId,
+      model: estimate.model,
+      purpose: 'estimate',
+      promptTokens: estimate.promptTokens,
+      cachedTokens: estimate.cachedTokens,
+      completionTokens: estimate.completionTokens,
+    })
 
     return await finish(
       quoteId, quote, headlineFor(quote),

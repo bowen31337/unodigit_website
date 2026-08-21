@@ -29,6 +29,12 @@ export interface ChatResponse {
   finishReason: string
   promptTokens: number
   completionTokens: number
+  /** Portion of `promptTokens` the provider served from its prefix cache — a
+   *  SUBSET of it, not an addition. 0 when the provider does not report one. */
+  cachedTokens: number
+  /** Echoed back by the provider. Recorded rather than assumed from config, so
+   *  a silent substitution upstream is visible instead of invisible. */
+  model: string
 }
 
 export interface LlmClient {

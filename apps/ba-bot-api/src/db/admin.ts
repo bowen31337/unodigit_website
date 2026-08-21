@@ -449,3 +449,51 @@ export async function leadsOutsideWindow(db: D1Database, from: number): Promise<
     .first<{ n: number }>()
   return row?.n ?? 0
 }
+
+export interface ModelUsageRow {
+  model: string
+  purpose: string
+  calls: number
+  promptTokens: number
+  cachedTokens: number
+  completionTokens: number
+}
+
+/**
+ * LLM usage split by model and purpose.
+ *
+ * `conversations.tokens_in/out` sums every call into one pair of counters, so
+ * it cannot say what the estimator costs against the chat turns, nor whether
+ * the prefix cache is working. This can.
+ *
+ * `cached_tokens` is a SUBSET of `prompt_tokens`, so a hit rate is
+ * cached/prompt — never cached/(prompt+cached).
+ */
+export async function modelUsage(db: D1Database, from: number): Promise<ModelUsageRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT model, purpose,
+              COUNT(*)                          AS calls,
+              COALESCE(SUM(prompt_tokens), 0)     AS prompt_tokens,
+              COALESCE(SUM(cached_tokens), 0)     AS cached_tokens,
+              COALESCE(SUM(completion_tokens), 0) AS completion_tokens
+       FROM llm_usage
+       WHERE created_at >= ?
+       GROUP BY model, purpose
+       ORDER BY (prompt_tokens + completion_tokens) DESC`,
+    )
+    .bind(from)
+    .all<{
+      model: string; purpose: string; calls: number
+      prompt_tokens: number; cached_tokens: number; completion_tokens: number
+    }>()
+
+  return results.map((r) => ({
+    model: r.model,
+    purpose: r.purpose,
+    calls: r.calls,
+    promptTokens: r.prompt_tokens,
+    cachedTokens: r.cached_tokens,
+    completionTokens: r.completion_tokens,
+  }))
+}

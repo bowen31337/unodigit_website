@@ -3,7 +3,14 @@ import type { ChatMessage, LlmClient } from '../llm/types'
 import { ESTIMATOR_SYSTEM_PROMPT, PROGRAM_MODE_ADDENDUM } from './prompt'
 
 export type EstimateResult =
-  | { ok: true; shape: EstimateShape; promptTokens: number; completionTokens: number }
+  | {
+      ok: true
+      shape: EstimateShape
+      promptTokens: number
+      completionTokens: number
+      cachedTokens: number
+      model: string
+    }
   | { ok: false; reason: 'parse' | 'empty' | 'truncated' | 'provider' }
 
 const REPAIR =
@@ -136,6 +143,8 @@ async function askOnce(
         shape,
         promptTokens: res.promptTokens,
         completionTokens: res.completionTokens,
+        cachedTokens: res.cachedTokens,
+        model: res.model,
       }
     }
 
@@ -182,5 +191,7 @@ export async function runEstimate(
     shape: second.shape,
     promptTokens: first.promptTokens + second.promptTokens,
     completionTokens: first.completionTokens + second.completionTokens,
+    cachedTokens: first.cachedTokens + second.cachedTokens,
+    model: second.model,
   }
 }

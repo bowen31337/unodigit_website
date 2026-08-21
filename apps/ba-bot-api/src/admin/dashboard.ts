@@ -192,6 +192,11 @@ export function dashboardHtml(): string {
   </section>
 
   <section>
+    <h2>LLM usage by model</h2>
+    <div id="models"></div>
+  </section>
+
+  <section>
     <h2>Leads</h2>
     <div class="row">
       <input type="search" id="q" placeholder="filter by email, name or company" autocomplete="off">
@@ -299,7 +304,11 @@ export function dashboardHtml(): string {
       tile('Leads', fmtInt.format(o.leads), o.conversations ? Math.round(100 * o.leads / o.conversations) + '% of conversations' : ''),
       tile('Quotes', fmtInt.format(o.quotes), fmtInt.format(o.briefs) + ' briefs'),
       tile('Quoted value', fmtAud.format(o.quotedValueLowAud) + '–' + fmtAud.format(o.quotedValueHighAud)),
-      tile('LLM spend', fmtUsd.format(o.totalCostUsd), fmtInt.format(o.tokensIn + o.tokensOut) + ' tokens'),
+      // cost_usd is written by nothing, so the old USD figure was always 0.00 —
+      // a number that cannot be anything but zero is worse than no number.
+      // Tokens are what is actually measured, split the way they are billed.
+      tile('LLM tokens', fmtInt.format(o.tokensIn + o.tokensOut),
+        fmtInt.format(o.tokensIn) + ' in · ' + fmtInt.format(o.tokensOut) + ' out'),
       tile('Avg turns', o.avgTurns)
     );
 
@@ -313,6 +322,28 @@ export function dashboardHtml(): string {
       spark.appendChild(b);
     });
     if (!d.daily.length) spark.replaceChildren(el('div', null));
+
+    // cached_tokens is a SUBSET of prompt_tokens, so the hit rate is
+    // cached/prompt. Showing it as a share of the total would overstate it.
+    document.getElementById('models').replaceChildren(table(
+      [{ label: 'Model' }, { label: 'Used for' }, { label: 'Calls', numeric: true },
+       { label: 'Input', numeric: true }, { label: 'Cached', numeric: true },
+       { label: 'Cache hit', numeric: true }, { label: 'Output', numeric: true }],
+      d.models || [],
+      function (r) {
+        var tr = el('tr');
+        tr.appendChild(el('td', r.model, 'mono'));
+        tr.appendChild(el('td', r.purpose, 'mono'));
+        tr.appendChild(el('td', fmtInt.format(r.calls), 'n'));
+        tr.appendChild(el('td', fmtInt.format(r.promptTokens), 'n'));
+        tr.appendChild(el('td', fmtInt.format(r.cachedTokens), 'n'));
+        var pct = r.promptTokens ? Math.round(100 * r.cachedTokens / r.promptTokens) : 0;
+        tr.appendChild(el('td', pct + '%', 'n'));
+        tr.appendChild(el('td', fmtInt.format(r.completionTokens), 'n'));
+        return tr;
+      },
+      'No model calls in this window.'
+    ));
 
     document.getElementById('funnel').replaceChildren(table(
       [{ label: 'Stopped at' }, { label: 'Conversations', numeric: true },
