@@ -9,6 +9,12 @@ export const TurnOutputSchema = z
     slots: z.record(z.unknown()).default({}),
     ready_to_advance: z.boolean(),
     off_topic: z.boolean(),
+    /** The client wants to stop NOW. `ready_to_advance` cannot express this:
+     *  it moves one state, and the next state's gate then blocks again — a
+     *  visitor who said "I'm out of time" four times sat in SOLUTION_SHAPE
+     *  while the model replied "Done." Defaulted so an older cached completion
+     *  that omits the key still parses. */
+    wrap_up: z.boolean().default(false),
   })
   .strict()
 
@@ -28,7 +34,7 @@ export type TurnResult =
 const REPAIR_INSTRUCTION =
   'Your previous message was not valid against the required json object. ' +
   'Reply again with a single json object containing exactly the keys reply, slots, ' +
-  'ready_to_advance, off_topic — and no others. No markdown fences.'
+  'ready_to_advance, off_topic, wrap_up — and no others. No markdown fences.'
 
 function parse(content: string): TurnOutput | null {
   try {

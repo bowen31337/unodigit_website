@@ -15,13 +15,14 @@ function row(over: Partial<MessageRow>): MessageRow {
   }
 }
 
-/** The four keys the system prompt requires, in the order it names them. */
+/** The keys the system prompt requires, in the order it names them. */
 function envelopeOf(content: string) {
   return JSON.parse(content) as {
     reply: string
     slots: Record<string, unknown>
     ready_to_advance: boolean
     off_topic: boolean
+    wrap_up: boolean
   }
 }
 
@@ -41,10 +42,16 @@ describe('replayHistory', () => {
     expect(envelopeOf(out[0]!.content).reply).toBe('Who is it for?')
   })
 
-  it('emits exactly the four required keys, in prompt order', () => {
+  it('emits exactly the required keys, in prompt order', () => {
     const out = replayHistory([row({})])
     expect(Object.keys(envelopeOf(out[0]!.content)))
-      .toEqual(['reply', 'slots', 'ready_to_advance', 'off_topic'])
+      .toEqual(['reply', 'slots', 'ready_to_advance', 'off_topic', 'wrap_up'])
+  })
+
+  // A turn that wrapped up is the last one, so no later turn can replay a true
+  // here — and replaying one would tell the model the interview already ended.
+  it('always replays wrap_up as false', () => {
+    expect(envelopeOf(replayHistory([row({})])[0]!.content).wrap_up).toBe(false)
   })
 
   it('carries slots, ready_to_advance and off_topic through', () => {
@@ -58,6 +65,7 @@ describe('replayHistory', () => {
       slots: { project_name: 'StockWatch' },
       ready_to_advance: true,
       off_topic: true,
+      wrap_up: false,
     })
   })
 
@@ -104,7 +112,7 @@ describe('replayHistory', () => {
     const out = replayHistory(await listMessages(env.DB, id))
     expect(envelopeOf(out[0]!.content)).toEqual({
       reply: 'advancing', slots: { problem: 'stockouts' },
-      ready_to_advance: true, off_topic: false,
+      ready_to_advance: true, off_topic: false, wrap_up: false,
     })
   })
 

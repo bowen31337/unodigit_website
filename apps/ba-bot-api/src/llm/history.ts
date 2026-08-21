@@ -62,6 +62,9 @@ export function replayHistory(rows: MessageRow[]): ChatMessage[] {
         // as false rather than throwing.
         ready_to_advance: row.ready_to_advance === 1,
         off_topic: row.off_topic === 1,
+        // Always false in history: a turn that wrapped up is the last one, so
+        // no later turn ever replays a true here.
+        wrap_up: false,
       }),
     }
   })

@@ -204,11 +204,47 @@ export function registerChatRoutes(
       await recordEvent(c.env.DB, convId, 'slots_rejected', { state: session.state, keys: rejected })
     }
 
-    const result = step(session, {
+    let result = step(session, {
       slots,
       readyToAdvance: turn.value.ready_to_advance,
       offTopic: turn.value.off_topic,
     })
+
+    /**
+     * The client asked to stop. Jump straight to CONTACT.
+     *
+     * `ready_to_advance` cannot express this — it moves ONE state, and the next
+     * state's gate blocks again immediately. Observed: a visitor said they were
+     * out of time four times, the model replied "Done." each turn, and the
+     * conversation sat in SOLUTION_SHAPE because that gate wanted a
+     * differentiator the visitor was never going to give.
+     *
+     * Guarded on having enough for a brief. Without project_name and problem
+     * POST /api/generate answers 409 session_expired, so jumping an
+     * information-less conversation to CONTACT would collect an email and then
+     * fail to produce anything — worse than continuing to ask.
+     */
+    const canBrief =
+      typeof result.next.slots.project_name === 'string' &&
+      result.next.slots.project_name.trim() !== '' &&
+      typeof result.next.slots.problem === 'string' &&
+      result.next.slots.problem.trim() !== ''
+
+    if (
+      turn.value.wrap_up &&
+      canBrief &&
+      !['CONTACT', 'GENERATE', 'DONE'].includes(result.next.state)
+    ) {
+      await recordEvent(c.env.DB, convId, 'wrapped_up_early', {
+        from: session.state,
+        turns: session.totalTurns + 1,
+      })
+      result = {
+        ...result,
+        advanced: true,
+        next: { ...result.next, state: 'CONTACT', turnsInState: 0 },
+      }
+    }
 
     // The model wrote this reply under the OUTGOING state's addendum, so it
     // does not know it is the last thing the visitor will read. Advancing into

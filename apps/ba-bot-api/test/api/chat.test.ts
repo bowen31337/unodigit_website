@@ -81,6 +81,62 @@ beforeEach(() => {
   ip = `192.0.2.${ipCounter}`
 })
 
+describe('wrap_up', () => {
+  // ready_to_advance moves ONE state and the next gate blocks again. Observed
+  // live: a visitor said they were out of time four times, the model replied
+  // "Done." each turn, and the conversation sat in SOLUTION_SHAPE because that
+  // gate wanted a differentiator the visitor was never going to give.
+  async function seedMidInterview(slots: Record<string, unknown>): Promise<string> {
+    const id = newId('conv')
+    await createConversation(env.DB, id, Date.now())
+    await updateConversationState(env.DB, id, 'SOLUTION_SHAPE', 5)
+    await env.SESSIONS.put(sessionKey(id), JSON.stringify({
+      state: 'SOLUTION_SHAPE', slots, turnsInState: 1, totalTurns: 5, forcedAdvances: [],
+    }))
+    return id
+  }
+
+  it('jumps straight to CONTACT when the client asks to stop', async () => {
+    mockLlm({
+      reply: 'Understood — here is what we have.', slots: {},
+      ready_to_advance: false, off_topic: false, wrap_up: true,
+    })
+    const conversationId = await seedMidInterview({
+      project_name: 'DataHub', problem: 'no single view of the business',
+    })
+
+    const res = await post({ conversationId, message: 'I am out of time, just finish' })
+    expect((await res.json<{ state: string }>()).state).toBe('CONTACT')
+  })
+
+  // Without project_name and problem, POST /api/generate answers 409
+  // session_expired — so jumping here would collect an email and then fail to
+  // produce anything, which is worse than continuing to ask.
+  it('does not jump when there is not enough for a brief', async () => {
+    mockLlm({
+      reply: 'Understood.', slots: {},
+      ready_to_advance: false, off_topic: false, wrap_up: true,
+    })
+    const conversationId = await seedMidInterview({ project_name: 'DataHub' })
+
+    const res = await post({ conversationId, message: 'just finish' })
+    expect((await res.json<{ state: string }>()).state).toBe('SOLUTION_SHAPE')
+  })
+
+  it('leaves a normal turn alone', async () => {
+    mockLlm({
+      reply: 'What makes it different?', slots: {},
+      ready_to_advance: false, off_topic: false, wrap_up: false,
+    })
+    const conversationId = await seedMidInterview({
+      project_name: 'DataHub', problem: 'no single view',
+    })
+
+    const res = await post({ conversationId, message: 'it ingests data' })
+    expect((await res.json<{ state: string }>()).state).toBe('SOLUTION_SHAPE')
+  })
+})
+
 describe('handover into CONTACT', () => {
   // Reported from production twice: the last chat message either asked a
   // question the visitor could no longer answer, or promised a "next topic"
@@ -171,7 +227,7 @@ describe('prompt history', () => {
 
     // Prose would fail JSON.parse; that is the regression.
     const envelope = JSON.parse(assistants[0]!.content) as Record<string, unknown>
-    expect(Object.keys(envelope)).toEqual(['reply', 'slots', 'ready_to_advance', 'off_topic'])
+    expect(Object.keys(envelope)).toEqual(['reply', 'slots', 'ready_to_advance', 'off_topic', 'wrap_up'])
     expect(envelope['reply']).toBe('Who is it for?')
     // The slots that were MERGED, not the ones the model proposed: turn one ran
     // in GREETING, whose schema declares no slots, so `project_name` was
