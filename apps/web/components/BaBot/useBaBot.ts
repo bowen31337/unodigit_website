@@ -9,6 +9,7 @@ import type {
   StateId,
 } from '@unodigit/ba-bot-contract';
 import { BOT_API } from '@/lib/botApi';
+import { ORG } from '@/lib/site';
 
 /**
  * Prefix for every bot call. Re-exported so existing importers keep working;
@@ -64,7 +65,10 @@ const EMPTY: Persisted = {
  * can act on gets a specific line; the rest collapse to one honest fallback
  * rather than leaking a status code into the UI. */
 const ERRORS: Record<string, string> = {
-  not_configured: 'The assistant is offline right now. Please use the contact form instead.',
+  // /contact no longer carries an enquiry form — this assistant IS the intake
+  // path — so the offline fallback has to be the address that page falls back
+  // to as well, not a form that is not there any more.
+  not_configured: `The assistant is offline right now. Please email us at ${ORG.email} instead.`,
   challenge_failed: 'That verification did not go through. Please try once more.',
   invalid_body: 'That message could not be sent — try rephrasing it.',
   wrong_state: 'We are out of step. Starting a fresh conversation is the quickest fix.',

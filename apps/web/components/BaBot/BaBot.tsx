@@ -5,6 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { MessageSquareText, X, RotateCcw, Maximize2, Minimize2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { OPENING_LINE, TURNSTILE_ERRORS, useBaBot } from './useBaBot';
+import { BABOT_OPEN_EVENT } from './open';
 import ContactForm from './ContactForm';
 import Turnstile, { TURNSTILE_SITE_KEY } from './Turnstile';
 import { usePathname } from 'next/navigation';
@@ -116,6 +117,15 @@ export default function BaBot() {
   useEffect(() => {
     if (open && !onContact && !done) inputRef.current?.focus();
   }, [open, onContact, done]);
+
+  // Opened from the page rather than the floating launcher — /contact starts
+  // an interview here instead of rendering an enquiry form. See open.ts for
+  // why this is an event and not a context provider.
+  useEffect(() => {
+    const onOpenRequest = () => setOpen(true);
+    window.addEventListener(BABOT_OPEN_EVENT, onOpenRequest);
+    return () => window.removeEventListener(BABOT_OPEN_EVENT, onOpenRequest);
+  }, []);
 
   // A Turnstile token is single-use, and the Worker spends it verifying. If
   // that turn then fails for any reason, the token held here is already burnt

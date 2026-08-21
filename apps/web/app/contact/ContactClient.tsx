@@ -1,38 +1,31 @@
 'use client';
 
-import { useState } from 'react';
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { Mail, MapPin, Send, Check } from 'lucide-react';
+import { Mail, MapPin, MessageSquareText, Check } from 'lucide-react';
 import PageHero from '@/components/PageHero';
 import GlassCard from '@/components/GlassCard';
 import Button from '@/components/Button';
+import { openBaBot } from '@/components/BaBot/open';
+import { ORG } from '@/lib/site';
 
-const needs = [
-  { value: 'ai-strategy', label: 'AI Strategy' },
-  { value: 'ml-development', label: 'ML Development' },
-  { value: 'web-app', label: 'Web / App Development' },
-  { value: 'data-engineering', label: 'Data Engineering' },
-  { value: 'other', label: 'Other' },
+/**
+ * There is no enquiry form here any more.
+ *
+ * The one that used to live in this file never sent anything: `onSubmit` was
+ * `preventDefault()` followed by `setSubmitted(true)`, so it rendered "we've
+ * received your message" over an enquiry that had gone nowhere. The scoping
+ * assistant is the real intake path — it asks better questions than six
+ * fields can, and it hands the visitor a written scope at the end rather than
+ * a promise to reply. This page's job is now to explain that and start it.
+ */
+
+/** What the interview actually covers, in the visitor's terms. */
+const COVERED = [
+  'What you want to build, and what makes it worth building',
+  'Constraints that shape it — timeline, budget, the systems it has to live with',
+  'A written scope and an indicative estimate you can take away',
 ];
-
-const budgets = [
-  { value: '10-50k', label: '$10,000 – $50,000' },
-  { value: '50-100k', label: '$50,000 – $100,000' },
-  { value: '100-500k', label: '$100,000 – $500,000' },
-  { value: '500k+', label: '$500,000+' },
-];
-
-const EMPTY = { name: '', company: '', email: '', need: '', budget: '', message: '' };
 
 export default function ContactClient() {
-  const [submitted, setSubmitted] = useState(false);
-  const [form, setForm] = useState(EMPTY);
-  const reduced = useReducedMotion();
-
-  const update = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
-  ) => setForm({ ...form, [e.target.name]: e.target.value });
-
   return (
     <>
       <PageHero
@@ -43,7 +36,7 @@ export default function ContactClient() {
             <span style={{ color: 'var(--accent-display)' }}>together</span>
           </>
         }
-        lede="Tell us what you're working on. We'll come back within one business day with a considered response, not a sales sequence."
+        lede="Tell us what you're working on. Our assistant will walk you through it in a few minutes and write up a scope — or email us and a person will come back within one business day."
       />
 
       <section className="pb-s12">
@@ -61,11 +54,11 @@ export default function ContactClient() {
                 <span className="block">
                   <span className="type-headline mb-s2 block">Email us</span>
                   <a
-                    href="mailto:info@unodigit.com.au"
+                    href={`mailto:${ORG.email}`}
                     className="type-callout transition-colors duration-fast hover:text-accent-ink"
                     style={{ color: 'var(--label-secondary)' }}
                   >
-                    info@unodigit.com.au
+                    {ORG.email}
                   </a>
                 </span>
               </GlassCard>
@@ -88,167 +81,53 @@ export default function ContactClient() {
               </GlassCard>
             </div>
 
-            {/* ── Form ────────────────────────────────────────────────── */}
+            {/* ── Start an interview ──────────────────────────────────── */}
             <div className="lg:col-span-2">
+              {/* Opaque `.card`, not glass: the two cards beside it are already
+                  the translucent layer, and stacking a second one double-blurs
+                  the mesh behind both. */}
               <div className="card p-s8 sm:p-s10">
-                <AnimatePresence mode="wait" initial={false}>
-                  {submitted ? (
-                    <motion.div
-                      key="thanks"
-                      initial={{ opacity: 0, scale: reduced ? 1 : 0.96 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={
-                        reduced
-                          ? { duration: 0.25 }
-                          : { type: 'spring', bounce: 0.15, visualDuration: 0.35 }
-                      }
-                      className="py-s10 text-center"
-                      role="status"
-                    >
+                <span
+                  className="mb-s7 flex h-14 w-14 items-center justify-center rounded-lg"
+                  style={{ background: 'var(--accent-solid)', color: 'var(--on-accent)' }}
+                >
+                  <MessageSquareText size={26} strokeWidth={2} aria-hidden />
+                </span>
+
+                <h2 className="type-title-2 mb-s4">Scope your project</h2>
+                <p className="type-body mb-s7 max-w-prose" style={{ color: 'var(--label-secondary)' }}>
+                  Our assistant asks the questions a business analyst would ask on a first call.
+                  It takes a few minutes, and you leave with a written scope rather than a
+                  confirmation screen.
+                </p>
+
+                <ul className="mb-s8 space-y-s4">
+                  {COVERED.map((item) => (
+                    <li key={item} className="flex items-start gap-s4">
                       <span
-                        className="mx-auto mb-s7 flex h-16 w-16 items-center justify-center rounded-full"
-                        style={{ background: 'var(--accent-solid)', color: 'var(--on-accent)' }}
+                        className="mt-[3px] flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+                        style={{ background: 'rgb(var(--c-accent) / 0.14)', color: 'var(--accent-ink)' }}
                       >
-                        <Check size={30} strokeWidth={3} />
+                        <Check size={13} strokeWidth={3} aria-hidden />
                       </span>
-                      <h2 className="type-title-2 mb-s4">Thank you</h2>
-                      <p
-                        className="type-body mx-auto max-w-sm"
-                        style={{ color: 'var(--label-secondary)' }}
-                      >
-                        We&rsquo;ve received your message and will get back to you within one
-                        business day.
-                      </p>
-                    </motion.div>
-                  ) : (
-                    <motion.form
-                      key="form"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        setSubmitted(true);
-                      }}
-                      className="space-y-s6"
-                      noValidate={false}
-                    >
-                      <div className="grid gap-s6 sm:grid-cols-2">
-                        <div>
-                          <label htmlFor="name" className="field-label">
-                            Name <span aria-hidden="true">*</span>
-                          </label>
-                          <input
-                            id="name"
-                            name="name"
-                            type="text"
-                            required
-                            autoComplete="name"
-                            value={form.name}
-                            onChange={update}
-                            placeholder="Your name"
-                            className="field"
-                          />
-                        </div>
-                        <div>
-                          <label htmlFor="company" className="field-label">
-                            Company
-                          </label>
-                          <input
-                            id="company"
-                            name="company"
-                            type="text"
-                            autoComplete="organization"
-                            value={form.company}
-                            onChange={update}
-                            placeholder="Your company"
-                            className="field"
-                          />
-                        </div>
-                      </div>
+                      <span className="type-callout" style={{ color: 'var(--label-secondary)' }}>
+                        {item}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
 
-                      <div>
-                        <label htmlFor="email" className="field-label">
-                          Email <span aria-hidden="true">*</span>
-                        </label>
-                        <input
-                          id="email"
-                          name="email"
-                          type="email"
-                          required
-                          autoComplete="email"
-                          value={form.email}
-                          onChange={update}
-                          placeholder="you@company.com"
-                          className="field"
-                        />
-                      </div>
+                <Button size="lg" onClick={openBaBot}>
+                  Start scoping <MessageSquareText size={17} aria-hidden />
+                </Button>
 
-                      <div className="grid gap-s6 sm:grid-cols-2">
-                        <div>
-                          <label htmlFor="need" className="field-label">
-                            What do you need?
-                          </label>
-                          <select
-                            id="need"
-                            name="need"
-                            value={form.need}
-                            onChange={update}
-                            className="field"
-                          >
-                            <option value="">Select a service</option>
-                            {needs.map((n) => (
-                              <option key={n.value} value={n.value}>
-                                {n.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label htmlFor="budget" className="field-label">
-                            Budget range
-                          </label>
-                          <select
-                            id="budget"
-                            name="budget"
-                            value={form.budget}
-                            onChange={update}
-                            className="field"
-                          >
-                            <option value="">Select a range</option>
-                            {budgets.map((b) => (
-                              <option key={b.value} value={b.value}>
-                                {b.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-
-                      <div>
-                        <label htmlFor="message" className="field-label">
-                          Message <span aria-hidden="true">*</span>
-                        </label>
-                        <textarea
-                          id="message"
-                          name="message"
-                          required
-                          rows={5}
-                          value={form.message}
-                          onChange={update}
-                          placeholder="Tell us about your project…"
-                          className="field"
-                        />
-                      </div>
-
-                      <Button type="submit" size="lg">
-                        Send message <Send size={17} />
-                      </Button>
-                    </motion.form>
-                  )}
-                </AnimatePresence>
+                <p className="type-footnote mt-s6" style={{ color: 'var(--label-secondary)' }}>
+                  Prefer to write to a person?{' '}
+                  <a href={`mailto:${ORG.email}`} style={{ color: 'var(--accent-ink)' }}>
+                    {ORG.email}
+                  </a>{' '}
+                  — we reply within one business day.
+                </p>
               </div>
             </div>
           </div>

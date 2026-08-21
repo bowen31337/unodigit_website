@@ -45,7 +45,7 @@ ${line('Services', absoluteUrl('/services'), 'The six service lines and the four
 ${line('Work', absoluteUrl('/work'), 'Case studies with measured outcomes')}
 ${line('About', absoluteUrl('/about'), `Company background, founded ${ORG.foundingYear}`)}
 ${line('Insights', absoluteUrl('/insights'), 'Articles on enterprise AI, ML engineering and governance')}
-${line('Contact', absoluteUrl('/contact'), 'Enquiry form and email')}
+${line('Contact', absoluteUrl('/contact'), 'How to reach Uno Digit — the scoping assistant and email')}
 
 ## Case studies
 
