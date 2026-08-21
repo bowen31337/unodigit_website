@@ -210,3 +210,60 @@ describe('dashboard timestamp units', () => {
     expect(html).toMatch(/new Date\(r\.createdAt\)/)
   })
 })
+
+/**
+ * The whole page — CSS, markup and script — is one template literal, which
+ * means the JS inside it is never parsed until a browser loads it. These
+ * guard the two ways that has actually broken.
+ */
+describe('the dashboard inline script', () => {
+  const OPEN = '<script>'
+  const CLOSE = '</scr' + 'ipt>'
+
+  async function inlineScript(): Promise<string> {
+    const { dashboardHtml } = await import('../../src/admin/dashboard')
+    const html = dashboardHtml()
+    return html.slice(html.lastIndexOf(OPEN) + OPEN.length, html.lastIndexOf(CLOSE))
+  }
+
+  // A backslash inside the template literal is consumed by the literal itself,
+  // so the browser never sees it. Writing the character class as /[_\-.]/
+  // emitted /[_-.]/ — a reversed range, which is a SyntaxError for the ENTIRE
+  // script. Every tile, table and dialog rendered empty, with no console error
+  // that a passing test suite would ever surface. Nothing else catches this.
+  it('parses as JavaScript', async () => {
+    const script = await inlineScript()
+    expect(() => new Function(script)).not.toThrow()
+  })
+
+  // "cap" is a substring of lead_capTUREd, so the old
+  // /fail|reject|cap|limit|expired/ painted the single healthiest signal on
+  // the page as a red error pill. Matching whole underscore-separated words
+  // is the fix; this pins the behaviour rather than the regex.
+  it('classifies event names by whole word, not by substring', async () => {
+    const script = await inlineScript()
+    const start = script.indexOf('var BAD_WORDS')
+    const end = script.indexOf('\n  }', script.indexOf('function isBadEvent')) + 4
+    expect(start).toBeGreaterThan(-1)
+    const isBadEvent = new Function(script.slice(start, end) + '\nreturn isBadEvent')() as
+      (t: string) => boolean
+
+    expect(isBadEvent('lead_captured')).toBe(false)
+    expect(isBadEvent('conversation_started')).toBe(false)
+    expect(isBadEvent('quote_generated')).toBe(false)
+    expect(isBadEvent('rate_limit_reached')).toBe(true)
+    expect(isBadEvent('turnstile_rejected')).toBe(true)
+    expect(isBadEvent('estimate_failed')).toBe(true)
+  })
+
+  // The page ships default-src 'none' with no font-src and no external
+  // style-src, so a CDN font or a <img src="/logo.png"> is a silent blank.
+  // The brand mark is inline SVG and the favicon a data: URI for this reason.
+  // (w3.org is the SVG XML namespace, not a request.)
+  it('references no external origin, which the CSP would block anyway', async () => {
+    const { dashboardHtml } = await import('../../src/admin/dashboard')
+    const html = dashboardHtml()
+    const externals = html.match(/https?:\/\/[^'"\s)]+/g) ?? []
+    expect(externals.filter((u) => !u.startsWith('http://www.w3.org/'))).toEqual([])
+  })
+})

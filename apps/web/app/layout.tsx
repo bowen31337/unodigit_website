@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { SITE_URL, ORG } from '@/lib/site';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import ThemeProvider from '@/components/ThemeProvider';
@@ -7,6 +8,18 @@ import GlassFilters from '@/components/GlassFilters';
 import BaBot from '@/components/BaBot';
 
 export const metadata: Metadata = {
+  /**
+   * Without metadataBase, Next resolves og:image / og:url against no origin at
+   * all and emits relative paths. Crawlers and social scrapers need absolute
+   * URLs, so every OpenGraph image and canonical on the site was unusable.
+   *
+   * NOTE: no default `alternates.canonical` here on purpose. Child metadata
+   * inherits what the layout sets, so a canonical of '/' in this file would
+   * make every page on the site declare the home page as its canonical — the
+   * fastest way to deindex a whole site. Each page sets its own.
+   */
+  metadataBase: new URL(SITE_URL),
+  applicationName: ORG.name,
   title: {
     default: 'Uno Digit | AI & Digital Transformation Sydney',
     template: '%s | Uno Digit',
@@ -29,7 +42,26 @@ export const metadata: Metadata = {
     title: 'Uno Digit | AI & Digital Transformation Sydney',
     description: "Sydney's Leading AI Consultancy helping enterprises harness the power of artificial intelligence.",
   },
-  robots: { index: true, follow: true },
+  robots: {
+    index: true,
+    follow: true,
+    // Explicitly invite the rich snippets that answer engines and search
+    // results build previews from. Defaults are conservative and truncate.
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-snippet': -1,
+      'max-image-preview': 'large',
+      'max-video-preview': -1,
+    },
+  },
+  // Sydney-first geography, stated where it is machine-readable rather than
+  // only in prose. The canonical geo signal is the PostalAddress + areaServed
+  // in the JSON-LD graph; these are the lightweight corroborating hints.
+  other: {
+    'geo.region': 'AU-NSW',
+    'geo.placename': ORG.address.locality,
+  },
 };
 
 /**

@@ -8,9 +8,24 @@
  * ride in on — a page displaying every lead's email is the wrong place to
  * trust a CDN.
  *
- * The palette deliberately echoes apps/web (Apple-ish neutrals, cyan accent)
- * without importing the token layer: this ships from a different package and a
- * copy of six colours is cheaper than a shared build.
+ * DESIGN
+ * ------
+ * The style block is a hand-ported subset of `apps/web/app/globals.css` — the
+ * same Apple token layer, the same brand ramps derived from `public/logo.png`,
+ * the same two-track accent rule (`--accent` for graphics, `--accent-ink` for
+ * text), the same materials and the same prefers-* fallbacks. It is a COPY
+ * rather than an import because this ships from a different package with no
+ * build step; when a token changes in globals.css, change it here too.
+ *
+ * Two things are deliberately different from the site, both forced by the CSP:
+ *
+ *   1. No Inter. globals.css pulls Inter from fonts.googleapis.com; this page
+ *      has no font-src at all, so it rides the -apple-system stack alone. On
+ *      the Macs this page is actually read on, that IS SF Pro — the better
+ *      rendering of the two.
+ *   2. The logo is inline SVG and the favicon is a data: URI, because there is
+ *      no /logo.png on this origin to link to. `img-src 'self' data:` already
+ *      allows the favicon; inline SVG is markup, so no directive applies.
  */
 
 /**
@@ -46,160 +61,961 @@ export function dashboardHtml(): string {
   // NOTE: everything below is one template literal. A backtick anywhere inside
   // it — including in a comment — terminates the string and produces a wall of
   // syntax errors far from the real edit. Write `code` as plain words here.
+  // A literal dollar-brace would interpolate, so avoid that too.
   return `<!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>BA bot · metrics</title>
-<style>
-  :root {
-    --bg: #f2f2f7; --panel: #fff; --line: rgba(60,60,67,.18);
-    --ink: #1c1c1e; --ink-2: rgba(60,60,67,.73); --ink-3: rgba(60,60,67,.5);
-    --accent: #0e7490; --good: #1a7f5a; --warn: #a1620a; --bad: #b3261e;
-    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #000; --panel: #1c1c1e; --line: rgba(235,235,245,.2);
-      --ink: #f2f2f7; --ink-2: rgba(235,235,245,.6); --ink-3: rgba(235,235,245,.4);
-      --accent: #22d3ee; --good: #4ade80; --warn: #fbbf24; --bad: #ff6b6b;
-    }
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--bg); color: var(--ink);
-    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-    -webkit-font-smoothing: antialiased;
-  }
-  header {
-    display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
-    padding: 20px 24px; border-bottom: 1px solid var(--line);
-    position: sticky; top: 0; background: var(--bg); z-index: 5;
-  }
-  h1 { font-size: 19px; font-weight: 600; margin: 0; letter-spacing: -.01em; }
-  .who { color: var(--ink-3); font-size: 13px; margin-left: auto; }
-  main { padding: 24px; max-width: 1200px; margin: 0 auto; }
-  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-  .seg button {
-    font: inherit; font-size: 13px; padding: 5px 12px; border: 0; cursor: pointer;
-    background: transparent; color: var(--ink-2);
-  }
-  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--bg); font-weight: 600; }
-  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-bottom: 28px; }
-  .tile { background: var(--panel); border-radius: 12px; padding: 14px 16px; border: 1px solid var(--line); }
-  .tile .k { font-size: 12px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .04em; }
-  .tile .v { font-size: 26px; font-weight: 600; letter-spacing: -.02em; margin-top: 4px; font-variant-numeric: tabular-nums; }
-  .tile .s { font-size: 12px; color: var(--ink-2); margin-top: 2px; }
-  section { margin-bottom: 32px; }
-  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); margin: 0 0 10px; font-weight: 600; }
-  table { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
-  th, td { text-align: left; padding: 9px 14px; font-size: 13px; border-bottom: 1px solid var(--line); }
-  th { color: var(--ink-3); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
-  tr:last-child td { border-bottom: 0; }
-  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
-  td.mono { font-family: var(--mono); font-size: 12px; color: var(--ink-2); }
-  .bar { height: 5px; background: var(--accent); border-radius: 3px; min-width: 2px; }
-  .pill { display: inline-block; padding: 1px 7px; border-radius: 20px; font-size: 11px; font-family: var(--mono); }
-  .linkbtn { background: none; border: 0; padding: 0; font: inherit; font-size: 12px;
-             color: var(--accent); cursor: pointer; text-decoration: underline; }
-  .muted { color: var(--ink-2); }
-  dialog#confirm-delete { width: min(560px, 92vw); padding: 0; border: 0;
-    border-radius: 12px; background: var(--panel); color: var(--ink); }
-  dialog#confirm-delete::backdrop { background: rgba(0,0,0,.6); }
-  dialog#confirm-delete header { display: flex; justify-content: space-between;
-    align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
-  #del-body { padding: 16px 18px 20px; font-size: 13px; line-height: 1.55; }
-  #del-body ul { margin: 10px 0; padding-left: 18px; color: var(--ink-2); }
-  #del-body input { width: 100%; margin-top: 10px; padding: 9px 11px; font: inherit;
-    font-family: var(--mono); font-size: 12px; color: var(--ink); background: var(--bg);
-    border: 1px solid var(--line); border-radius: 8px; }
-  .danger { margin-top: 14px; width: 100%; padding: 10px; font: inherit; font-weight: 600;
-    color: #fff; background: var(--bad); border: 0; border-radius: 8px; cursor: pointer; }
-  .danger:disabled { opacity: .45; cursor: not-allowed; }
-  dialog#transcript { width: min(720px, 92vw); max-height: 82vh; padding: 0; border: 0;
-    border-radius: 12px; background: var(--panel); color: var(--ink); }
-  dialog#transcript::backdrop { background: rgba(0,0,0,.6); }
-  dialog#transcript header { display: flex; justify-content: space-between; align-items: center;
-    gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); position: sticky; top: 0;
-    background: var(--panel); }
-  #transcript-body { padding: 14px 18px 20px; overflow-y: auto; max-height: calc(82vh - 56px); }
-  .turn { margin-bottom: 14px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
-  .turn-meta { font-family: var(--mono); font-size: 11px; color: var(--ink-2); margin-bottom: 3px; }
-  .turn-user > div:last-child { color: var(--ink); }
-  .turn-bot  > div:last-child { color: var(--ink-2); }
+<title>BA bot · metrics — Uno Digit</title>
 
-  /* "Save as PDF" is window.print(), the same approach the public quote page
-     uses — no PDF library and no server round trip. A modal <dialog> lives in
-     the top layer, so printing it needs the rest of the page removed rather
-     than merely hidden behind it, and the dialog itself un-positioned so it
-     can paginate instead of being clipped to one viewport-sized box. */
-  @media print {
-    body > *:not(#transcript) { display: none !important; }
-    dialog#transcript {
-      display: block !important; position: static !important;
-      width: auto !important; max-height: none !important;
-      background: #fff !important; color: #000 !important;
-    }
-    dialog#transcript::backdrop { display: none; }
-    dialog#transcript header { position: static; border-bottom: 1px solid #ccc; }
-    #transcript-body { max-height: none !important; overflow: visible !important; }
-    /* Controls are not part of the document. */
-    #transcript-md, #transcript-print, #transcript-close { display: none !important; }
-    .turn { break-inside: avoid; }
-    .turn-meta { color: #555 !important; }
-    .turn-bot > div:last-child, .turn-user > div:last-child { color: #000 !important; }
+<!-- The mark from apps/web/public/favicon.svg, inlined as a data: URI because
+     this origin serves no static files. The hashes in the two brand colours
+     must be percent-encoded or the URI terminates at the first one. -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2040%2040'%3E%3Cpath%20d='M11%2011V21C11%2025.9706%2015.0294%2030%2020%2030C24.9706%2030%2029%2025.9706%2029%2021V11'%20stroke='%2306b6d4'%20stroke-width='6'%20stroke-linecap='round'%20stroke-linejoin='round'%20fill='none'/%3E%3Ccircle%20cx='29'%20cy='11'%20r='3'%20fill='%238b5cf6'/%3E%3Ccircle%20cx='11'%20cy='11'%20r='3'%20fill='%238b5cf6'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2040%2040'%3E%3Crect%20width='40'%20height='40'%20rx='9'%20fill='%23ffffff'/%3E%3Cpath%20d='M11%2011V21C11%2025.9706%2015.0294%2030%2020%2030C24.9706%2030%2029%2025.9706%2029%2021V11'%20stroke='%2306b6d4'%20stroke-width='6'%20stroke-linecap='round'%20stroke-linejoin='round'%20fill='none'/%3E%3Ccircle%20cx='29'%20cy='11'%20r='3'%20fill='%238b5cf6'/%3E%3Ccircle%20cx='11'%20cy='11'%20r='3'%20fill='%238b5cf6'/%3E%3C/svg%3E">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000000">
+
+<!-- Runs before the first paint so a stored theme choice never flashes the
+     other mode. No stored choice means no attribute, which leaves the
+     prefers-color-scheme block in charge. -->
+<script>
+  try {
+    var t = localStorage.getItem('uno-admin-theme');
+    if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+  } catch (e) { /* private mode: fall through to the OS setting */ }
+</script>
+
+<style>
+/* ==========================================================================
+   1. BRAND RAMPS — from apps/web/app/globals.css, which derives them from
+   public/logo.png. The logo holds exactly two colours: cyan #06b6d4 (the U
+   stroke) and violet #8b5cf6 (the two nodes). Only the stops this page uses
+   are carried over.
+   ========================================================================== */
+:root {
+  --cyan-100: #daf6fb;
+  --cyan-400: #1ed6f6;   /* dark-mode ink track   — 12.00:1 on #000 */
+  --cyan-500: #06b6d4;   /* THE LOGO COLOR        — graphics only, 2.43:1 on #fff */
+  --cyan-600: #04849a;   /* light large-text track */
+  --cyan-700: #04778b;   /* light body-text track — 5.23:1 on #fff */
+  --violet-300: #b393fb;
+  --violet-400: #8b5cf6; /* THE LOGO COLOR */
+  --violet-600: #7845ed;
+
+  /* ---- 2. APPLE PRIMITIVES ---- */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
+    'Helvetica Neue', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'SF Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --text-title-1:   1.75rem;
+  --text-title-2:   1.375rem;
+  --text-title-3:   1.25rem;
+  --text-headline:  1.0625rem;
+  --text-body:      1.0625rem;
+  --text-callout:   1rem;
+  --text-subhead:   0.9375rem;
+  --text-footnote:  0.8125rem;
+  --text-caption-1: 0.75rem;
+  --text-caption-2: 0.6875rem;
+
+  /* Tracking TIGHTENS as size grows — the single biggest Apple type tell.
+     A uniform global letter-spacing is what makes a page read as not-Apple. */
+  --tracking-tight: -0.022em;
+  --tracking-snug:  -0.014em;
+  --tracking-normal: 0em;
+  --tracking-wide:   0.01em;
+  --tracking-caps:   0.05em;   /* uppercase micro-labels track OUT, not in */
+
+  --leading-snug:    1.2;
+  --leading-normal:  1.35;
+  --leading-relaxed: 1.5;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  --space-2: 0.25rem;  --space-3: 0.5rem;   --space-4: 0.75rem;
+  --space-5: 1rem;     --space-6: 1.25rem;  --space-7: 1.5rem;
+  --space-8: 2rem;     --space-9: 2.5rem;   --space-10: 3rem;
+
+  --radius-xs: 6px;  --radius-sm: 8px;  --radius-md: 12px;
+  --radius-lg: 16px; --radius-xl: 22px; --radius-2xl: 28px;
+  --radius-capsule: 999px;
+
+  --shadow-1: 0 1px 2px rgba(0,0,0,0.04), 0 1px 1px rgba(0,0,0,0.06);
+  --shadow-2: 0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.08);
+  --shadow-3: 0 8px 24px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.08);
+  --shadow-4: 0 16px 48px rgba(0,0,0,0.14), 0 4px 12px rgba(0,0,0,0.10);
+  --shadow-glass: 0 8px 32px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.05);
+
+  /* Never the weak built-in ease-*; never ease-in on UI. */
+  --ease-out:    cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-ios:    cubic-bezier(0.32, 0.72, 0, 1);
+  --duration-instant: 100ms;
+  --duration-fast:    200ms;
+  --duration-base:    300ms;
+
+  /* ---- 3. SEMANTIC TOKENS — LIGHT (default) ---- */
+  --accent:       var(--cyan-500);   /* graphics only */
+  --accent-ink:   var(--cyan-700);   /* text and links */
+  --accent-solid: var(--cyan-700);
+  --on-accent:    #ffffff;
+  --accent-2:     var(--violet-400);
+  --accent-2-ink: var(--violet-600);
+  --c-accent: 6 182 212;
+
+  --bg:           #f2f2f7;   /* grouped background — this page is all panels */
+  --bg-elevated:  #ffffff;
+  --bg-sunken:    #e9e9ef;
+
+  --label:            rgba(0, 0, 0, 1);
+  /* 0.73, not Apple's shipping 0.60: 0.60 measures 3.44:1 on #fff and fails
+     AA for body copy. --label-tertiary keeps Apple's value and is reserved
+     for DECORATIVE marks only — never readable copy. */
+  --label-secondary:  rgba(60, 60, 67, 0.73);
+  --label-tertiary:   rgba(60, 60, 67, 0.55);
+  --label-quaternary: rgba(60, 60, 67, 0.18);
+
+  --separator: rgba(60, 60, 67, 0.20);
+
+  /* Error red follows the same two-track split as accent. */
+  --red:     #ff3b30;
+  --red-ink: #d70015;
+  --green:     #34c759;
+  --green-ink: #1a7f42;
+
+  --fill-2: rgba(120, 120, 128, 0.16);
+  --fill-3: rgba(120, 120, 128, 0.12);
+  --fill-4: rgba(120, 120, 128, 0.08);
+
+  /* ---- 4. MATERIALS ---- */
+  --material-regular-tint: rgba(255, 255, 255, 0.72);
+  --material-thick-tint:   rgba(255, 255, 255, 0.86);
+  --material-blur: 20px;
+  --material-saturate: 180%;
+
+  /* The inset top-edge highlight is the highest-leverage detail separating an
+     Apple material from 2020 glassmorphism. Light mode gives glass almost no
+     contrast against a pale page, so the rim carries the edge definition. */
+  --glass-specular: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  --glass-inner:    inset 0 0 0 0.5px rgba(255, 255, 255, 0.30);
+  --glass-rim:      0 0 0 0.5px rgba(0, 0, 0, 0.10);
+
+  color-scheme: light dark;
+}
+
+/* DARK — auto via prefers-color-scheme, plus an explicit override so the
+   toggle can force either mode regardless of the OS setting. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --accent:       var(--cyan-500);
+    --accent-ink:   var(--cyan-400);
+    --accent-solid: var(--cyan-400);
+    --on-accent:    #001519;
+    --accent-2-ink: var(--violet-300);
+
+    --bg:          #000000;
+    --bg-elevated: #1c1c1e;
+    --bg-sunken:   #141416;
+
+    --label:            rgba(255, 255, 255, 1);
+    --label-secondary:  rgba(235, 235, 245, 0.60);
+    --label-tertiary:   rgba(235, 235, 245, 0.30);
+    --label-quaternary: rgba(235, 235, 245, 0.16);
+
+    --separator: rgba(84, 84, 88, 0.60);
+
+    --red:     #ff453a;
+    --red-ink: #ff6961;
+    --green:     #30d158;
+    --green-ink: #4ade80;
+
+    --fill-2: rgba(120, 120, 128, 0.32);
+    --fill-3: rgba(120, 120, 128, 0.24);
+    --fill-4: rgba(120, 120, 128, 0.18);
+
+    --material-regular-tint: rgba(30, 30, 32, 0.74);
+    --material-thick-tint:   rgba(30, 30, 32, 0.88);
+
+    /* In dark the top-edge highlight dims and the rim flips to a dark halo. */
+    --glass-specular: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+    --glass-inner:    inset 0 0 0 0.5px rgba(255, 255, 255, 0.07);
+    --glass-rim:      0 0 0 0.5px rgba(0, 0, 0, 0.50);
+
+    --shadow-1: 0 1px 2px rgba(0,0,0,0.30);
+    --shadow-2: 0 2px 8px rgba(0,0,0,0.36);
+    --shadow-3: 0 8px 24px rgba(0,0,0,0.44);
+    --shadow-4: 0 16px 48px rgba(0,0,0,0.52);
+    --shadow-glass: 0 8px 32px rgba(0,0,0,0.50);
   }
-  .pill.err { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
-  .pill.ok  { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
-  .empty { color: var(--ink-3); font-size: 13px; padding: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
-  .err-banner { background: color-mix(in srgb, var(--bad) 15%, transparent); color: var(--bad); padding: 10px 14px; border-radius: 10px; margin-bottom: 16px; font-size: 13px; }
-  .spark { display: flex; align-items: flex-end; gap: 2px; height: 44px; }
-  .spark div { flex: 1; background: var(--accent); border-radius: 2px 2px 0 0; min-height: 2px; opacity: .85; }
-  input[type=search] { font: inherit; font-size: 13px; padding: 5px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
-  .row { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+}
+
+/* Forced dark (theme toggle) — mirrors the block above. */
+[data-theme='dark'] {
+  --accent: var(--cyan-500);
+  --accent-ink: var(--cyan-400);
+  --accent-solid: var(--cyan-400);
+  --on-accent: #001519;
+  --accent-2-ink: var(--violet-300);
+
+  --bg: #000000;
+  --bg-elevated: #1c1c1e;
+  --bg-sunken: #141416;
+
+  --label: rgba(255, 255, 255, 1);
+  --label-secondary: rgba(235, 235, 245, 0.60);
+  --label-tertiary: rgba(235, 235, 245, 0.30);
+  --label-quaternary: rgba(235, 235, 245, 0.16);
+
+  --separator: rgba(84, 84, 88, 0.60);
+
+  --red: #ff453a;
+  --red-ink: #ff6961;
+  --green: #30d158;
+  --green-ink: #4ade80;
+
+  --fill-2: rgba(120, 120, 128, 0.32);
+  --fill-3: rgba(120, 120, 128, 0.24);
+  --fill-4: rgba(120, 120, 128, 0.18);
+
+  --material-regular-tint: rgba(30, 30, 32, 0.74);
+  --material-thick-tint:   rgba(30, 30, 32, 0.88);
+
+  --glass-specular: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  --glass-inner:    inset 0 0 0 0.5px rgba(255, 255, 255, 0.07);
+  --glass-rim:      0 0 0 0.5px rgba(0, 0, 0, 0.50);
+
+  --shadow-1: 0 1px 2px rgba(0,0,0,0.30);
+  --shadow-2: 0 2px 8px rgba(0,0,0,0.36);
+  --shadow-3: 0 8px 24px rgba(0,0,0,0.44);
+  --shadow-4: 0 16px 48px rgba(0,0,0,0.52);
+  --shadow-glass: 0 8px 32px rgba(0,0,0,0.50);
+}
+
+/* ==========================================================================
+   5. BASE
+   ========================================================================== */
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--label);
+  font-family: var(--font-sans);
+  font-size: var(--text-subhead);
+  line-height: var(--leading-normal);
+  letter-spacing: var(--tracking-normal);
+  font-optical-sizing: auto;          /* SF swaps Text <-> Display by size */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Every control gets a visible focus ring. */
+:focus-visible {
+  outline: 2px solid var(--accent-ink);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+::selection { background: rgb(var(--c-accent) / 0.25); color: var(--label); }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--label-quaternary);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background-color: var(--label-tertiary); background-clip: content-box; }
+
+/* ==========================================================================
+   6. TOP BAR — a real material. It needs content behind it to be a material
+   at all, which a scrolling page provides.
+   ========================================================================== */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+  padding: var(--space-4) var(--space-7);
+  background: var(--material-regular-tint);
+  -webkit-backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
+          backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
+  box-shadow:
+    var(--glass-specular),
+    var(--glass-inner),
+    0 0.5px 0 var(--separator);
+}
+
+.brand { display: inline-flex; align-items: center; gap: 10px; flex-shrink: 0; }
+/* saturate() on the surrounding material must not shift the brand colour. */
+.brand svg { display: block; flex-shrink: 0; filter: none; }
+.brand-name {
+  font-size: var(--text-title-3);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-snug);
+  line-height: 1;
+  color: var(--label);
+}
+.brand-name em { font-style: normal; color: var(--accent-ink); }
+
+.brand-rule { width: 1px; height: 22px; background: var(--separator); flex-shrink: 0; }
+
+h1 {
+  margin: 0;
+  font-size: var(--text-headline);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-snug);
+  color: var(--label-secondary);
+  white-space: nowrap;
+}
+
+.topbar-end { display: flex; align-items: center; gap: var(--space-4); margin-left: auto; }
+
+.who {
+  font-size: var(--text-caption-1);
+  color: var(--label-secondary);
+  letter-spacing: var(--tracking-wide);
+  white-space: nowrap;
+  max-width: 24ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ==========================================================================
+   7. SEGMENTED CONTROL — an iOS segmented control: a sunken track with an
+   elevated thumb that SLIDES. Segments are equal width so only translateX
+   animates; animating the thumb's width would be a layout property.
+   ========================================================================== */
+.seg {
+  position: relative;
+  display: flex;
+  padding: 2px;
+  background: var(--fill-3);
+  border-radius: var(--radius-sm);
+  isolation: isolate;
+}
+.seg-thumb {
+  position: absolute;
+  top: 2px; left: 2px; bottom: 2px;
+  z-index: 0;
+  background: var(--bg-elevated);
+  border-radius: 7px;
+  box-shadow: var(--shadow-1), 0 0 0 0.5px var(--separator);
+  will-change: transform;
+}
+.seg button {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 0;
+  min-width: 46px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: var(--text-caption-1);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-wide);
+  color: var(--label-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  /* Colour only — position is the thumb's job. */
+  transition: color var(--duration-fast) var(--ease-out);
+}
+.seg button[aria-pressed='true'] { color: var(--label); font-weight: var(--weight-semibold); }
+.seg button:active { color: var(--label); }
+
+/* ==========================================================================
+   8. CONTROLS — press feedback fires on pointer-DOWN, never on release.
+   ========================================================================== */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px; height: 32px;
+  padding: 0;
+  color: var(--label-secondary);
+  background: var(--fill-4);
+  border: 0;
+  border-radius: var(--radius-capsule);
+  cursor: pointer;
+  transition:
+    transform var(--duration-instant) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+.icon-btn:hover { background: var(--fill-3); color: var(--label); }
+.icon-btn:active { transform: scale(0.92); }   /* never scale(0) */
+.icon-btn svg { display: block; }
+
+.linkbtn {
+  padding: 2px 0;
+  font: inherit;
+  font-size: var(--text-caption-1);
+  font-weight: var(--weight-medium);
+  color: var(--accent-ink);
+  background: none;
+  border: 0;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  text-decoration: none;
+  transition: opacity var(--duration-instant) var(--ease-out),
+              transform var(--duration-instant) var(--ease-out);
+}
+.linkbtn:hover { text-decoration: underline; text-underline-offset: 2px; }
+.linkbtn:active { opacity: 0.6; transform: scale(0.97); }
+.linkbtn.destructive { color: var(--red-ink); }
+
+.btn-plain {
+  min-height: 32px;
+  padding: 0 var(--space-5);
+  font: inherit;
+  font-size: var(--text-caption-1);
+  font-weight: var(--weight-semibold);
+  color: var(--accent-ink);
+  background: var(--fill-4);
+  border: 0;
+  border-radius: var(--radius-capsule);
+  cursor: pointer;
+  transition: transform var(--duration-instant) var(--ease-out),
+              background-color var(--duration-fast) var(--ease-out);
+}
+.btn-plain:hover { background: var(--fill-3); }
+.btn-plain:active { transform: scale(0.97); }
+
+/* Apple inputs are a filled recessed shape, not an outlined box; the border
+   only appears on focus, where it doubles as the focus ring. */
+.field {
+  min-height: 32px;
+  padding: 6px 11px;
+  font: inherit;
+  font-size: var(--text-caption-1);
+  color: var(--label);
+  background: var(--fill-4);
+  border: 0;
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 0.5px var(--separator);
+  transition: box-shadow var(--duration-fast) var(--ease-out),
+              background-color var(--duration-fast) var(--ease-out);
+}
+.field::placeholder { color: var(--label-secondary); }
+.field:focus {
+  outline: none;
+  background: var(--bg-elevated);
+  box-shadow: inset 0 0 0 1.5px var(--accent-ink);
+}
+.search { position: relative; display: inline-flex; align-items: center; }
+.search svg { position: absolute; left: 9px; color: var(--label-tertiary); pointer-events: none; }
+.search .field { padding-left: 29px; width: 300px; max-width: 100%; }
+
+/* ==========================================================================
+   9. LAYOUT + SURFACES
+   ========================================================================== */
+main { max-width: 1280px; margin: 0 auto; padding: var(--space-8) var(--space-7) var(--space-10); }
+
+.stats {
+  display: grid;
+  gap: var(--space-4);
+  /* Four columns, with the two range-valued tiles spanning two each: 4x1 +
+     2x2 = 8 units, which fills exactly two rows and leaves no orphan tile.
+     auto-fit was leaving one tile alone on a second row at most widths. */
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: var(--space-7);
+}
+@media (max-width: 1000px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px)  { .stats { grid-template-columns: 1fr; } }
+
+.tile {
+  padding: var(--space-5) var(--space-6) var(--space-6);
+  background: var(--bg-elevated);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2), 0 0 0 0.5px var(--separator);
+}
+/* The money number is the one an operator opens this page for, so it gets the
+   width its range needs and a stained-glass accent wash to sit forward of the
+   others. Everything else stays uniform — one emphasis, not six. */
+.tile.wide { grid-column: span 2; }
+.tile.feature {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgb(var(--c-accent) / 0.10), rgb(var(--c-accent) / 0.02) 60%),
+    var(--bg-elevated);
+}
+.tile .k {
+  font-size: var(--text-caption-2);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--label-secondary);
+}
+.tile .v {
+  margin-top: 6px;
+  font-size: var(--text-title-1);
+  font-weight: var(--weight-semibold);
+  /* Tracking tightens as size grows. */
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--leading-snug);
+  font-variant-numeric: tabular-nums;
+}
+.tile .s {
+  margin-top: 3px;
+  font-size: var(--text-caption-1);
+  color: var(--label-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.tile .v .to { color: var(--label-tertiary); font-weight: var(--weight-regular); }
+
+.cols { display: grid; gap: var(--space-4); grid-template-columns: 1fr 1fr; margin-bottom: var(--space-4); }
+@media (max-width: 900px) { .cols { grid-template-columns: 1fr; } .tile.wide { grid-column: auto; } }
+
+.panel {
+  margin-bottom: var(--space-4);
+  background: var(--bg-elevated);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2), 0 0 0 0.5px var(--separator);
+  overflow: hidden;
+}
+.cols .panel { margin-bottom: 0; display: flex; flex-direction: column; }
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 0.5px solid var(--separator);
+}
+h2 {
+  margin: 0;
+  font-size: var(--text-footnote);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-normal);
+  color: var(--label);
+}
+.panel-note { font-size: var(--text-caption-1); color: var(--label-secondary); }
+.panel-head .search, .panel-head .spacer { margin-left: auto; }
+.panel-body { padding: var(--space-6); flex: 1; }
+
+/* ==========================================================================
+   10. TABLES
+   ========================================================================== */
+/* The leads table is 13 columns and will always overflow. The right-edge
+   fade is the affordance: without it the columns past the edge read as
+   missing rather than as scrolled-off. Masked rather than drawn so it works
+   over any panel background, and switched off once scrolled to the end. */
+.tscroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+/* Only the leads table is long enough to want a pinned header, and a header
+   only pins if its scrollport can actually scroll — so bound the height here
+   rather than letting the panel run to 100 rows down the page. */
+.tscroll.tall { max-height: min(58vh, 620px); }
+.tscroll.is-clipped {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent);
+          mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent);
+}
+table { width: 100%; border-collapse: collapse; }
+th, td {
+  text-align: left;
+  padding: 10px var(--space-5);
+  font-size: var(--text-caption-1);
+  border-bottom: 0.5px solid var(--separator);
+  white-space: nowrap;
+}
+thead th {
+  /* top:0, and the offset is relative to .tscroll, NOT the viewport: setting
+     overflow-x makes overflow-y compute to auto, so .tscroll is already the
+     scrollport. An earlier top:56px (to clear the sticky topbar) pushed the
+     header 56px down inside its own table, where it sat on top of row one. */
+  position: sticky; top: 0;
+  padding-top: 9px; padding-bottom: 9px;
+  font-size: var(--text-caption-2);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--label-secondary);
+  background: var(--bg-sunken);
+}
+tbody tr { transition: background-color var(--duration-fast) var(--ease-out); }
+tbody tr:hover { background: var(--fill-4); }
+tbody tr:last-child td { border-bottom: 0; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+td.mono { font-family: var(--font-mono); font-size: var(--text-caption-2); color: var(--label-secondary); }
+td.strong { font-weight: var(--weight-medium); color: var(--label); }
+.dash { color: var(--label-tertiary); }
+
+/* A meter, not a bar in a cell: the cache-hit number means more beside its
+   own scale than as a bare percentage. */
+.meter { display: inline-flex; align-items: center; gap: 8px; justify-content: flex-end; }
+/* display:block on both is load-bearing, not tidiness: these are <span>s, and
+   an inline box ignores width and height outright — the fill rendered at zero
+   width and the meter read as an empty grey track at every percentage. */
+.meter-track {
+  display: block; width: 48px; height: 5px;
+  border-radius: 3px; background: var(--fill-2); overflow: hidden;
+}
+.meter-fill { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
+
+.pill {
+  display: inline-block;
+  padding: 2px 8px;
+  font-family: var(--font-mono);
+  font-size: var(--text-caption-2);
+  border-radius: var(--radius-capsule);
+  letter-spacing: 0;
+}
+.pill.err { background: color-mix(in srgb, var(--red) 16%, transparent); color: var(--red-ink); }
+.pill.ok  { background: color-mix(in srgb, var(--green) 16%, transparent); color: var(--green-ink); }
+
+.empty {
+  padding: var(--space-8) var(--space-6);
+  font-size: var(--text-caption-1);
+  line-height: var(--leading-relaxed);
+  color: var(--label-secondary);
+  text-align: center;
+}
+.err-banner {
+  margin-bottom: var(--space-5);
+  padding: 11px var(--space-5);
+  font-size: var(--text-caption-1);
+  color: var(--red-ink);
+  background: color-mix(in srgb, var(--red) 14%, transparent);
+  border-radius: var(--radius-md);
+  box-shadow: inset 0 0 0 0.5px var(--red);
+}
+
+/* ==========================================================================
+   11. SPEND CHART — bars scale up from the baseline on first load only.
+   scaleY, not height: height is a layout property.
+   ========================================================================== */
+.chart { display: flex; align-items: flex-end; gap: 3px; height: 132px; }
+.chart .col { flex: 1; display: flex; align-items: flex-end; height: 100%; border-radius: 4px; }
+.chart .col:hover { background: var(--fill-4); }
+.chart .bar {
+  width: 100%;
+  min-height: 3px;
+  border-radius: 3px 3px 1px 1px;
+  background: linear-gradient(to top, rgb(var(--c-accent) / 0.55), var(--accent));
+  transform-origin: bottom;
+  transition: filter var(--duration-fast) var(--ease-out);
+}
+.chart .col:hover .bar { filter: brightness(1.15); }
+.chart-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 0.5px solid var(--separator);
+  font-size: var(--text-caption-2);
+  color: var(--label-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+   12. FUNNEL — a bar list, not a bar squeezed into a table's last column.
+   ========================================================================== */
+.funnel { display: flex; flex-direction: column; justify-content: space-between; gap: var(--space-5); height: 100%; }
+.funnel-row { display: grid; grid-template-columns: 1fr auto; gap: 5px var(--space-5); align-items: baseline; }
+.funnel-name {
+  font-family: var(--font-mono);
+  font-size: var(--text-caption-2);
+  color: var(--label);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.funnel-meta {
+  font-size: var(--text-caption-2);
+  color: var(--label-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.funnel-track {
+  grid-column: 1 / -1;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--fill-3);
+  overflow: hidden;
+}
+.funnel-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transform-origin: left;
+}
+
+/* ==========================================================================
+   13. DIALOGS — a thick material, floated. The entrance is a scale+fade on
+   --ease-ios; a modal is fire-and-forget, so it does not need a spring.
+   ========================================================================== */
+dialog {
+  padding: 0;
+  border: 0;
+  color: var(--label);
+  background: var(--material-thick-tint);
+  -webkit-backdrop-filter: blur(34px) saturate(var(--material-saturate));
+          backdrop-filter: blur(34px) saturate(var(--material-saturate));
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--glass-specular), var(--glass-inner), var(--glass-rim), var(--shadow-4);
+}
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.42);
+  -webkit-backdrop-filter: blur(3px);
+          backdrop-filter: blur(3px);
+}
+dialog[open] { animation: sheet-in var(--duration-base) var(--ease-ios); }
+dialog[open]::backdrop { animation: fade-in var(--duration-base) var(--ease-ios); }
+@keyframes sheet-in { from { opacity: 0; transform: scale(0.96) translateY(8px); } }
+@keyframes fade-in  { from { opacity: 0; } }
+
+.dlg-head {
+  display: flex; justify-content: space-between; align-items: center; gap: var(--space-5);
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 0.5px solid var(--separator);
+}
+.dlg-title {
+  font-size: var(--text-headline);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-snug);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dlg-actions { display: flex; align-items: center; gap: var(--space-5); flex-shrink: 0; }
+
+#confirm-delete { width: min(520px, 92vw); }
+#del-body { padding: var(--space-6); font-size: var(--text-caption-1); line-height: var(--leading-relaxed); }
+#del-body p { margin: 0 0 var(--space-4); }
+#del-body ul {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  list-style: none;
+  background: var(--fill-4);
+  border-radius: var(--radius-md);
+  color: var(--label-secondary);
+  font-variant-numeric: tabular-nums;
+}
+#del-body li { display: flex; justify-content: space-between; padding: 2px 0; }
+#del-body li b { color: var(--label); font-weight: var(--weight-semibold); }
+#del-body input { display: block; width: 100%; font-family: var(--font-mono); }
+.danger {
+  width: 100%;
+  min-height: 44px;                        /* Apple touch-target floor */
+  margin-top: var(--space-5);
+  font: inherit;
+  font-size: var(--text-callout);
+  font-weight: var(--weight-semibold);
+  color: #fff;
+  background: var(--red-ink);
+  border: 0;
+  border-radius: var(--radius-capsule);
+  cursor: pointer;
+  transition: transform var(--duration-instant) var(--ease-out),
+              filter var(--duration-instant) var(--ease-out);
+}
+.danger:hover:not(:disabled) { filter: brightness(1.08); }
+.danger:active:not(:disabled) { transform: scale(0.97); }
+/* A disabled control must LOOK disabled. */
+.danger:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* display lives ONLY on [open]: the UA sheet hides a closed <dialog> with
+   display:none, and setting display on the element itself outranks that and
+   leaves the sheet on screen permanently. */
+#transcript { width: min(680px, 92vw); max-height: 84vh; }
+#transcript[open] { display: flex; flex-direction: column; }
+#transcript .dlg-head { flex-shrink: 0; }
+#transcript-body { padding: var(--space-6); overflow-y: auto; }
+
+/* The conversation reads as a conversation. Bubbles are opaque on purpose —
+   stacking a translucent bubble on the translucent sheet double-blurs both. */
+.turn { display: flex; flex-direction: column; margin-bottom: var(--space-5); max-width: 82%; }
+.turn-user { margin-left: auto; align-items: flex-end; }
+.turn-meta {
+  margin-bottom: 4px;
+  font-size: var(--text-caption-2);
+  color: var(--label-secondary);
+  letter-spacing: var(--tracking-wide);
+}
+.bubble {
+  padding: 9px 13px;
+  font-size: var(--text-caption-1);
+  line-height: var(--leading-relaxed);
+  white-space: pre-wrap;
+  border-radius: var(--radius-lg);
+  background: var(--fill-4);
+  color: var(--label);
+  box-shadow: 0 0 0 0.5px var(--separator);
+}
+.turn-user .bubble {
+  background: rgb(var(--c-accent) / 0.16);
+  box-shadow: 0 0 0 0.5px rgb(var(--c-accent) / 0.28);
+  border-bottom-right-radius: var(--radius-xs);
+}
+.turn-bot .bubble { border-bottom-left-radius: var(--radius-xs); }
+.muted { color: var(--label-secondary); font-size: var(--text-caption-1); }
+
+/* ==========================================================================
+   14. ACCESSIBILITY FALLBACKS — a material fails three ways for real users.
+   ========================================================================== */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .topbar, dialog { background: var(--bg-elevated); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .topbar, dialog {
+    background: var(--bg-elevated);
+    -webkit-backdrop-filter: none;
+            backdrop-filter: none;
+  }
+  dialog::backdrop { background: rgba(0, 0, 0, 0.7); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+@media (prefers-contrast: more) {
+  .tile, .panel, dialog { box-shadow: 0 0 0 1px var(--label); }
+  :root { --label-secondary: rgba(60, 60, 67, 0.85); }
+  [data-theme='dark'] { --label-secondary: rgba(235, 235, 245, 0.85); }
+}
+/* Reduced motion: gentler, not gone. The spring becomes a jump-cut and the
+   entrances become crossfades, but instant press feedback survives, because
+   cause-and-effect is not decoration. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  dialog[open] { animation: fade-in 0.15s linear; }
+}
+
+/* ==========================================================================
+   15. PRINT — "Save as PDF" is window.print(), the same approach the public
+   quote page uses: no PDF library and no server round trip. A modal <dialog>
+   lives in the top layer, so printing it needs the rest of the page removed
+   rather than merely hidden behind it, and the dialog itself un-positioned so
+   it can paginate instead of being clipped to one viewport-sized box.
+   ========================================================================== */
+@media print {
+  body > *:not(#transcript) { display: none !important; }
+  /* Repeating :root is deliberate. The system-dark block above is
+     :root:not([data-theme='light']), and :not() takes the specificity of its
+     argument — (0,2,0) — so a plain :root here would lose to it no matter how
+     late it appears, and the transcript would print on a black page. */
+  :root:root, :root:root[data-theme='dark'], [data-theme='dark'] {
+    --bg: #fff; --bg-elevated: #fff; --bg-sunken: #fff;
+    --label: #000; --label-secondary: rgba(0,0,0,.65); --label-tertiary: rgba(0,0,0,.45);
+    --separator: rgba(0,0,0,.2); --fill-4: #f4f4f5;
+  }
+  /* Restating this is not redundant: the tokens above only reach elements that
+     READ them, and body's background is set in the base block from the dark
+     value. Without this, printing from dark mode with "background graphics" on
+     produces a full-bleed black page behind the transcript. */
+  body { background: var(--bg); color: var(--label); }
+  dialog#transcript {
+    display: block !important; position: static !important;
+    width: auto !important; max-height: none !important;
+    background: #fff !important; color: #000 !important;
+    -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+    box-shadow: none !important; border-radius: 0 !important;
+  }
+  dialog#transcript::backdrop { display: none; }
+  .dlg-head { position: static; border-bottom: 1px solid #ccc; }
+  #transcript-body { max-height: none !important; overflow: visible !important; padding-left: 0; padding-right: 0; }
+  /* Controls are not part of the document. */
+  .dlg-actions { display: none !important; }
+  .turn { break-inside: avoid; max-width: 100%; }
+  .turn-user { margin-left: 0; align-items: flex-start; }
+  .bubble {
+    background: transparent !important; box-shadow: none !important;
+    padding-left: 0; padding-right: 0; color: #000 !important;
+  }
+  .turn-meta { color: #555 !important; }
+}
 </style>
 </head>
 <body>
-<header>
-  <h1>BA bot · metrics</h1>
-  <div class="seg" id="range" role="group" aria-label="Time range">
-    <button data-days="7">7d</button>
-    <button data-days="30" aria-pressed="true">30d</button>
-    <button data-days="90">90d</button>
-    <button data-days="0">All</button>
+
+<header class="topbar">
+  <span class="brand">
+    <!-- The mark from apps/web/components/Logo.tsx. Its two colours stay
+         literal rather than going through the accent tokens: the logo is the
+         source of truth the tokens were derived FROM, and it must render
+         identically in both themes. -->
+    <svg width="26" height="26" viewBox="0 0 40 40" fill="none" role="img" aria-label="Uno Digit">
+      <path d="M11 11V21C11 25.9706 15.0294 30 20 30C24.9706 30 29 25.9706 29 21V11"
+            stroke="#06b6d4" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="29" cy="11" r="3" fill="#8b5cf6"/>
+      <circle cx="11" cy="11" r="3" fill="#8b5cf6"/>
+    </svg>
+    <span class="brand-name">Uno <em>Digit</em></span>
+  </span>
+  <span class="brand-rule" aria-hidden="true"></span>
+  <h1>BA bot metrics</h1>
+
+  <div class="topbar-end">
+    <div class="seg" id="range" role="group" aria-label="Time range">
+      <span class="seg-thumb" id="seg-thumb" aria-hidden="true"></span>
+      <button type="button" data-days="7">7d</button>
+      <button type="button" data-days="30" aria-pressed="true">30d</button>
+      <button type="button" data-days="90">90d</button>
+      <button type="button" data-days="0">All</button>
+    </div>
+    <button type="button" class="icon-btn" id="theme" aria-label="Switch appearance">
+      <svg id="theme-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
+    </button>
+    <div class="who" id="who"></div>
   </div>
-  <div class="who" id="who"></div>
 </header>
+
 <main>
   <div id="error" hidden class="err-banner"></div>
-  <div class="grid" id="tiles"></div>
+  <div class="stats" id="tiles"></div>
 
-  <section>
-    <h2>Spend per day</h2>
-    <div class="spark" id="spark"></div>
-  </section>
+  <div class="cols">
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Spend per day</h2>
+        <span class="panel-note" id="spend-note"></span>
+      </div>
+      <div class="panel-body">
+        <div class="chart" id="chart"></div>
+        <div class="chart-axis"><span id="chart-from"></span><span id="chart-to"></span></div>
+      </div>
+    </section>
 
-  <section>
-    <h2>Where conversations stop</h2>
-    <div id="funnel"></div>
-  </section>
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Where conversations stop</h2>
+        <span class="panel-note">conversations · share · avg turns</span>
+      </div>
+      <div class="panel-body" id="funnel"></div>
+    </section>
+  </div>
 
-  <section>
-    <h2>Events — every signal the bot records</h2>
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Events</h2>
+      <span class="panel-note">every signal the bot records</span>
+    </div>
     <div id="events"></div>
   </section>
 
-  <section>
-    <h2>LLM usage by model</h2>
+  <section class="panel">
+    <div class="panel-head"><h2>LLM usage by model</h2></div>
     <div id="models"></div>
   </section>
 
-  <section>
-    <h2>Leads</h2>
-    <div class="row">
-      <input type="search" id="q" placeholder="filter by email, name or company" autocomplete="off">
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Leads</h2>
+      <span class="search">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/>
+        </svg>
+        <input type="search" id="q" class="field" placeholder="Filter by email, name or company" autocomplete="off" aria-label="Filter leads">
+      </span>
     </div>
     <div id="leads"></div>
   </section>
@@ -207,23 +1023,23 @@ export function dashboardHtml(): string {
 
 <!-- Native <dialog>: focus trapping, Escape-to-close and the backdrop come for
      free, and this page ships no framework to provide them. -->
-<dialog id="confirm-delete">
-  <header>
-    <strong>Delete this lead permanently</strong>
-    <button type="button" id="del-cancel" class="linkbtn">Cancel</button>
-  </header>
+<dialog id="confirm-delete" aria-labelledby="del-title">
+  <div class="dlg-head">
+    <span class="dlg-title" id="del-title">Delete this lead permanently</span>
+    <span class="dlg-actions"><button type="button" id="del-cancel" class="linkbtn">Cancel</button></span>
+  </div>
   <div id="del-body"></div>
 </dialog>
 
-<dialog id="transcript">
-  <header>
-    <strong id="transcript-who"></strong>
-    <span class="row">
+<dialog id="transcript" aria-labelledby="transcript-who">
+  <div class="dlg-head">
+    <span class="dlg-title" id="transcript-who"></span>
+    <span class="dlg-actions">
       <a id="transcript-md" class="linkbtn" download>Download .md</a>
       <button type="button" id="transcript-print" class="linkbtn">Save as PDF</button>
-      <button type="button" id="transcript-close" class="linkbtn">Close</button>
+      <button type="button" id="transcript-close" class="btn-plain">Close</button>
     </span>
-  </header>
+  </div>
   <div id="transcript-body"></div>
 </dialog>
 
@@ -231,6 +1047,7 @@ export function dashboardHtml(): string {
 (function () {
   'use strict';
   var days = 30;
+  var reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   var fmtInt = new Intl.NumberFormat('en-AU');
   var fmtAud = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 });
@@ -243,6 +1060,14 @@ export function dashboardHtml(): string {
     // lead. Escaping by construction beats escaping by discipline.
     if (text !== undefined && text !== null) n.textContent = String(text);
     if (cls) n.className = cls;
+    return n;
+  }
+
+  // An em dash for a genuinely absent value, tinted so a column of them reads
+  // as texture rather than as data.
+  function orDash(v) {
+    var n = el('td', v || '—');
+    if (!v) n.className = 'dash';
     return n;
   }
 
@@ -264,8 +1089,100 @@ export function dashboardHtml(): string {
       });
   }
 
-  function tile(k, v, s) {
-    var t = el('div', null, 'tile');
+  /* ---------------------------------------------------------------------
+     Appearance. Default is the OS setting, which means NO attribute — an
+     explicit data-theme is only written once someone chooses. The <head>
+     script applies the stored choice before first paint; this only keeps the
+     icon and the toggle in sync afterwards.
+     --------------------------------------------------------------------- */
+  var SUN = 'M12 3v2M12 19v2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M3 12h2M19 12h2M5.6 18.4L7 17M17 7l1.4-1.4';
+  function isDark() {
+    var t = document.documentElement.getAttribute('data-theme');
+    return t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+  function paintThemeIcon() {
+    var svg = document.getElementById('theme-icon');
+    svg.replaceChildren();
+    var ns = 'http://www.w3.org/2000/svg';
+    if (isDark()) {
+      // Showing the sun in dark mode: the icon is the destination, not the state.
+      var c = document.createElementNS(ns, 'circle');
+      c.setAttribute('cx', '12'); c.setAttribute('cy', '12'); c.setAttribute('r', '4');
+      var rays = document.createElementNS(ns, 'path');
+      rays.setAttribute('d', SUN);
+      svg.append(c, rays);
+    } else {
+      var m = document.createElementNS(ns, 'path');
+      m.setAttribute('d', 'M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z');
+      svg.append(m);
+    }
+  }
+  document.getElementById('theme').addEventListener('click', function () {
+    var next = isDark() ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem('uno-admin-theme', next); } catch (e) { /* private mode */ }
+    paintThemeIcon();
+  });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', paintThemeIcon);
+  paintThemeIcon();
+
+  /* ---------------------------------------------------------------------
+     A small critically-damped spring (damping = 2*sqrt(stiffness), so it
+     settles without overshoot). The segmented thumb is the one element on
+     this page a person moves directly, and a fixed-duration transition snaps
+     where a spring settles. It is interruptible on purpose: retargeting
+     mid-flight keeps the current position AND velocity rather than restarting
+     from zero, which is what makes fast repeated taps feel continuous.
+     --------------------------------------------------------------------- */
+  function makeSpring(apply) {
+    var stiffness = 260, damping = 32;
+    var x = 0, v = 0, target = 0, raf = 0, last = 0;
+    function step(t) {
+      var dt = last ? Math.min((t - last) / 1000, 1 / 30) : 1 / 60;
+      last = t;
+      v += (-stiffness * (x - target) - damping * v) * dt;
+      x += v * dt;
+      if (Math.abs(x - target) < 0.15 && Math.abs(v) < 0.15) {
+        x = target; v = 0; raf = 0; last = 0; apply(x); return;
+      }
+      apply(x);
+      raf = requestAnimationFrame(step);
+    }
+    return {
+      set: function (val) { if (raf) cancelAnimationFrame(raf); raf = 0; last = 0; x = target = val; v = 0; apply(x); },
+      to: function (val) {
+        target = val;
+        if (reduceMotion) { x = val; v = 0; apply(x); return; }
+        if (!raf) { last = 0; raf = requestAnimationFrame(step); }
+      }
+    };
+  }
+
+  var seg = document.getElementById('range');
+  var segButtons = Array.prototype.slice.call(seg.querySelectorAll('button'));
+  var thumb = document.getElementById('seg-thumb');
+  var thumbSpring = makeSpring(function (x) { thumb.style.transform = 'translateX(' + x + 'px)'; });
+
+  function segIndex() {
+    for (var i = 0; i < segButtons.length; i++) {
+      if (segButtons[i].getAttribute('aria-pressed') === 'true') return i;
+    }
+    return 0;
+  }
+  // Segments are equal-width (flex 1 1 0), so the thumb's width never changes
+  // and only translateX has to move — never a layout property.
+  function segStep() { return (seg.clientWidth - 4) / segButtons.length; }
+  function layoutThumb(animate) {
+    var w = segStep();
+    thumb.style.width = w + 'px';
+    var x = segIndex() * w;
+    if (animate) thumbSpring.to(x); else thumbSpring.set(x);
+  }
+  new ResizeObserver(function () { layoutThumb(false); }).observe(seg);
+  layoutThumb(false);
+
+  function tile(k, v, s, cls) {
+    var t = el('div', null, 'tile' + (cls ? ' ' + cls : ''));
     t.appendChild(el('div', k, 'k'));
     t.appendChild(el('div', v, 'v'));
     if (s) t.appendChild(el('div', s, 's'));
@@ -276,18 +1193,53 @@ export function dashboardHtml(): string {
   // table used to say "Nothing in this window" while running no window at all,
   // which sent operators to widen a filter that changed nothing and made a
   // working portal look broken.
-  function table(cols, rows, build, emptyMsg) {
+  function table(cols, rows, build, emptyMsg, tall) {
     if (!rows.length) return el('div', emptyMsg || 'Nothing in this window.', 'empty');
+    var wrap = el('div', null, 'tscroll' + (tall ? ' tall' : ''));
+    // The fade is state, not decoration: it has to disappear at the end of the
+    // scroll or it reads as "still more columns" when there are none.
+    function syncClip() {
+      var more = wrap.scrollWidth - wrap.clientWidth - wrap.scrollLeft > 2;
+      wrap.classList.toggle('is-clipped', more);
+    }
+    wrap.addEventListener('scroll', syncClip, { passive: true });
+    new ResizeObserver(syncClip).observe(wrap);
+
     var t = el('table'), thead = el('thead'), tr = el('tr');
-    cols.forEach(function (c) {
-      var th = el('th', c.label, c.numeric ? 'n' : '');
-      tr.appendChild(th);
-    });
+    cols.forEach(function (c) { tr.appendChild(el('th', c.label, c.numeric ? 'n' : '')); });
     thead.appendChild(tr); t.appendChild(thead);
     var tb = el('tbody');
     rows.forEach(function (r) { tb.appendChild(build(r)); });
     t.appendChild(tb);
-    return t;
+    wrap.appendChild(t);
+    return wrap;
+  }
+
+  // "failed", "rejected", "reached", "expired" are the signals worth noticing;
+  // everything else is routine bookkeeping. Matched on whole underscore-
+  // separated words, not substrings: the old /fail|reject|cap|limit|expired/
+  // matched the "cap" inside lead_capTUREd, so the single healthiest event on
+  // the page rendered as a red error pill.
+  var BAD_WORDS = ['fail', 'failed', 'failure', 'error', 'errors', 'reject', 'rejected',
+    'blocked', 'denied', 'expired', 'invalid', 'timeout', 'timedout', 'limit', 'limited',
+    'capped', 'abandoned', 'abort', 'aborted'];
+  function isBadEvent(type) {
+    return String(type).toLowerCase().split(/[_.-]/).some(function (w) {
+      return BAD_WORDS.indexOf(w) !== -1;
+    });
+  }
+
+  // Bars and fills grow from nothing on FIRST paint only. Re-running it on
+  // every range switch would animate something an operator does dozens of
+  // times a session, which is exactly the motion Apple leaves out.
+  var firstPaint = true;
+  function grow(node, axis) {
+    if (reduceMotion || !firstPaint) return;
+    node.style.transform = axis + '(0)';
+    requestAnimationFrame(function () {
+      node.style.transition = 'transform 620ms var(--ease-out)';
+      node.style.transform = axis + '(1)';
+    });
   }
 
   // Timestamps from this API are MILLISECONDS — every column is written from
@@ -297,31 +1249,24 @@ export function dashboardHtml(): string {
   // daily() in db/admin. It is the recurring mistake in this codebase.
   function renderSummary(d) {
     var o = d.overview;
-    var tiles = document.getElementById('tiles');
-    tiles.replaceChildren(
+    // Order matters: the two span-2 tiles sit at the start and end so the six
+    // tiles fill two rows of four exactly.
+    document.getElementById('tiles').replaceChildren(
+      quotedValueTile(o),
       tile('Conversations', fmtInt.format(o.conversations),
         fmtInt.format(o.completed) + ' completed · ' + fmtInt.format(o.unfinished) + ' unfinished'),
-      tile('Leads', fmtInt.format(o.leads), o.conversations ? Math.round(100 * o.leads / o.conversations) + '% of conversations' : ''),
+      tile('Leads', fmtInt.format(o.leads),
+        o.conversations ? Math.round(100 * o.leads / o.conversations) + '% of conversations' : ''),
       tile('Quotes', fmtInt.format(o.quotes), fmtInt.format(o.briefs) + ' briefs'),
-      tile('Quoted value', fmtAud.format(o.quotedValueLowAud) + '–' + fmtAud.format(o.quotedValueHighAud)),
+      tile('Avg turns', o.avgTurns, 'per conversation'),
       // cost_usd is written by nothing, so the old USD figure was always 0.00 —
       // a number that cannot be anything but zero is worse than no number.
       // Tokens are what is actually measured, split the way they are billed.
       tile('LLM tokens', fmtInt.format(o.tokensIn + o.tokensOut),
-        fmtInt.format(o.tokensIn) + ' in · ' + fmtInt.format(o.tokensOut) + ' out'),
-      tile('Avg turns', o.avgTurns)
+        fmtInt.format(o.tokensIn) + ' in · ' + fmtInt.format(o.tokensOut) + ' out', 'wide')
     );
 
-    var max = d.daily.reduce(function (m, r) { return Math.max(m, r.costUsd); }, 0) || 1;
-    var spark = document.getElementById('spark');
-    spark.replaceChildren();
-    d.daily.forEach(function (r) {
-      var b = el('div');
-      b.style.height = Math.max(2, Math.round(100 * r.costUsd / max)) + '%';
-      b.title = r.day + ' · ' + fmtUsd.format(r.costUsd) + ' · ' + r.conversations + ' conversations';
-      spark.appendChild(b);
-    });
-    if (!d.daily.length) spark.replaceChildren(el('div', null));
+    renderChart(d.daily);
 
     // cached_tokens is a SUBSET of prompt_tokens, so the hit rate is
     // cached/prompt. Showing it as a share of the total would overstate it.
@@ -338,45 +1283,104 @@ export function dashboardHtml(): string {
         tr.appendChild(el('td', fmtInt.format(r.promptTokens), 'n'));
         tr.appendChild(el('td', fmtInt.format(r.cachedTokens), 'n'));
         var pct = r.promptTokens ? Math.round(100 * r.cachedTokens / r.promptTokens) : 0;
-        tr.appendChild(el('td', pct + '%', 'n'));
+        var cell = el('td', null, 'n');
+        var meter = el('span', null, 'meter');
+        var track = el('span', null, 'meter-track');
+        var fill = el('span', null, 'meter-fill');
+        fill.style.width = pct + '%';
+        track.appendChild(fill);
+        meter.append(el('span', pct + '%'), track);
+        cell.appendChild(meter);
+        tr.appendChild(cell);
         tr.appendChild(el('td', fmtInt.format(r.completionTokens), 'n'));
         return tr;
       },
       'No model calls in this window.'
     ));
 
-    document.getElementById('funnel').replaceChildren(table(
-      [{ label: 'Stopped at' }, { label: 'Conversations', numeric: true },
-       { label: '%', numeric: true }, { label: 'Avg turns', numeric: true }, { label: '' }],
-      d.funnel,
-      function (r) {
-        var tr = el('tr');
-        tr.appendChild(el('td', r.state, 'mono'));
-        tr.appendChild(el('td', fmtInt.format(r.conversations), 'n'));
-        tr.appendChild(el('td', r.pctOfTotal + '%', 'n'));
-        tr.appendChild(el('td', r.avgTurns, 'n'));
-        var cell = el('td'), bar = el('div', null, 'bar');
-        bar.style.width = Math.max(2, r.pctOfTotal) + '%';
-        cell.appendChild(bar); tr.appendChild(cell);
-        return tr;
-      }
-    ));
+    renderFunnel(d.funnel);
 
     document.getElementById('events').replaceChildren(table(
       [{ label: 'Event' }, { label: 'Count', numeric: true }, { label: 'Last seen' }],
       d.events,
       function (r) {
         var tr = el('tr'), td = el('td');
-        // "failed", "rejected", "reached", "expired" are the signals worth
-        // noticing; everything else is routine bookkeeping.
-        var bad = /fail|reject|cap|limit|expired/.test(r.type);
-        td.appendChild(el('span', r.type, 'pill ' + (bad ? 'err' : 'ok')));
+        td.appendChild(el('span', r.type, 'pill ' + (isBadEvent(r.type) ? 'err' : 'ok')));
         tr.appendChild(td);
         tr.appendChild(el('td', fmtInt.format(r.count), 'n'));
         tr.appendChild(el('td', new Date(r.lastAt).toLocaleString('en-AU'), 'mono'));
         return tr;
       }
     ));
+  }
+
+  // The money number is what an operator opens this page for. It gets the
+  // extra column its range needs, so "$412,000–$738,000" stops wrapping
+  // mid-figure, and a low-to-high split instead of one run-on string.
+  function quotedValueTile(o) {
+    var t = el('div', null, 'tile wide feature');
+    t.appendChild(el('div', 'Quoted value', 'k'));
+    var v = el('div', null, 'v');
+    v.append(
+      el('span', fmtAud.format(o.quotedValueLowAud)),
+      el('span', ' to ', 'to'),
+      el('span', fmtAud.format(o.quotedValueHighAud))
+    );
+    t.appendChild(v);
+    t.appendChild(el('div', 'across ' + fmtInt.format(o.quotes) + ' quotes', 's'));
+    return t;
+  }
+
+  function renderChart(daily) {
+    var chart = document.getElementById('chart');
+    var note = document.getElementById('spend-note');
+    chart.replaceChildren();
+    if (!daily.length) {
+      note.textContent = '';
+      document.getElementById('chart-from').textContent = '';
+      document.getElementById('chart-to').textContent = '';
+      chart.appendChild(el('div', 'No spend recorded in this window.', 'empty'));
+      return;
+    }
+
+    var max = daily.reduce(function (m, r) { return Math.max(m, r.costUsd); }, 0) || 1;
+    var total = daily.reduce(function (s, r) { return s + r.costUsd; }, 0);
+    note.textContent = fmtUsd.format(total) + ' total · peak ' + fmtUsd.format(max);
+
+    daily.forEach(function (r) {
+      var col = el('div', null, 'col');
+      var b = el('div', null, 'bar');
+      b.style.height = Math.max(2, Math.round(100 * r.costUsd / max)) + '%';
+      col.title = r.day + ' · ' + fmtUsd.format(r.costUsd) + ' · ' + r.conversations + ' conversations';
+      col.appendChild(b);
+      chart.appendChild(col);
+      grow(b, 'scaleY');
+    });
+
+    var f = new Date(daily[0].day), t = new Date(daily[daily.length - 1].day);
+    var short = { day: 'numeric', month: 'short' };
+    document.getElementById('chart-from').textContent = f.toLocaleDateString('en-AU', short);
+    document.getElementById('chart-to').textContent = t.toLocaleDateString('en-AU', short);
+  }
+
+  function renderFunnel(rows) {
+    var box = document.getElementById('funnel');
+    if (!rows.length) { box.replaceChildren(el('div', 'Nothing in this window.', 'empty')); return; }
+    box.replaceChildren();
+    rows.forEach(function (r) {
+      var row = el('div', null, 'funnel-row');
+      row.appendChild(el('div', r.state, 'funnel-name'));
+      row.appendChild(el('div',
+        fmtInt.format(r.conversations) + ' · ' + r.pctOfTotal + '% · ' + r.avgTurns + ' turns',
+        'funnel-meta'));
+      var track = el('div', null, 'funnel-track');
+      var fill = el('div', null, 'funnel-fill');
+      fill.style.width = Math.max(1.5, r.pctOfTotal) + '%';
+      track.appendChild(fill);
+      row.appendChild(track);
+      box.appendChild(row);
+      grow(fill, 'scaleX');
+    });
   }
 
   // Opens the conversation behind a lead. Built with textContent only, like
@@ -404,7 +1408,7 @@ export function dashboardHtml(): string {
           var wrap = el('div', null, 'turn ' + (t.role === 'user' ? 'turn-user' : 'turn-bot'));
           wrap.appendChild(el('div', (t.role === 'user' ? 'Visitor' : 'Mary') +
             ' · ' + new Date(t.createdAt).toLocaleString('en-AU'), 'turn-meta'));
-          wrap.appendChild(el('div', t.content));
+          wrap.appendChild(el('div', t.content, 'bubble'));
           return wrap;
         }));
       })
@@ -442,7 +1446,9 @@ export function dashboardHtml(): string {
       var ul = el('ul');
       [['conversation', i.conversations], ['message', i.messages], ['brief', i.briefs],
        ['quote', i.quotes], ['event', i.events]].forEach(function (pair) {
-        ul.appendChild(el('li', pair[1] + ' ' + pair[0] + (pair[1] === 1 ? '' : 's')));
+        var li = el('li');
+        li.append(el('span', pair[0] + (pair[1] === 1 ? '' : 's')), el('b', fmtInt.format(pair[1])));
+        ul.appendChild(li);
       });
       body.appendChild(ul);
       body.appendChild(el('p', 'Rate-limit counters are not touched — they hold salted ' +
@@ -450,7 +1456,7 @@ export function dashboardHtml(): string {
 
       var label = el('p', 'Type the email address to confirm:');
       body.appendChild(label);
-      var input = el('input');
+      var input = el('input', null, 'field');
       input.type = 'text';
       input.setAttribute('aria-label', 'Type the email address to confirm deletion');
       input.autocomplete = 'off';
@@ -498,12 +1504,14 @@ export function dashboardHtml(): string {
         var tr = el('tr');
         tr.appendChild(el('td', new Date(r.createdAt).toLocaleDateString('en-AU'), 'mono'));
         tr.appendChild(el('td', r.email, 'mono'));
-        tr.appendChild(el('td', r.name || '—'));
-        tr.appendChild(el('td', r.company || '—'));
+        var name = orDash(r.name); name.classList.add('strong');
+        tr.appendChild(name);
+        tr.appendChild(orDash(r.company));
         // What the client wants built, in a couple of words. Inferred during
         // the interview, so null for anything before migration 0006.
-        tr.appendChild(el('td', r.industry || '—'));
-        tr.appendChild(el('td', r.phone || '—', 'mono'));
+        tr.appendChild(orDash(r.industry));
+        var phone = orDash(r.phone); phone.classList.add('mono');
+        tr.appendChild(phone);
         // Source is the UTM tag; "direct" there only means untagged.
         var src = el('td', r.utmSource || 'direct', 'mono');
         if (r.utmSource && (r.utmMedium || r.utmCampaign)) {
@@ -515,11 +1523,12 @@ export function dashboardHtml(): string {
         // typed URL both read "direct" in Source; only this tells them apart.
         // Shown as the host alone — the full URL is long, and the host is the
         // part an operator reads.
-        var ref = el('td', '—', 'mono');
+        var ref = el('td', '—', 'mono dash');
         if (r.referrer) {
           var host = r.referrer;
-          try { host = new URL(r.referrer).host.replace(/^www\./, ''); } catch (e) { /* keep raw */ }
+          try { host = new URL(r.referrer).host.replace(/^www\\./, ''); } catch (e) { /* keep raw */ }
           ref.textContent = host;
+          ref.className = 'mono';
           ref.title = r.referrer;
         }
         tr.appendChild(ref);
@@ -536,7 +1545,7 @@ export function dashboardHtml(): string {
           a.href = r.quoteUrl; a.target = '_blank'; a.rel = 'noopener noreferrer';
           a.className = 'linkbtn';
           q.appendChild(a);
-        } else { q.textContent = '—'; }
+        } else { q.textContent = '—'; q.className = 'dash'; }
         tr.appendChild(q);
 
         var t = el('td');
@@ -547,16 +1556,16 @@ export function dashboardHtml(): string {
             showTranscript(r.conversationId, r.name ? r.name + ' · ' + r.email : r.email);
           });
           t.appendChild(b);
-        } else { t.textContent = '—'; }
+        } else { t.textContent = '—'; t.className = 'dash'; }
         tr.appendChild(t);
 
-        tr.appendChild(el('td', r.quotes ? fmtAud.format(r.lowAud) + '–' + fmtAud.format(r.highAud) : '—', 'n'));
+        tr.appendChild(el('td',
+          r.quotes ? fmtAud.format(r.lowAud) + '–' + fmtAud.format(r.highAud) : '—',
+          r.quotes ? 'n' : 'n dash'));
 
         var del = el('td');
-        var db_ = el('button', 'Delete');
+        var db_ = el('button', 'Delete', 'linkbtn destructive');
         db_.type = 'button';
-        db_.className = 'linkbtn';
-        db_.style.color = 'var(--bad)';
         db_.setAttribute('aria-label', 'Delete lead ' + r.email);
         db_.addEventListener('click', function () { confirmDelete(r); });
         del.appendChild(db_);
@@ -564,7 +1573,8 @@ export function dashboardHtml(): string {
 
         return tr;
       },
-      leadsEmptyMessage(d)
+      leadsEmptyMessage(d),
+      true
     ));
   }
 
@@ -590,17 +1600,18 @@ export function dashboardHtml(): string {
 
   function loadAll() {
     get('/admin/api/summary?days=' + days)
-      .then(renderSummary).catch(function (e) { if (e.message !== 'reauth') fail(e.message); });
+      .then(renderSummary)
+      .catch(function (e) { if (e.message !== 'reauth') fail(e.message); })
+      .finally(function () { firstPaint = false; });
     loadLeads();
   }
 
-  document.getElementById('range').addEventListener('click', function (ev) {
+  seg.addEventListener('click', function (ev) {
     var b = ev.target.closest('button');
     if (!b) return;
     days = Number(b.dataset.days);
-    Array.prototype.forEach.call(this.querySelectorAll('button'), function (x) {
-      x.setAttribute('aria-pressed', String(x === b));
-    });
+    segButtons.forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+    layoutThumb(true);
     loadAll();
   });
 

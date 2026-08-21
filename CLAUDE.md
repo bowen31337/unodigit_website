@@ -116,6 +116,13 @@ Other conventions:
   and `prefers-contrast: more` all have real fallbacks. Verify changes against them.
 - Dark mode is driven by `data-theme` on `<html>` (next-themes), with a
   `prefers-color-scheme` block for the pre-hydration / no-JS case.
+- **One deliberate copy of the token layer exists**, in
+  `apps/ba-bot-api/src/admin/dashboard.ts`. That page ships from a different
+  package with no build step and a `default-src 'none'` CSP, so it can neither
+  import `globals.css` nor pull Inter from Google Fonts — it carries a hand-
+  ported subset of the same tokens and rides the `-apple-system` stack alone.
+  **Change a token in `globals.css` and change it there too.** For the same
+  reason the logo is inline SVG and the favicon a `data:` URI, not `/logo.png`.
 
 ### Key Libraries
 

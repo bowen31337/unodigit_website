@@ -59,10 +59,12 @@ Slot fields: none. Set ready_to_advance to true after your first reply.`,
 Find out what the product is, who it is for, and what problem it solves.
 Slot fields: project_name (string), audience (string), problem (string), industry (string).
 ALWAYS include industry in slots on your FIRST reply in this topic, and never
-ask about it — infer it from what the visitor has already said. Two or three
-words naming the sector the product serves: "construction", "dental and allied
-health", "warehousing and logistics", "legal services", "e-commerce retail".
-Only omit it if their description truly implies no sector at all.
+ask about it. INFER it — the visitor will usually not name a sector, they will
+describe work that belongs to one. "Warehouse stock across three sites" is
+warehousing and logistics. "Patient recall" is dental or allied health.
+"Subcontractor invoices" is construction. Two or three words naming the sector
+the product serves. Omit it only when the description could belong to any
+industry at all, such as a generic internal admin tool.
 Set ready_to_advance to true only once project_name, audience and problem are
 known — industry is not required for that.`,
 
