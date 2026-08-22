@@ -76,9 +76,55 @@ docs/screenshots/
 .dev.vars
 .dev.vars.*
 
-# Font build cache — upstream archives (Inter ~34 MB, JetBrains Mono) and their
-# extractions, downloaded by tools/fonts/build-fonts.py. Regenerated on demand;
-# the pinned URLs + SHA-256 live in that script. Never commit these.
-tools/fonts/.cache/
+# Any dot-cache directory, at any depth. The one that prompted this was
+# tools/fonts/.cache/ — the upstream archives fetched by build-fonts.py (Inter
+# ~34 MB plus its full extraction, and JetBrains Mono) which measured 109 MB and
+# were one `git add -A` away from entering history. They are regenerable: the
+# pinned URLs and their SHA-256 live in that script.
+#
+# Deliberately `.cache/` and NOT a bare `cache/`: the latter would also swallow a
+# legitimate source directory named `cache`, which is a silent and very
+# confusing way to lose code.
+.cache/
+
+# Python — tools/fonts/ is a Python toolchain (fontTools, skia-pathops).
 __pycache__/
-*.pyc
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Test output. The Worker's Vitest suite writes coverage/ under --coverage;
+# nothing here is an input to anything.
+coverage/
+*.lcov
+.vitest/
+
+# Browser automation artefacts. Playwright and browser-harness both drop
+# screenshot/trace directories wherever they are invoked from — they are large,
+# they date immediately, and they are captured to be looked at once.
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+.playwright-mcp/
+.browser_screenshots/
+
+# Lint/build caches
+.eslintcache
+*.tsbuildinfo
+
+# Logs and scratch files, beyond the package-manager debug logs above
+*.log
+*.tmp
+.tmp/
+
+# OS cruft not already covered
+Thumbs.db
+desktop.ini
+._*
+.Spotlight-V100
+.Trashes
