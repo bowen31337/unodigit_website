@@ -10,15 +10,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
+      # Must precede setup-node: `cache: pnpm` below shells out to pnpm to
+      # locate the store, so pnpm has to already be on PATH.
+      # No `version` input — the action reads `packageManager` from the root
+      # package.json, so CI and local use the same pnpm by construction.
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
+      # `cache: pnpm` is explicit and stays explicit. setup-node v5 added
+      # AUTOMATIC caching whenever package.json carries a `packageManager`
+      # field — which this repo's root does — and v6 then narrowed that
+      # automatic path to npm only. Naming the cache here means the behaviour
+      # does not depend on which of those rules is in force.
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
 
       - name: Install dependencies

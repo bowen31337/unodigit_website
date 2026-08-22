@@ -389,7 +389,15 @@ The Worker is **not** deployed by CI — it ships manually via `pnpm bot:deploy`
 `apps/ba-bot-api/scripts/sync-secrets.sh`. See `apps/ba-bot-api/SETUP.md`, which also
 explains why `api.unodigit.com.au` is not usable as the API hostname.
 
-CI pins **Node 22** and **pnpm 10**, and installs with `--frozen-lockfile`. Any
+CI pins **Node 24** and **pnpm 10**, and installs with `--frozen-lockfile`. The
+three actions are on their node24 runtimes (`checkout@v7`, `setup-node@v7`,
+`pnpm/action-setup@v6`) — GitHub force-migrated node20 actions and warned on
+every run until this bump. Two ordering rules in that workflow are load-bearing:
+`pnpm/action-setup` must run **before** `setup-node`, because `cache: pnpm`
+shells out to pnpm to find the store; and `cache: pnpm` stays **explicit**,
+because `setup-node@v5` began caching automatically when `package.json` has a
+`packageManager` field (this repo's root does) and `v6` then narrowed that to
+npm only. Naming it pins the behaviour regardless. Any
 `package.json` edit must be committed together with a regenerated `pnpm-lock.yaml` or the
 deploy fails at install — this has already required a dedicated fix-up commit.
 
