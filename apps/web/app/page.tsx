@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import HomeClient from './HomeClient';
 import JsonLd from '@/components/JsonLd';
+import { pageMetadata } from '@/lib/metadata';
 import { pageSchema, faqNode } from '@/lib/schema';
 import { HOME_FAQS } from '@/data/faqs';
 
@@ -8,12 +9,11 @@ const TITLE = 'Uno Digit | AI & Digital Transformation Leader Sydney';
 const DESCRIPTION =
   'We partner with forward-thinking enterprises in Sydney and Australia to build intelligent systems, custom AI solutions, and digital ecosystems that drive growth.';
 
-export const metadata: Metadata = {
-  alternates: { canonical: '/' },
+export const metadata: Metadata = pageMetadata({
+  path: '/',
   title: TITLE,
   description: DESCRIPTION,
-  openGraph: { title: TITLE, description: DESCRIPTION, url: '/' },
-};
+});
 
 export default function HomePage() {
   return (

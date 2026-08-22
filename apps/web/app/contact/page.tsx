@@ -1,22 +1,20 @@
 import type { Metadata } from 'next';
 import ContactClient from './ContactClient';
 import JsonLd from '@/components/JsonLd';
+import { pageMetadata } from '@/lib/metadata';
 import { pageSchema } from '@/lib/schema';
 
 const TITLE = 'Contact Us';
 const DESCRIPTION =
   'Get in touch with Uno Digit. We are ready to help you transform your business with AI. Located in Sydney, Australia.';
 
-export const metadata: Metadata = {
-  alternates: { canonical: '/contact' },
+export const metadata: Metadata = pageMetadata({
+  path: '/contact',
   title: TITLE,
   description: DESCRIPTION,
-  openGraph: {
-    title: 'Contact Uno Digit | AI Consultancy Sydney',
-    description: 'Get in touch with Uno Digit. We are ready to help you transform your business with AI.',
-    url: '/contact',
-  },
-};
+  ogTitle: 'Contact Uno Digit | AI Consultancy Sydney',
+  ogDescription: 'Get in touch with Uno Digit. We are ready to help you transform your business with AI.',
+});
 
 export default function ContactPage() {
   return (

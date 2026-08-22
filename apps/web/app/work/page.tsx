@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import WorkClient from './WorkClient';
 import JsonLd from '@/components/JsonLd';
+import { pageMetadata } from '@/lib/metadata';
 import { pageSchema, itemListNode } from '@/lib/schema';
 import { projects, featuredCase } from '@/data/projects';
 
@@ -13,16 +14,13 @@ const allProjects = [featuredCase, ...projects].filter((p) =>
   seen.has(p.slug) ? false : seen.add(p.slug),
 );
 
-export const metadata: Metadata = {
-  alternates: { canonical: '/work' },
+export const metadata: Metadata = pageMetadata({
+  path: '/work',
   title: TITLE,
   description: DESCRIPTION,
-  openGraph: {
-    title: 'Our Work & Case Studies | Uno Digit',
-    description: 'Explore our portfolio of successful AI implementation, data science projects, and digital transformation case studies.',
-    url: '/work',
-  },
-};
+  ogTitle: 'Our Work & Case Studies | Uno Digit',
+  ogDescription: 'Explore our portfolio of successful AI implementation, data science projects, and digital transformation case studies.',
+});
 
 export default function WorkPage() {
   return (

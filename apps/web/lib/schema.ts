@@ -22,6 +22,18 @@ import { ORG, SITE_URL, AREA_SERVED, SERVICES, absoluteUrl } from './site'
 type Node = Record<string, unknown>
 
 const WEBSITE_ID = `${SITE_URL}/#website`
+const LOGO_ID = `${SITE_URL}/#logo`
+
+/** The brand mark, as its own graph node so every reference to it resolves. */
+function logoNode(): Node {
+  return {
+    '@type': 'ImageObject',
+    '@id': LOGO_ID,
+    url: ORG.logo,
+    contentUrl: ORG.logo,
+    caption: `${ORG.name} logo`,
+  }
+}
 
 /** The organisation, as ProfessionalService — a consultancy, not a shop. */
 function organizationNode(): Node {
@@ -34,8 +46,12 @@ function organizationNode(): Node {
     description: ORG.description,
     foundingDate: String(ORG.foundingYear),
     email: ORG.email,
-    logo: { '@type': 'ImageObject', '@id': `${SITE_URL}/#logo`, url: ORG.logo, contentUrl: ORG.logo },
-    image: { '@id': `${SITE_URL}/#logo` },
+    // Both point at the hoisted ImageObject node below rather than defining
+    // it inline. A node defined *inside* another node's property is legal
+    // JSON-LD, but consumers vary on whether they resolve a reference to a
+    // nested @id — a top-level node is unambiguous for all of them.
+    logo: { '@id': LOGO_ID },
+    image: { '@id': LOGO_ID },
     // Locality only — no streetAddress is published, so none is asserted.
     address: {
       '@type': 'PostalAddress',
@@ -112,6 +128,7 @@ export function pageSchema({
   const url = absoluteUrl(path)
   const nodes: Node[] = [
     organizationNode(),
+    logoNode(),
     websiteNode(),
     {
       '@type': pageType,
@@ -169,14 +186,20 @@ export function articleNode(a: {
   }
 }
 
-/** A case study. Not an Article — it is a described project with an outcome. */
+/**
+ * A case study. Not an Article — it is a described project with an outcome.
+ *
+ * The client name is deliberately NOT emitted as a sourceOrganization node.
+ * Naming a company in prose is the site's claim; minting a schema.org
+ * Organization for it asserts that entity into the knowledge graph on their
+ * behalf, which is not ours to do.
+ */
 export function caseStudyNode(p: {
   path: string
   title: string
   description: string
   category: string
   result: string
-  client?: string
   tags?: string[]
 }): Node {
   const url = absoluteUrl(p.path)

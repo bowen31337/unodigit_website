@@ -74,34 +74,48 @@ export default function FAQ({
               </button>
             </h3>
 
-            {/* Always mounted. `isOpen && <panel>` would have been simpler, but
-                a collapsed answer would then not exist in the exported HTML at
-                all — and these exact strings are the page's FAQPage structured
-                data. Structured data whose text cannot be found on the page is
-                unverifiable, and both Google and the AI fetchers discount it.
-                So the closed state is height:0 + aria-hidden, not unmounted.
-                The panel holds only a paragraph, so there is nothing focusable
-                to trap inside the collapsed region. */}
-            <motion.div
+            {/* Always mounted, and collapsed with grid-template-rows rather
+                than by unmounting. Two separate reasons:
+
+                1. GEO. `isOpen && <panel>` is simpler, but a collapsed answer
+                   would then not exist in the exported HTML at all — and these
+                   exact strings are the page's FAQPage structured data.
+                   Structured data whose text cannot be found on the page is
+                   unverifiable, and both Google and the AI fetchers discount
+                   it. So closed means height 0, not absent.
+
+                2. It actually works. The obvious version — a motion.div
+                   animating `height: 'auto'` — rendered correctly on the
+                   server and then never updated on the client: the chevron
+                   beside it sprang normally while the panel's inline style
+                   stayed frozen at its server-rendered value. The 0fr -> 1fr
+                   grid transition needs no measurement, so there is nothing to
+                   go wrong at hydration.
+
+                The row still gets Apple's motion: the track opens on
+                --ease-ios, and the copy inside rides opacity and a small
+                translateY so it reads as the answer sliding out from behind
+                the question rather than the box merely getting taller. */}
+            <div
               id={panelId}
               role="region"
               aria-labelledby={buttonId}
               aria-hidden={!isOpen}
-              initial={false}
-              animate={{ height: isOpen ? 'auto' : 0, opacity: isOpen ? 1 : 0 }}
-              transition={reduce ? { duration: 0 } : OPEN_SPRING}
-              className="overflow-hidden"
+              className="grid motion-safe:transition-[grid-template-rows] motion-safe:duration-300 motion-safe:ease-ios"
+              style={{ gridTemplateRows: isOpen ? '1fr' : '0fr' }}
             >
-              <motion.p
-                initial={false}
-                animate={{ y: isOpen || reduce ? 0 : -6 }}
-                transition={reduce ? { duration: 0 } : OPEN_SPRING}
-                className="type-body m-0 px-s6 pb-s6 pt-0 text-label-secondary"
-                style={{ maxWidth: '68ch' }}
-              >
-                {faq.a}
-              </motion.p>
-            </motion.div>
+              <div className="overflow-hidden">
+                <motion.p
+                  initial={false}
+                  animate={{ opacity: isOpen ? 1 : 0, y: isOpen ? 0 : -6 }}
+                  transition={reduce ? { duration: 0 } : OPEN_SPRING}
+                  className="type-body m-0 px-s6 pb-s6 pt-0 text-label-secondary"
+                  style={{ maxWidth: '68ch' }}
+                >
+                  {faq.a}
+                </motion.p>
+              </div>
+            </div>
           </div>
         );
       })}

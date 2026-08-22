@@ -2,6 +2,9 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { projects, featuredCase } from '@/data/projects';
 import ProjectDetailClient from './ProjectDetailClient';
+import JsonLd from '@/components/JsonLd';
+import { pageSchema, caseStudyNode } from '@/lib/schema';
+import { pageMetadata } from '@/lib/metadata';
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -25,15 +28,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     };
   }
 
-  return {
+  return pageMetadata({
+    path: `/work/${slug}`,
     title: `${project.title} | Case Study`,
     description: project.description,
-    openGraph: {
-      title: `${project.title} | Uno Digit Case Study`,
-      description: project.description,
-      type: 'article',
-    },
-  };
+    ogTitle: `${project.title} | Uno Digit Case Study`,
+    type: 'article',
+    section: project.category,
+  });
 }
 
 export default async function ProjectDetailPage({ params }: Props) {
@@ -44,6 +46,33 @@ export default async function ProjectDetailPage({ params }: Props) {
     notFound();
   }
 
-  return <ProjectDetailClient project={project} />;
+  const path = `/work/${slug}`;
+
+  return (
+    <>
+      <JsonLd
+        data={pageSchema({
+          path,
+          title: project.title,
+          description: project.description,
+          breadcrumbs: [
+            { name: 'Work', path: '/work' },
+            { name: project.title, path },
+          ],
+          extra: [
+            caseStudyNode({
+              path,
+              title: project.title,
+              description: project.description,
+              category: project.category,
+              result: project.result,
+              tags: project.tags,
+            }),
+          ],
+        })}
+      />
+      <ProjectDetailClient project={project} />
+    </>
+  );
 }
 

@@ -1,5 +1,5 @@
 import type { MetadataRoute } from 'next'
-import { SITE_URL, absoluteUrl } from '@/lib/site'
+import { SITE_URL } from '@/lib/site'
 
 /**
  * There was no robots.txt. An absent robots.txt is permissive, so this does
@@ -55,6 +55,9 @@ export default function robots(): MetadataRoute.Robots {
       ...AI_CRAWLERS.map((userAgent) => ({ userAgent, allow: '/', disallow: '/q/' })),
     ],
     sitemap: `${SITE_URL}/sitemap.xml`,
-    host: absoluteUrl('/'),
+    // No `host`. It is a non-standard Yandex-only directive that Google and
+    // the AI fetchers ignore, and Next renders whatever it is given verbatim —
+    // which produced `Host: https://unodigit.com.au/`, a malformed value
+    // (the directive takes a bare hostname). Absent beats malformed.
   }
 }

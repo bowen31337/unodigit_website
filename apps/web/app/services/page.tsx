@@ -1,22 +1,20 @@
 import type { Metadata } from 'next';
 import ServicesClient from './ServicesClient';
 import JsonLd from '@/components/JsonLd';
+import { pageMetadata } from '@/lib/metadata';
 import { pageSchema } from '@/lib/schema';
 
 const TITLE = 'AI Services & Web Development';
 const DESCRIPTION =
   'Comprehensive AI strategies, Machine Learning solutions, and Web Development services for Australian businesses. Transform your operations today.';
 
-export const metadata: Metadata = {
-  alternates: { canonical: '/services' },
+export const metadata: Metadata = pageMetadata({
+  path: '/services',
   title: TITLE,
   description: DESCRIPTION,
-  openGraph: {
-    title: 'AI Services & Web Development | Uno Digit Sydney',
-    description: 'Comprehensive AI strategies, Machine Learning solutions, and Web Development services for Australian businesses.',
-    url: '/services',
-  },
-};
+  ogTitle: 'AI Services & Web Development | Uno Digit Sydney',
+  ogDescription: 'Comprehensive AI strategies, Machine Learning solutions, and Web Development services for Australian businesses.',
+});
 
 export default function ServicesPage() {
   return (
