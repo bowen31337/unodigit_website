@@ -10,6 +10,12 @@ import type { Config } from 'tailwindcss';
  * not, because the var already carries its own alpha.
  */
 const config: Config = {
+  /* Wraps EVERY `hover:` utility in @media (hover: hover). iOS keeps :hover
+     applied after a tap until something else is tapped, so without this a
+     tapped card stays stuck in its lifted state. One flag covers all 18
+     hover: utilities across the components — nothing to keep in sync. */
+  future: { hoverOnlyWhenSupported: true },
+
   // Dark mode is driven by the [data-theme] attribute set by next-themes, with
   // prefers-color-scheme handled inside globals.css for the no-JS case.
   darkMode: ['class', '[data-theme="dark"]'],

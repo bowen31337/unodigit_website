@@ -75,3 +75,10 @@ docs/screenshots/
 .wrangler/
 .dev.vars
 .dev.vars.*
+
+# Font build cache — upstream archives (Inter ~34 MB, JetBrains Mono) and their
+# extractions, downloaded by tools/fonts/build-fonts.py. Regenerated on demand;
+# the pinned URLs + SHA-256 live in that script. Never commit these.
+tools/fonts/.cache/
+__pycache__/
+*.pyc

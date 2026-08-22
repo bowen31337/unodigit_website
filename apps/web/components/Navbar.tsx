@@ -56,6 +56,8 @@ export default function Navbar() {
       <header
         className={cn(
           'fixed inset-x-0 top-0 z-50 transition-[padding] duration-base ease-out print:hidden',
+          // M1: in landscape the Dynamic Island occupies a full gutter.
+          'pl-[var(--safe-l)] pr-[var(--safe-r)] pt-[var(--safe-t)]',
           isScrolled ? 'py-s3' : 'py-s5'
         )}
       >

@@ -1,0 +1,68 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Uno Display — specimen</title>
+<style>
+  @font-face { font-family:'Uno Display'; src:url('uno-display-300.woff2') format('woff2'); font-weight:300 }
+  @font-face { font-family:'Uno Display'; src:url('uno-display-400.woff2') format('woff2'); font-weight:400 }
+  @font-face { font-family:'Uno Display'; src:url('uno-display-500.woff2') format('woff2'); font-weight:500 }
+  @font-face { font-family:'Uno Display'; src:url('uno-display-700.woff2') format('woff2'); font-weight:700 }
+  :root { --ink:#f8fafc; --dim:#94a3b8; --cyan:#06b6d4; --violet:#8b5cf6; }
+  * { margin:0; padding:0; box-sizing:border-box }
+  body { background:#020617; color:var(--ink); font-family:'Uno Display',sans-serif;
+         padding:56px 64px; }
+  .lab { font-family:ui-monospace,monospace; font-size:12.5px; letter-spacing:.14em;
+         text-transform:uppercase; color:var(--cyan); margin:38px 0 12px }
+  .row { font-size:72px; line-height:1.18; word-spacing:.04em }
+  .lc  { font-size:72px; line-height:1.18 }
+  .fig { font-size:72px; letter-spacing:.02em }
+  .pun { font-size:60px; letter-spacing:.06em; color:var(--dim) }
+  .wordmark { font-size:132px; font-weight:700; letter-spacing:-.035em; line-height:1 }
+  .wordmark b { color:var(--cyan) }
+  .head { font-size:60px; font-weight:500; letter-spacing:-.028em; line-height:1.08;
+          max-width:17ch; margin-top:6px }
+  .w { display:flex; gap:34px; align-items:baseline; flex-wrap:wrap; font-size:46px }
+  .w span { display:block }
+  .w i { font-family:ui-monospace,monospace; font-size:12px; color:var(--dim);
+         display:block; font-style:normal; letter-spacing:.1em }
+  .sig { display:grid; grid-template-columns:repeat(4,1fr); gap:24px; margin-top:10px }
+  .sig div { border:1px solid rgba(255,255,255,.1); border-radius:14px; padding:20px 22px }
+  .sig .g { font-size:86px; line-height:1; color:var(--cyan) }
+  .sig p { font-family:ui-monospace,monospace; font-size:13px; line-height:1.65;
+           color:var(--dim); margin-top:12px; letter-spacing:.02em }
+  hr { border:0; border-top:1px solid rgba(255,255,255,.09); margin:44px 0 0 }
+</style>
+
+<div class="lab">Uno Display · uppercase</div>
+<div class="row">ABCDEFGHIJKLM<br>NOPQRSTUVWXYZ</div>
+
+<div class="lab">lowercase</div>
+<div class="lc">abcdefghijklm<br>nopqrstuvwxyz</div>
+
+<div class="lab">figures — tabular by default</div>
+<div class="fig">0123456789</div>
+
+<div class="lab">punctuation</div>
+<div class="pun">. , : ; ! ? - – — / ( ) ' " &amp; @ % + =</div>
+
+<hr>
+<div class="lab">the four signatures</div>
+<div class="sig">
+  <div><div class="g">ij!?</div><p>01 — SQUARE NODE<br>Dots are squares, never circles. Descends from the two nodes in the logo. Shared with Uno Sans via frozen ss07.</p></div>
+  <div><div class="g">AMVW</div><p>02 — FLAT APEX<br>Apexes are cut flat, never pointed. Reads as machined precision, and pointed apexes are where amateur type fails.</p></div>
+  <div><div class="g">U</div><p>03 — U IS THE MARK<br>Two verticals joined by a true semicircle with squared terminals. The logo, and the first letter of the name.</p></div>
+  <div><div class="g">10</div><p>04 — THE NUMERALS<br>“Uno Digit”: 1 takes a full flat foot, 0 carries a node in its counter.</p></div>
+</div>
+
+<hr>
+<div class="lab">weights</div>
+<div class="w">
+  <span><i>LIGHT 300</i><span style="font-weight:300">Intelligence</span></span>
+  <span><i>REGULAR 400</i><span style="font-weight:400">Intelligence</span></span>
+  <span><i>MEDIUM 500</i><span style="font-weight:500">Intelligence</span></span>
+  <span><i>BOLD 700</i><span style="font-weight:700">Intelligence</span></span>
+</div>
+
+<hr>
+<div class="lab">in use</div>
+<div class="wordmark"><b>U</b>NO DIGIT</div>
+<div class="head">Architecting the future with artificial intelligence.</div>

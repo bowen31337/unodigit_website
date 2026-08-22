@@ -229,7 +229,12 @@ export default function BaBot() {
             type="button"
             onClick={() => setOpen(true)}
             aria-label="Scope your project with our assistant"
-            className="btn btn-filled fixed bottom-s7 right-s7 z-[60] shadow-lg print:hidden"
+            className="btn btn-filled fixed z-[60] shadow-lg print:hidden"
+            /* M1: sits above the home indicator, not under it. */
+            style={{
+              bottom: 'max(var(--space-7), var(--safe-b))',
+              right: 'max(var(--space-7), var(--safe-r))',
+            }}
             initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.8 }}
             animate={reduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1 }}
             exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.8 }}

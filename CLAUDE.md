@@ -119,18 +119,123 @@ Other conventions:
 - **One deliberate copy of the token layer exists**, in
   `apps/ba-bot-api/src/admin/dashboard.ts`. That page ships from a different
   package with no build step and a `default-src 'none'` CSP, so it can neither
-  import `globals.css` nor pull Inter from Google Fonts — it carries a hand-
-  ported subset of the same tokens and rides the `-apple-system` stack alone.
-  **Change a token in `globals.css` and change it there too.** For the same
-  reason the logo is inline SVG and the favicon a `data:` URI, not `/logo.png`.
+  import `globals.css` nor fetch a font — it carries a hand-ported subset of the
+  same tokens, plus the brand face inlined as a `data:` URI from the generated
+  `src/admin/font-inline.ts` (`font-src data:` is the only directive added).
+  **Change a token in `globals.css` and change it there too — the font is now
+  part of that contract.** For the same reason the logo is inline SVG and the
+  favicon a `data:` URI, not `/logo.png`.
+
+### Typography — two brand faces, self-hosted
+
+**There is no Google Fonts request.** `globals.css` used to open with an
+`@import` of the Google CDN; a CSS `@import` is discovered only after the
+stylesheet parses, so that serialised two blocking third-party round trips ahead
+of first paint, and cost 444.6 KB for four static weights. Total font payload is
+now **73 KB**, first-party. Regenerate with
+`python3 tools/fonts/build-fonts.py` (Uno Sans/Mono) and
+`python3 tools/fonts/uno-display/build-display.py` (Uno Display). Neither runs in
+CI — the binaries are committed deliberately.
+
+| Face | Origin | Used by |
+|---|---|---|
+| **Uno Display** | **Drawn** — 82 glyphs, parametric, original work, no OFL obligation | `.type-display`, `.type-title-1`, print collateral |
+| **Uno Sans** | Inter 4.1 (OFL 1.1, no RFN) — `ss07/ss08/cv05` frozen into the cmap, name table rewritten, subset | everything else |
+| **Uno Mono** | JetBrains Mono derived | `--font-mono` |
+
+**`size-adjust: 93.02%` on Uno Sans is load-bearing — do not change it.**
+Measured: SF Pro's x-height ratio is 0.5078, Inter's is 0.5459, so Inter renders
+7.5% larger at the same px size, and every tracking value in the token layer was
+tuned against SF. 93.02% (= 100/107.5) makes the x-heights match exactly, so the
+scale needs no re-tuning and Apple devices see zero layout shift on swap. The
+cost is capitals 3.9% shorter — cap-height cannot also match. If uppercase reads
+light, raise weight on that role; never move `size-adjust`.
+
+**The brand face now leads on Apple devices too**, reversing the previous
+SF-first stack. Deliberate: a brand whose typeface changes with the visitor's
+hardware does not control its own voice. It is only safe *because* of
+`size-adjust`. If that is ever removed, revert the stack order with it.
+
+**Fallback `size-adjust` values must be measured the same way on both sides.**
+They come from `@capsizecss/metrics` for the source font *and* for each fallback.
+Reading `OS/2.xAvgCharWidth` off the binary instead yielded `size-adjust: 133.87%`
+where ~100% is correct — an all-glyph mean versus a frequency-weighted average
+are different measurements. Never mix them.
+
+**Uno Display cannot carry a weight axis.** It is built with boolean operations,
+so its masters are not interpolatable. Four static cuts; Uno Sans has the axes.
+
+### Touch surfaces
+
+`viewportFit: 'cover'` in `layout.tsx` is what makes `env(safe-area-inset-*)`
+resolve to anything but 0 — the `--safe-t/r/b/l` tokens are inert without it.
+The BaBot sheet uses `max(var(--babot-kb), var(--safe-b))`, **not** a sum: when
+the keyboard is up it already covers the home indicator, and adding both floats
+the sheet above the keyboard. `-webkit-tap-highlight-color: transparent` is set
+so the designed `:active { scale(0.97) }` is the only press feedback. Every
+`:hover` is gated behind `@media (hover: hover)` — iOS retains hover after a tap,
+which left cards stuck in their lifted state — and `tailwind.config.ts` sets
+`future.hoverOnlyWhenSupported` so the `hover:` utilities are gated too.
+
+### GEO / machine-readable surface
+
+The site is built to be **cited by answer engines** (ChatGPT Search, Perplexity,
+Google AI Overviews), not only ranked by search. That surface is:
+
+| File | What it emits |
+|---|---|
+| `lib/site.ts` | The canonical business facts. Sitemap, robots, llms.txt and every JSON-LD node read from here. |
+| `lib/schema.ts` | The JSON-LD `@graph` — one connected entity graph per page. |
+| `lib/metadata.ts` | `pageMetadata()` — canonical + OpenGraph + Twitter for every page. |
+| `app/sitemap.ts` / `app/robots.ts` | `/sitemap.xml`, `/robots.txt`, rendered to disk by the static export. |
+| `app/llms.txt/route.ts` | `/llms.txt` (llmstxt.org) — a curated markdown map of the site. |
+| `data/faqs.ts` + `components/FAQ.tsx` | The home-page FAQ, which is also the `FAQPage` node. |
+
+**Never invent a fact into structured data.** Answer engines repeat JSON-LD as
+fact, so a fabricated `streetAddress`, `telephone`, `aggregateRating` or
+headcount is publishing a false record, not filling a field. The site publishes
+no street address or phone, so `lib/site.ts` omits them — and the rule is
+written at the top of that file. `lib/schema.ts` deliberately does **not** mint
+an Organization node for named case-study clients either.
+
+Three traps, each of which has already cost a debugging session:
+
+- **Next metadata does NOT deep-merge.** A page setting its own `openGraph`
+  *replaces* the layout's entire `openGraph` object. Every page here set an
+  openGraph title, which silently dropped the site-wide `images` — so `og:image`
+  was missing everywhere while `og:twitter` survived (no page overrode
+  `twitter`). This is why every page goes through `pageMetadata()` instead of
+  hand-writing the object. Do not set `alternates.canonical` in `layout.tsx`
+  either: children inherit it, and every page would declare the home page as
+  its canonical.
+- **The FAQ answers must stay in the DOM when collapsed.** They are the page's
+  `FAQPage` structured data, and structured data whose text is not findable on
+  the page gets discounted. `components/FAQ.tsx` collapses with
+  `grid-template-rows: 0fr` rather than unmounting. A `motion.div` animating
+  `height: 'auto'` was tried first and is **broken here** — it renders correctly
+  on the server then never updates on the client (the chevron beside it springs
+  normally while the panel's inline style stays frozen at the SSR value).
+- **`article.date` is a display string** ("Dec 15, 2024"), not ISO 8601. Pass it
+  through `toIsoDate()` before it reaches `publishedTime` or `datePublished`.
+
+**Run `pnpm build && pnpm validate:geo` after touching any of this.**
+`apps/web/scripts/validate-geo.mjs` parses every exported page and asserts:
+exactly one JSON-LD block per indexable page, one distinct Organization `@id`
+site-wide, no dangling `@id` references, a canonical present and matching
+`og:url`, an absolute `og:image` on every page, and no fabricated properties on
+the Organization node. It caught the missing `og:image` and a nested-`@id`
+reference that would otherwise have shipped.
 
 ### Key Libraries
 
 - **motion** (Framer Motion successor) — All page/component animations
 - **next-themes** — light / dark / system, writing to `data-theme`
 - **Radix UI** — Accessible component primitives (via shadcn/ui)
-- **react-hook-form + zod** — Available for form handling (the contact form is
-  currently plain controlled state)
+- **react-hook-form + zod** — Available for form handling, currently unused.
+  `/contact` has no enquiry form: the one that lived there posted nowhere
+  (`onSubmit` was `preventDefault()` + `setSubmitted(true)`) and the page now
+  starts the BA bot instead, via `openBaBot()` in `components/BaBot/open.ts`.
+  The only remaining form is the bot's own `ContactForm`, plain controlled state.
 - **lucide-react** — Icons
 
 ### Shared components

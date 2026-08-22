@@ -13,7 +13,11 @@ const socials = [
 export default function Footer() {
   return (
     <footer className="print:hidden" style={{ background: 'var(--bg-secondary)' }}>
-      <div className="container py-s12">
+      {/* M1: pad past the home indicator so the last row is not half-covered. */}
+      <div
+        className="container pt-s12"
+        style={{ paddingBottom: 'calc(var(--space-12) + var(--safe-b))' }}
+      >
         <div className="grid grid-cols-1 gap-s10 md:grid-cols-12">
           <div className="md:col-span-5">
             <Link href="/" className="mb-s5 inline-block rounded-md" aria-label="Uno Digit — home">

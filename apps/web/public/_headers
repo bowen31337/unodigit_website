@@ -1,0 +1,11 @@
+# Cloudflare Pages reads this from inside the uploaded directory, the same way
+# it reads _worker.js and _routes.json. The static export copies public/
+# verbatim into out/, so this file ships as-is.
+
+/fonts/*
+  # Filenames are content-stable: a re-cut font gets a NEW filename rather than
+  # a cache-busting query, so a year-long immutable cache is safe.
+  Cache-Control: public, max-age=31536000, immutable
+  # Fonts are fetched in CORS mode even same-origin. Present so the files stay
+  # usable if the site is ever served from a separate asset host.
+  Access-Control-Allow-Origin: *
