@@ -1,0 +1,189 @@
+[
+  {
+    "slug": "linkedin-company-banner",
+    "label": "LinkedIn company page banner (1128x191)",
+    "landing": "/",
+    "utm_source": "linkedin",
+    "utm_medium": "profile",
+    "utm_campaign": "brand26",
+    "utm_content": "company-banner",
+    "url": "https://www.unodigit.com.au/?utm_source=linkedin&utm_medium=profile&utm_campaign=brand26&utm_content=company-banner",
+    "url_length": 115
+  },
+  {
+    "slug": "linkedin-personal-cover",
+    "label": "LinkedIn personal cover (1584x396)",
+    "landing": "/",
+    "utm_source": "linkedin",
+    "utm_medium": "profile",
+    "utm_campaign": "brand26",
+    "utm_content": "personal-cover",
+    "url": "https://www.unodigit.com.au/?utm_source=linkedin&utm_medium=profile&utm_campaign=brand26&utm_content=personal-cover",
+    "url_length": 115
+  },
+  {
+    "slug": "linkedin-post",
+    "label": "LinkedIn feed post (1200x627)",
+    "landing": "/services/",
+    "utm_source": "linkedin",
+    "utm_medium": "social",
+    "utm_campaign": "brand26",
+    "utm_content": "post-card",
+    "url": "https://www.unodigit.com.au/services/?utm_source=linkedin&utm_medium=social&utm_campaign=brand26&utm_content=post-card",
+    "url_length": 118
+  },
+  {
+    "slug": "linkedin-doc",
+    "label": "LinkedIn document carousel (1080x1080)",
+    "landing": "/insights/",
+    "utm_source": "linkedin",
+    "utm_medium": "social",
+    "utm_campaign": "brand26",
+    "utm_content": "carousel",
+    "url": "https://www.unodigit.com.au/insights/?utm_source=linkedin&utm_medium=social&utm_campaign=brand26&utm_content=carousel",
+    "url_length": 117
+  },
+  {
+    "slug": "wechat-official-cover",
+    "label": "WeChat Official Account cover (900x383)",
+    "landing": "/",
+    "utm_source": "wechat",
+    "utm_medium": "social",
+    "utm_campaign": "brand26",
+    "utm_content": "official-cover",
+    "url": "https://www.unodigit.com.au/?utm_source=wechat&utm_medium=social&utm_campaign=brand26&utm_content=official-cover",
+    "url_length": 112
+  },
+  {
+    "slug": "wechat-moments",
+    "label": "WeChat Moments card (1080x1080)",
+    "landing": "/",
+    "utm_source": "wechat",
+    "utm_medium": "social",
+    "utm_campaign": "brand26",
+    "utm_content": "moments",
+    "url": "https://www.unodigit.com.au/?utm_source=wechat&utm_medium=social&utm_campaign=brand26&utm_content=moments",
+    "url_length": 105
+  },
+  {
+    "slug": "wechat-namecard",
+    "label": "WeChat digital name card (1080x1920)",
+    "landing": "/contact/",
+    "utm_source": "wechat",
+    "utm_medium": "qr",
+    "utm_campaign": "brand26",
+    "utm_content": "namecard",
+    "url": "https://www.unodigit.com.au/contact/?utm_source=wechat&utm_medium=qr&utm_campaign=brand26&utm_content=namecard",
+    "url_length": 110
+  },
+  {
+    "slug": "x-header",
+    "label": "X / Twitter header (1500x500)",
+    "landing": "/",
+    "utm_source": "x",
+    "utm_medium": "profile",
+    "utm_campaign": "brand26",
+    "utm_content": "header",
+    "url": "https://www.unodigit.com.au/?utm_source=x&utm_medium=profile&utm_campaign=brand26&utm_content=header",
+    "url_length": 100
+  },
+  {
+    "slug": "instagram-post",
+    "label": "Instagram post (1080x1080)",
+    "landing": "/",
+    "utm_source": "instagram",
+    "utm_medium": "social",
+    "utm_campaign": "brand26",
+    "utm_content": "post",
+    "url": "https://www.unodigit.com.au/?utm_source=instagram&utm_medium=social&utm_campaign=brand26&utm_content=post",
+    "url_length": 105
+  },
+  {
+    "slug": "instagram-story",
+    "label": "Instagram story (1080x1920)",
+    "landing": "/contact/",
+    "utm_source": "instagram",
+    "utm_medium": "social",
+    "utm_campaign": "brand26",
+    "utm_content": "story",
+    "url": "https://www.unodigit.com.au/contact/?utm_source=instagram&utm_medium=social&utm_campaign=brand26&utm_content=story",
+    "url_length": 114
+  },
+  {
+    "slug": "facebook-cover",
+    "label": "Facebook page cover (1640x664)",
+    "landing": "/",
+    "utm_source": "facebook",
+    "utm_medium": "profile",
+    "utm_campaign": "brand26",
+    "utm_content": "cover",
+    "url": "https://www.unodigit.com.au/?utm_source=facebook&utm_medium=profile&utm_campaign=brand26&utm_content=cover",
+    "url_length": 106
+  },
+  {
+    "slug": "youtube-banner",
+    "label": "YouTube channel art (2560x1440)",
+    "landing": "/",
+    "utm_source": "youtube",
+    "utm_medium": "profile",
+    "utm_campaign": "brand26",
+    "utm_content": "banner",
+    "url": "https://www.unodigit.com.au/?utm_source=youtube&utm_medium=profile&utm_campaign=brand26&utm_content=banner",
+    "url_length": 106
+  },
+  {
+    "slug": "email-signature",
+    "label": "Email signature block",
+    "landing": "/",
+    "utm_source": "email",
+    "utm_medium": "signature",
+    "utm_campaign": "brand26",
+    "utm_content": "sig",
+    "url": "https://www.unodigit.com.au/?utm_source=email&utm_medium=signature&utm_campaign=brand26&utm_content=sig",
+    "url_length": 103
+  },
+  {
+    "slug": "roller-banner",
+    "label": "Pull-up roller banner (850x2000mm)",
+    "landing": "/contact/",
+    "utm_source": "print",
+    "utm_medium": "qr",
+    "utm_campaign": "brand26",
+    "utm_content": "roller-banner",
+    "url": "https://www.unodigit.com.au/contact/?utm_source=print&utm_medium=qr&utm_campaign=brand26&utm_content=roller-banner",
+    "url_length": 114
+  },
+  {
+    "slug": "business-card",
+    "label": "Business card reverse (90x55mm)",
+    "landing": "/contact/",
+    "utm_source": "print",
+    "utm_medium": "qr",
+    "utm_campaign": "brand26",
+    "utm_content": "business-card",
+    "url": "https://www.unodigit.com.au/contact/?utm_source=print&utm_medium=qr&utm_campaign=brand26&utm_content=business-card",
+    "url_length": 114
+  },
+  {
+    "slug": "a4-flyer",
+    "label": "A4 leave-behind flyer",
+    "landing": "/services/",
+    "utm_source": "print",
+    "utm_medium": "qr",
+    "utm_campaign": "brand26",
+    "utm_content": "a4-flyer",
+    "url": "https://www.unodigit.com.au/services/?utm_source=print&utm_medium=qr&utm_campaign=brand26&utm_content=a4-flyer",
+    "url_length": 110
+  },
+  {
+    "slug": "tradeshow",
+    "label": "Trade-show standee / lectern",
+    "landing": "/contact/",
+    "utm_source": "print",
+    "utm_medium": "qr",
+    "utm_campaign": "brand26",
+    "utm_content": "tradeshow",
+    "url": "https://www.unodigit.com.au/contact/?utm_source=print&utm_medium=qr&utm_campaign=brand26&utm_content=tradeshow",
+    "url_length": 110
+  }
+]

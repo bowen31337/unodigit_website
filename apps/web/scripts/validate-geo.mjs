@@ -10,6 +10,15 @@ import { fileURLToPath } from 'node:url'
 
 // Run after `pnpm build`, from anywhere:  node scripts/validate-geo.mjs
 const OUT = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'out')
+// The expected canonical origin is READ FROM lib/site.ts, not hardcoded. This
+// check previously hardcoded the apex; when SITE_URL is corrected the validator
+// must follow it automatically, or it reports every page as broken (or worse,
+// keeps passing a host that no longer matches the site).
+const SITE_URL = /export const SITE_URL = '([^']+)'/.exec(
+  readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '..', 'lib', 'site.ts'), 'utf8'),
+)?.[1]
+if (!SITE_URL) { console.error('validate-geo: could not read SITE_URL from lib/site.ts'); process.exit(1) }
+
 const FABRICATED = ['telephone', 'streetAddress', 'aggregateRating', 'review', 'priceRange', 'numberOfEmployees', 'faxNumber']
 
 function htmlFiles(dir) {
@@ -32,7 +41,7 @@ for (const file of htmlFiles(OUT)) {
   const isNoindex = /name="robots"[^>]*content="[^"]*noindex/.test(html)
   const canonical = /<link rel="canonical" href="([^"]+)"/.exec(html)?.[1]
   if (!isNoindex && !canonical) problems.push(`${rel}: no canonical`)
-  if (canonical && !canonical.startsWith('https://unodigit.com.au')) problems.push(`${rel}: relative canonical ${canonical}`)
+  if (canonical && !canonical.startsWith(SITE_URL)) problems.push(`${rel}: canonical not on ${SITE_URL} — ${canonical}`)
 
   // og:image regressed silently once already: a page setting its own
   // openGraph REPLACES the layout's, dropping the image. Check every page.

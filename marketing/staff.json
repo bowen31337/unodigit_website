@@ -1,0 +1,17 @@
+{
+  "_note": "Personal contact facts. Same rule as lib/site.ts: nothing here may be invented. Every value below was supplied by its owner or verified to exist. An email or number that is wrong on a business card cannot be corrected after printing.",
+  "people": [
+    {
+      "slug": "bowen-li",
+      "given": "Bowen",
+      "family": "Li",
+      "name": "Bowen Li",
+      "title": "Chief Technology Officer",
+      "titleShort": "CTO",
+      "email": "info@unodigit.com.au",
+      "phoneDisplay": "+61 430 830 888",
+      "phoneE164": "+61430830888",
+      "_email_note": "Shared company address, NOT a personal one. bowen.li@unodigit.com.au was specified first but confirmed 2026-08-22 to have no mailbox, so it was removed rather than printed. If a personal alias is ever created, change it here and re-run make_qr.py + render.py + verify_artwork.py \u2014 the card and the vCard both read this field."
+    }
+  ]
+}

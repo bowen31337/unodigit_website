@@ -1,0 +1,95 @@
+{
+  "_source": "Mirrored by hand from apps/web/app/globals.css (token layer) and apps/web/lib/site.ts (business facts). globals.css remains the single source of truth \u2014 if a token changes there, change it here.",
+  "org": {
+    "name": "Uno Digit",
+    "url": "https://www.unodigit.com.au",
+    "email": "info@unodigit.com.au",
+    "locality": "Sydney",
+    "region": "NSW",
+    "country": "AU",
+    "linkedin": "https://www.linkedin.com/company/101707731",
+    "foundingYear": 2018,
+    "_url_note": "www is mandatory \u2014 the apex unodigit.com.au has no DNS record and does not connect (verified 2026-08-22). apps/web/lib/site.ts was corrected to www on 2026-08-22, so the site and this file now agree."
+  },
+  "color": {
+    "cyan50": "#f1fcfd",
+    "cyan100": "#daf6fb",
+    "cyan200": "#b4eef8",
+    "cyan300": "#6fe2f6",
+    "cyan400": "#1ed6f6",
+    "cyan500": "#06b6d4",
+    "cyan600": "#04849a",
+    "cyan700": "#04778b",
+    "cyan800": "#056576",
+    "cyan900": "#054651",
+    "violet50": "#f5f1fe",
+    "violet100": "#eae2fd",
+    "violet200": "#d5c4fd",
+    "violet300": "#b393fb",
+    "violet400": "#8b5cf6",
+    "violet500": "#7038f0",
+    "violet600": "#7845ed",
+    "violet700": "#4b18bf",
+    "violet800": "#3e1797",
+    "violet900": "#31156f",
+    "ink": "#000000",
+    "paper": "#ffffff",
+    "paperSecondary": "#f2f2f7",
+    "nearBlack": "#0b0b0f"
+  },
+  "logo": {
+    "viewBox": "0 0 40 40",
+    "strokePath": "M11 11V21C11 25.9706 15.0294 30 20 30C24.9706 30 29 25.9706 29 21V11",
+    "strokeWidth": 6,
+    "strokeColor": "#06b6d4",
+    "nodes": [
+      {
+        "cx": 29,
+        "cy": 11,
+        "r": 3
+      },
+      {
+        "cx": 11,
+        "cy": 11,
+        "r": 3
+      }
+    ],
+    "nodeColor": "#8b5cf6"
+  },
+  "type": {
+    "display": "Uno Display",
+    "sans": "Uno Sans",
+    "mono": "Uno Mono",
+    "note": "Uno Sans carries size-adjust: 93.02% on the web. Print artwork does NOT apply it \u2014 there is no SF Pro to metric-match against on a banner, and shrinking the face 7% costs stature at 2 metres. Web tracking values are therefore re-tuned per print role rather than reused."
+  },
+  "copy": {
+    "positioning": "Sydney's leading AI consultancy",
+    "headline": "AI-driven digital transformation",
+    "subhead": "We turn ambitious ideas into intelligent systems that scale.",
+    "services": [
+      "AI Strategy & Consulting",
+      "Machine Learning Solutions",
+      "Data Engineering",
+      "Web & App Development",
+      "Process Automation",
+      "Cloud & MLOps"
+    ],
+    "proof": [
+      {
+        "value": "150+",
+        "label": "Projects delivered"
+      },
+      {
+        "value": "$50M+",
+        "label": "Value created"
+      },
+      {
+        "value": "98%",
+        "label": "Client satisfaction"
+      }
+    ],
+    "cta": "Scan to scope your project in 5 minutes",
+    "ctaSub": "Our BA bot turns a conversation into a costed brief.",
+    "displayUrl": "www.unodigit.com.au"
+  }
+}

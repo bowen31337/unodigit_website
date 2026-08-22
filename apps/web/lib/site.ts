@@ -16,7 +16,18 @@
  * fabricated one costs trust and can earn a manual action.
  */
 
-export const SITE_URL = 'https://unodigit.com.au'
+/**
+ * The canonical host is `www`. The apex `unodigit.com.au` has NO A/AAAA/CNAME
+ * record at OnlyDomains (where this zone's DNS lives) — it resolves to nothing,
+ * so it cannot serve the site and cannot even issue a redirect. Only
+ * `www.unodigit.com.au` is a Cloudflare Pages custom domain with a certificate.
+ *
+ * This constant previously said the apex, which meant every canonical, og:url,
+ * sitemap <loc> and JSON-LD @id on the live site pointed at a hostname that
+ * does not resolve. Do not change it back without first giving the apex a
+ * record; the apex's MX/SPF (Zoho mail) are unaffected either way.
+ */
+export const SITE_URL = 'https://www.unodigit.com.au'
 
 /** trailingSlash: true in next.config.js — canonical URLs must match it. */
 export function absoluteUrl(path = '/'): string {

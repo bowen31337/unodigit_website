@@ -32,7 +32,8 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     locale: 'en_AU',
-    url: 'https://unodigit.com.au',
+    // Read from the constant, never a literal — this line drifted off SITE_URL once.
+    url: SITE_URL,
     siteName: 'Uno Digit',
     title: 'Uno Digit | AI & Digital Transformation Sydney',
     description: "Sydney's Leading AI Consultancy helping enterprises harness the power of artificial intelligence.",
